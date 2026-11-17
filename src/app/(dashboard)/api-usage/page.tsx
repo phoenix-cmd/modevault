@@ -1,30 +1,34 @@
 "use client"
 
+/* eslint-disable react-hooks/set-state-in-effect -- session state is hydrated from the API on mount */
+
 import { useEffect, useState } from "react"
-import { Activity, Plus, Terminal, RefreshCw, Layers } from "lucide-react"
+import {
+  Activity,
+  Cpu,
+  Layers,
+  Plus,
+  RefreshCw,
+  Wallet,
+} from "lucide-react"
 import { ApiAccountsCards } from "@/components/api-usage/api-accounts-cards"
 import { ApiTokenChart } from "@/components/api-usage/api-token-chart"
 import { ApiRecordsTable } from "@/components/api-usage/api-records-table"
 import { AddApiRecordModal } from "@/components/api-usage/add-api-record-modal"
 import { PageHeader } from "@/components/ui/page-header"
-import { GlassCard } from "@/components/ui/glass-card"
-import { CardSkeleton } from "@/components/ui/skeleton-loader"
-import { formatNumber, formatCurrency } from "@/lib/utils"
-import type { ApiAccountData } from "@/lib/types"
+import { formatNumber } from "@/lib/utils"
+import type {
+  ApiAccountData,
+  ApiUsageRecordData,
+  ApiUsageSummaryData,
+  RawApiAccount,
+} from "@/lib/types"
 
 export default function ApiUsagePage() {
   const [loading, setLoading] = useState(true)
   const [accounts, setAccounts] = useState<ApiAccountData[]>([])
-  const [records, setRecords] = useState<any[]>([])
-  const [summary, setSummary] = useState<{
-    totalTokens: number
-    totalCost: number
-    totalRequests: number
-    totalCachedTokens: number
-    byModel: any[]
-    dailyTrend: any[]
-    byProvider: any[]
-  } | null>(null)
+  const [records, setRecords] = useState<ApiUsageRecordData[]>([])
+  const [summary, setSummary] = useState<ApiUsageSummaryData | null>(null)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
@@ -45,7 +49,7 @@ export default function ApiUsagePage() {
       ])
 
       if (accJson.data) {
-        const mappedAcc: ApiAccountData[] = accJson.data.map((a: any) => ({
+        const mappedAcc: ApiAccountData[] = accJson.data.map((a: RawApiAccount) => ({
           id: a.id,
           userId: a.userId,
           providerId: a.providerId,
@@ -81,104 +85,153 @@ export default function ApiUsagePage() {
     fetchData()
   }, [])
 
+  const metrics = summary
+    ? [
+        {
+          label: "Total tokens",
+          value: formatNumber(summary.totalTokens),
+          meta: `Cached ${formatNumber(summary.totalCachedTokens)}`,
+          icon: Cpu,
+        },
+        {
+          label: "API spend",
+          value: `$${summary.totalCost.toFixed(2)}`,
+          meta: `~₹${(summary.totalCost * 84.5).toFixed(0)} at current rates`,
+          icon: Wallet,
+        },
+        {
+          label: "Requests",
+          value: formatNumber(summary.totalRequests),
+          meta: "Across recorded usage",
+          icon: Activity,
+        },
+        {
+          label: "Developer accounts",
+          value: String(accounts.length),
+          meta: "Connected and manual",
+          icon: Layers,
+        },
+      ]
+    : []
+
   return (
-    <div className="space-y-8 pb-16">
+    <div className="space-y-5 pb-12">
       <PageHeader
-        title="API Usage & Developer Metrics"
-        description="Monitor token throughput, prepaid credit reserves, request latency, and per-model unit economics."
+        title="API usage"
+        description="Token throughput, prepaid credit reserves and per-model unit economics across your developer APIs."
         action={
-          <div className="flex items-center gap-2">
+          <>
+            <button
+              onClick={fetchData}
+              disabled={loading}
+              className="btn-secondary"
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+                strokeWidth={1.8}
+              />
+              Refresh
+            </button>
             <button
               onClick={() => {
                 setSelectedAccountId(null)
                 setModalOpen(true)
               }}
-              className="flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-xs font-medium text-white shadow-lg shadow-violet-500/20 transition-all hover:bg-violet-500 active:scale-95"
+              className="btn-primary"
             >
-              <Plus className="h-4 w-4" />
-              Log API Usage
+              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+              Log usage
             </button>
-          </div>
+          </>
         }
       />
 
-      {/* Aggregate Developer Stats Strip */}
-      {summary && (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <GlassCard variant="subtle" className="p-4 space-y-1">
-            <p className="text-xs text-zinc-500 font-medium">Total Tokens Consumed</p>
-            <p className="text-xl font-bold font-mono text-zinc-100">
-              {formatNumber(summary.totalTokens)}
-            </p>
-            <p className="text-[11px] text-zinc-500">
-              Cached: {formatNumber(summary.totalCachedTokens)}
-            </p>
-          </GlassCard>
-
-          <GlassCard variant="subtle" className="p-4 space-y-1">
-            <p className="text-xs text-zinc-500 font-medium">Total API Incurred Spend</p>
-            <p className="text-xl font-bold font-mono text-emerald-400">
-              ${summary.totalCost.toFixed(2)}
-            </p>
-            <p className="text-[11px] text-zinc-500">
-              ~₹{(summary.totalCost * 84.5).toFixed(0)} at current rates
-            </p>
-          </GlassCard>
-
-          <GlassCard variant="subtle" className="p-4 space-y-1">
-            <p className="text-xs text-zinc-500 font-medium">API Requests Recorded</p>
-            <p className="text-xl font-bold font-mono text-zinc-100">
-              {formatNumber(summary.totalRequests)}
-            </p>
-            <p className="text-[11px] text-zinc-500">Across 30 days</p>
-          </GlassCard>
-
-          <GlassCard variant="subtle" className="p-4 space-y-1">
-            <p className="text-xs text-zinc-500 font-medium">Active API Accounts</p>
-            <p className="text-xl font-bold font-mono text-zinc-100">
-              {accounts.length}
-            </p>
-            <p className="text-[11px] text-zinc-500">
-              OpenAI, Anthropic, Gemini, OpenRouter
-            </p>
-          </GlassCard>
+      {loading || !summary ? (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="panel px-4 py-3.5">
+              <div className="skeleton h-2.5 w-20" />
+              <div className="skeleton mt-3 h-6 w-24" />
+              <div className="skeleton mt-2 h-2.5 w-28" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {metrics.map(({ label, value, meta, icon: Icon }) => (
+            <div key={label} className="panel px-4 py-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <p className="metric-label">{label}</p>
+                <Icon className="h-3.5 w-3.5 text-ink-3" strokeWidth={1.8} />
+              </div>
+              <p className="metric-value">{value}</p>
+              <p className="metric-meta">{meta}</p>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* API Accounts Cards */}
-      <div className="space-y-4">
-        <h2 className="text-sm font-semibold text-zinc-200">
-          Tracked Developer Accounts & Balances
-        </h2>
-        {loading ? (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <CardSkeleton key={i} />
-            ))}
+      {loading ? (
+        <section className="panel overflow-hidden">
+          <div className="panel-header">
+            <div className="space-y-2">
+              <div className="skeleton h-3.5 w-32" />
+              <div className="skeleton h-2.5 w-52" />
+            </div>
           </div>
-        ) : (
-          <ApiAccountsCards
-            accounts={accounts}
-            onAddLog={(id) => {
-              setSelectedAccountId(id)
-              setModalOpen(true)
-            }}
-          />
-        )}
-      </div>
-
-      {/* Token Graphs & Model Cost Distribution */}
-      {summary && (
-        <ApiTokenChart
-          dailyTrend={summary.dailyTrend}
-          byModel={summary.byModel}
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div
+              key={index}
+              className="flex items-center gap-3 border-b border-line px-4 py-3.5 last:border-b-0"
+            >
+              <div className="skeleton h-7 w-7 rounded-[6px]" />
+              <div className="flex-1 space-y-1.5">
+                <div className="skeleton h-3.5 w-32" />
+                <div className="skeleton h-2.5 w-20" />
+              </div>
+              <div className="skeleton h-4 w-16" />
+            </div>
+          ))}
+        </section>
+      ) : (
+        <ApiAccountsCards
+          accounts={accounts}
+          onAddLog={(id) => {
+            setSelectedAccountId(id)
+            setModalOpen(true)
+          }}
         />
       )}
 
-      {/* Raw Usage Table */}
+      {loading ? (
+        <div className="grid gap-3 lg:grid-cols-3">
+          <div className="panel px-4 py-4 lg:col-span-2">
+            <div className="skeleton mb-4 h-3.5 w-36" />
+            <div className="skeleton h-[236px] w-full rounded-md" />
+          </div>
+          <div className="panel px-4 py-4">
+            <div className="skeleton mb-4 h-3.5 w-28" />
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <div key={index} className="space-y-1.5">
+                  <div className="skeleton h-3 w-full" />
+                  <div className="skeleton h-1 w-full rounded-full" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
+        summary && (
+          <ApiTokenChart
+            dailyTrend={summary.dailyTrend}
+            byModel={summary.byModel}
+          />
+        )
+      )}
+
       <ApiRecordsTable records={records} />
 
-      {/* Log Modal */}
       <AddApiRecordModal
         apiAccounts={accounts}
         selectedAccountId={selectedAccountId}

@@ -1,16 +1,16 @@
 "use client"
 
+/* eslint-disable react-hooks/set-state-in-effect -- session state is hydrated from the API on mount */
+
 import { useEffect, useState } from "react"
 import {
-  Plus,
-  Search,
+  Clock,
+  Layers,
   LayoutGrid,
   List,
-  Filter,
-  Layers,
+  Plus,
+  Search,
   TrendingUp,
-  Clock,
-  Sparkles,
 } from "lucide-react"
 import { SubscriptionCard } from "@/components/subscriptions/subscription-card"
 import { SubscriptionList } from "@/components/subscriptions/subscription-list"
@@ -19,16 +19,14 @@ import { UsageModal } from "@/components/subscriptions/usage-modal"
 import { DeleteDialog } from "@/components/subscriptions/delete-dialog"
 import { PageHeader } from "@/components/ui/page-header"
 import { EmptyState } from "@/components/ui/empty-state"
-import { CardSkeleton } from "@/components/ui/skeleton-loader"
-import { GlassCard } from "@/components/ui/glass-card"
 import { PROVIDER_LIST } from "@/lib/providers"
-import { formatCurrency, formatNumber } from "@/lib/utils"
-import type { SubscriptionData, SubscriptionStatus } from "@/lib/types"
+import { formatCurrency, getMonthlyEquivalent } from "@/lib/utils"
+import type { RawSubscription, SubscriptionData } from "@/lib/types"
 
 export default function SubscriptionsPage() {
   const [subscriptions, setSubscriptions] = useState<SubscriptionData[]>([])
   const [loading, setLoading] = useState(true)
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list")
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("")
@@ -52,7 +50,7 @@ export default function SubscriptionsPage() {
       const res = await fetch("/api/subscriptions")
       const json = await res.json()
       if (json.data) {
-        const mapped: SubscriptionData[] = json.data.map((s: any) => ({
+        const mapped: SubscriptionData[] = json.data.map((s: RawSubscription) => ({
           id: s.id,
           userId: s.userId,
           providerId: s.providerId,
@@ -95,21 +93,16 @@ export default function SubscriptionsPage() {
     fetchSubscriptions()
   }, [])
 
-  // Filtered subscriptions
   const filtered = subscriptions.filter((sub) => {
     const matchesSearch =
       sub.providerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       sub.planName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (sub.notes && sub.notes.toLowerCase().includes(searchQuery.toLowerCase()))
 
-    const matchesStatus =
-      statusFilter === "all" || sub.status === statusFilter
-
+    const matchesStatus = statusFilter === "all" || sub.status === statusFilter
     const matchesProvider =
       providerFilter === "all" || sub.providerSlug === providerFilter
-
-    const matchesType =
-      typeFilter === "all" || sub.type === typeFilter
+    const matchesType = typeFilter === "all" || sub.type === typeFilter
 
     return matchesSearch && matchesStatus && matchesProvider && matchesType
   })
@@ -120,11 +113,11 @@ export default function SubscriptionsPage() {
     setNowTimestamp(Date.now())
   }, [])
 
-  // Quick stats
   const activeSubs = subscriptions.filter((s) => s.status === "active")
-  const totalMonthlySpend = activeSubs.reduce((acc, s) => {
-    return acc + (s.billingCycle === "yearly" ? s.price / 12 : s.price)
-  }, 0)
+  const totalMonthlySpend = activeSubs.reduce(
+    (acc, s) => acc + getMonthlyEquivalent(s.price, s.billingCycle),
+    0
+  )
   const expiringSoonCount = nowTimestamp
     ? activeSubs.filter((s) => {
         if (!s.renewalDate) return false
@@ -133,148 +126,177 @@ export default function SubscriptionsPage() {
       }).length
     : 0
 
+  const hasActiveFilters =
+    searchQuery !== "" ||
+    statusFilter !== "all" ||
+    providerFilter !== "all" ||
+    typeFilter !== "all"
+
+  const deletingSub = deletingId
+    ? subscriptions.find((s) => s.id === deletingId)
+    : null
+
+  const openCreate = () => {
+    setEditingSub(null)
+    setIsFormOpen(true)
+  }
+
+  const metrics = [
+    {
+      label: "Active subscriptions",
+      value: String(activeSubs.length),
+      meta: `${subscriptions.length} tracked in total`,
+      icon: Layers,
+    },
+    {
+      label: "Monthly committed",
+      value: formatCurrency(totalMonthlySpend, "INR"),
+      meta: "Normalized across billing cycles",
+      icon: TrendingUp,
+    },
+    {
+      label: "Renewing in 14 days",
+      value: String(expiringSoonCount),
+      meta: expiringSoonCount > 0 ? "Review before renewal" : "Nothing due soon",
+      icon: Clock,
+      accent: expiringSoonCount > 0,
+    },
+  ]
+
   return (
-    <div className="space-y-6 pb-16">
-      {/* Page Header */}
+    <div className="space-y-5 pb-12">
       <PageHeader
-        title="My Subscriptions"
-        description="Comprehensive portfolio of active consumer plans and developer accounts with live usage."
+        title="Subscriptions"
+        description="Every AI plan and developer account in one portfolio, with live quota and renewal tracking."
         action={
-          <button
-            onClick={() => {
-              setEditingSub(null)
-              setIsFormOpen(true)
-            }}
-            className="flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-violet-500/25 transition-all hover:bg-violet-500 active:scale-95"
-          >
-            <Plus className="h-4 w-4" />
-            Add Subscription
+          <button onClick={openCreate} className="btn-primary">
+            <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+            Add subscription
           </button>
         }
       />
 
-      {/* Metrics Strip */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <GlassCard variant="subtle" className="p-4 flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-xs text-zinc-500 font-medium">Active Subscriptions</p>
-            <p className="text-xl font-bold text-zinc-100">{activeSubs.length}</p>
-          </div>
-          <div className="h-10 w-10 rounded-xl bg-violet-500/10 flex items-center justify-center text-violet-400">
-            <Layers className="h-5 w-5" />
-          </div>
-        </GlassCard>
-
-        <GlassCard variant="subtle" className="p-4 flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-xs text-zinc-500 font-medium">Monthly Committed Spend</p>
-            <p className="text-xl font-bold text-zinc-100">
-              {formatCurrency(totalMonthlySpend, "INR")}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {metrics.map(({ label, value, meta, icon: Icon, accent }) => (
+          <div key={label} className="panel px-4 py-3.5">
+            <div className="flex items-start justify-between gap-3">
+              <p className="metric-label">{label}</p>
+              <Icon
+                className={
+                  accent ? "h-3.5 w-3.5 text-accent" : "h-3.5 w-3.5 text-ink-3"
+                }
+                strokeWidth={1.8}
+              />
+            </div>
+            <p className="mt-1.5 text-[21px] font-semibold tracking-[-0.02em] text-ink tnum">
+              {value}
             </p>
+            <p className="mt-0.5 text-[11px] text-ink-3">{meta}</p>
           </div>
-          <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
-            <TrendingUp className="h-5 w-5" />
-          </div>
-        </GlassCard>
-
-        <GlassCard variant="subtle" className="p-4 flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-xs text-zinc-500 font-medium">Renewals in 14 Days</p>
-            <p className="text-xl font-bold text-zinc-100">{expiringSoonCount}</p>
-          </div>
-          <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400">
-            <Clock className="h-5 w-5" />
-          </div>
-        </GlassCard>
+        ))}
       </div>
 
-      {/* Filter and View Bar */}
-      <div className="glass rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 border border-white/[0.06]">
-        {/* Search */}
-        <div className="relative min-w-[240px] flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-          <input
-            type="text"
-            placeholder="Search provider, plan or notes..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg bg-white/[0.03] border border-white/[0.06] pl-9 pr-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 outline-none focus:border-violet-500/40"
-          />
-        </div>
+      <div className="panel p-2.5">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative min-w-0 flex-1 lg:max-w-sm">
+            <Search
+              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3"
+              strokeWidth={2}
+            />
+            <input
+              type="text"
+              placeholder="Search provider, plan or notes…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="field field-sm pl-8"
+            />
+          </div>
 
-        {/* Dropdowns */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Status */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg bg-white/[0.03] border border-white/[0.06] px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-violet-500/40"
-          >
-            <option value="all" className="bg-[#18181b]">All Statuses</option>
-            <option value="active" className="bg-[#18181b]">Active</option>
-            <option value="paused" className="bg-[#18181b]">Paused</option>
-            <option value="trial" className="bg-[#18181b]">Trial</option>
-            <option value="cancelled" className="bg-[#18181b]">Cancelled</option>
-          </select>
-
-          {/* Provider */}
-          <select
-            value={providerFilter}
-            onChange={(e) => setProviderFilter(e.target.value)}
-            className="rounded-lg bg-white/[0.03] border border-white/[0.06] px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-violet-500/40"
-          >
-            <option value="all" className="bg-[#18181b]">All Providers</option>
-            {PROVIDER_LIST.map((p) => (
-              <option key={p.slug} value={p.slug} className="bg-[#18181b]">
-                {p.name}
-              </option>
-            ))}
-          </select>
-
-          {/* Category */}
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="rounded-lg bg-white/[0.03] border border-white/[0.06] px-2.5 py-1.5 text-xs text-zinc-300 outline-none focus:border-violet-500/40"
-          >
-            <option value="all" className="bg-[#18181b]">All Categories</option>
-            <option value="consumer" className="bg-[#18181b]">Consumer Subscriptions</option>
-            <option value="api" className="bg-[#18181b]">Developer API Accounts</option>
-          </select>
-
-          {/* View Toggle */}
-          <div className="flex items-center rounded-lg border border-white/[0.06] bg-white/[0.03] p-0.5">
-            <button
-              onClick={() => setViewMode("grid")}
-              className={`rounded-md p-1.5 transition-colors ${
-                viewMode === "grid"
-                  ? "bg-violet-600/30 text-violet-300"
-                  : "text-zinc-500 hover:text-zinc-300"
-              }`}
-              title="Grid View"
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="select select-sm w-auto"
+              aria-label="Filter by status"
             >
-              <LayoutGrid className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => setViewMode("list")}
-              className={`rounded-md p-1.5 transition-colors ${
-                viewMode === "list"
-                  ? "bg-violet-600/30 text-violet-300"
-                  : "text-zinc-500 hover:text-zinc-300"
-              }`}
-              title="Table View"
+              <option value="all">All statuses</option>
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+              <option value="trial">Trial</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+
+            <select
+              value={providerFilter}
+              onChange={(e) => setProviderFilter(e.target.value)}
+              className="select select-sm w-auto"
+              aria-label="Filter by provider"
             >
-              <List className="h-4 w-4" />
-            </button>
+              <option value="all">All providers</option>
+              {PROVIDER_LIST.map((p) => (
+                <option key={p.slug} value={p.slug}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="select select-sm w-auto"
+              aria-label="Filter by category"
+            >
+              <option value="all">All categories</option>
+              <option value="consumer">Consumer</option>
+              <option value="api">API account</option>
+            </select>
+
+            <div className="segmented ml-auto lg:ml-0" role="group" aria-label="View mode">
+              <button
+                onClick={() => setViewMode("list")}
+                className={`segmented-item ${
+                  viewMode === "list" ? "segmented-item-active" : ""
+                }`}
+                aria-pressed={viewMode === "list"}
+              >
+                <List className="h-3.5 w-3.5" strokeWidth={1.8} />
+                <span className="hidden sm:inline">Table</span>
+              </button>
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`segmented-item ${
+                  viewMode === "grid" ? "segmented-item-active" : ""
+                }`}
+                aria-pressed={viewMode === "grid"}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" strokeWidth={1.8} />
+                <span className="hidden sm:inline">Cards</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Subscription Content */}
       {loading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="panel overflow-hidden">
+          <div className="flex items-center gap-6 border-b border-line bg-surface-2/60 px-4 py-2.5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="skeleton h-2.5 w-16" />
+            ))}
+          </div>
           {Array.from({ length: 6 }).map((_, i) => (
-            <CardSkeleton key={i} />
+            <div
+              key={i}
+              className="flex items-center gap-3 border-b border-line px-4 py-3.5 last:border-b-0"
+            >
+              <div className="skeleton h-7 w-7 rounded-[6px]" />
+              <div className="flex-1 space-y-1.5">
+                <div className="skeleton h-3.5 w-32" />
+                <div className="skeleton h-2.5 w-20" />
+              </div>
+              <div className="skeleton hidden h-3.5 w-16 sm:block" />
+              <div className="skeleton h-5 w-14 rounded" />
+            </div>
           ))}
         </div>
       ) : filtered.length === 0 ? (
@@ -282,18 +304,15 @@ export default function SubscriptionsPage() {
           icon={Layers}
           title="No subscriptions found"
           description={
-            searchQuery || statusFilter !== "all"
-              ? "No AI services match your selected filters. Try clearing filters or searching for another provider."
-              : "Start monitoring your AI stack by connecting your first subscription or API account."
+            hasActiveFilters
+              ? "No AI services match your current filters. Try clearing them or searching for another provider."
+              : "Start monitoring your AI stack by adding your first subscription or API account."
           }
-          actionLabel="Add Subscription"
-          onAction={() => {
-            setEditingSub(null)
-            setIsFormOpen(true)
-          }}
+          actionLabel="Add subscription"
+          onAction={openCreate}
         />
       ) : viewMode === "grid" ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((sub) => (
             <SubscriptionCard
               key={sub.id}
@@ -331,7 +350,6 @@ export default function SubscriptionsPage() {
         />
       )}
 
-      {/* Modals */}
       <SubscriptionForm
         subscription={editingSub}
         isOpen={isFormOpen}
@@ -354,6 +372,9 @@ export default function SubscriptionsPage() {
 
       <DeleteDialog
         subscriptionId={deletingId}
+        subscriptionName={
+          deletingSub ? `${deletingSub.providerName} ${deletingSub.planName}` : undefined
+        }
         isOpen={isDeleteOpen}
         onClose={() => {
           setIsDeleteOpen(false)

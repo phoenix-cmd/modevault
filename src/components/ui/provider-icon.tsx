@@ -22,23 +22,37 @@ interface ProviderIconProps {
 
 export function ProviderIcon({
   slug,
-  brandColor = "#8b5cf6",
+  brandColor,
   size = "md",
   className,
 }: ProviderIconProps) {
   const sizeMap = {
-    sm: "h-7 w-7 text-xs",
-    md: "h-9 w-9 text-sm",
-    lg: "h-12 w-12 text-base",
+    sm: "h-7 w-7 rounded-[6px]",
+    md: "h-8 w-8 rounded-[7px]",
+    lg: "h-10 w-10 rounded-lg",
   }
 
   const iconSizeMap = {
     sm: "h-3.5 w-3.5",
-    md: "h-4.5 w-4.5",
-    lg: "h-6 w-6",
+    md: "h-4 w-4",
+    lg: "h-5 w-5",
   }
 
-  const getIcon = () => {
+  const colors: Record<string, string> = {
+    openai: "#0f8a6d",
+    anthropic: "#a27446",
+    google: "#3568c9",
+    "github-copilot": "#6552a8",
+    cursor: "#0d8f7a",
+    perplexity: "#1f8f88",
+    openrouter: "#4d55b8",
+    windsurf: "#177a5b",
+    huggingface: "#b47412",
+  }
+
+  const color = brandColor || colors[slug] || "#4a4fbf"
+
+  const icon = (() => {
     switch (slug) {
       case "openai":
         return <Bot className={iconSizeMap[size]} />
@@ -61,22 +75,23 @@ export function ProviderIcon({
       default:
         return <Zap className={iconSizeMap[size]} />
     }
-  }
+  })()
 
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center justify-center rounded-lg ring-1 transition-transform group-hover:scale-105",
+        "flex shrink-0 items-center justify-center border",
         sizeMap[size],
         className
       )}
       style={{
-        backgroundColor: `${brandColor}18`,
-        color: brandColor,
-        borderColor: `${brandColor}33`,
+        backgroundColor: `${color}0f`,
+        borderColor: `${color}24`,
+        color,
       }}
+      aria-hidden="true"
     >
-      {getIcon()}
+      {icon}
     </div>
   )
 }

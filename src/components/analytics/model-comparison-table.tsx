@@ -1,7 +1,5 @@
 "use client"
 
-import { Zap, ExternalLink } from "lucide-react"
-
 interface ModelItem {
   provider: string
   model: string
@@ -18,56 +16,111 @@ interface ModelComparisonTableProps {
 
 export function ModelComparisonTable({ models }: ModelComparisonTableProps) {
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <section className="panel overflow-hidden">
+      <div className="panel-header">
         <div>
-          <h2 className="text-base font-semibold text-zinc-100">
-            Market Model Economics & Token Unit Pricing
-          </h2>
-          <p className="text-xs text-zinc-500">
-            Official benchmark rates per million tokens across leading frontier providers
+          <h2 className="panel-title">Model pricing</h2>
+          <p className="panel-subtitle">
+            Official benchmark rates per million tokens
           </p>
         </div>
+        <span className="hidden text-[11px] text-ink-3 sm:block">
+          USD · per 1M tokens
+        </span>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-white/[0.06] glass">
-        <table className="w-full text-left text-xs text-zinc-300">
-          <thead className="border-b border-white/[0.06] bg-white/[0.02] uppercase tracking-wider text-[11px] text-zinc-500">
+      {/* Desktop table */}
+      <div className="hidden md:block">
+        <table className="data-table">
+          <thead>
             <tr>
-              <th className="px-5 py-3.5 font-medium">Provider</th>
-              <th className="px-5 py-3.5 font-medium">Model</th>
-              <th className="px-5 py-3.5 font-medium">Context Window</th>
-              <th className="px-5 py-3.5 font-medium text-right">Input / 1M</th>
-              <th className="px-5 py-3.5 font-medium text-right">Output / 1M</th>
-              <th className="px-5 py-3.5 font-medium text-right">Prompt Cache / 1M</th>
-              <th className="px-5 py-3.5 font-medium">Recommended Use Case</th>
+              <th>Provider</th>
+              <th>Model</th>
+              <th>Context</th>
+              <th className="text-right">Input</th>
+              <th className="text-right">Output</th>
+              <th className="hidden text-right lg:table-cell">Cached</th>
+              <th className="hidden xl:table-cell">Recommended for</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/[0.03]">
-            {models.map((m, idx) => (
-              <tr key={idx} className="hover:bg-white/[0.02] transition-colors">
-                <td className="px-5 py-3 font-medium text-zinc-200">
-                  {m.provider}
+          <tbody>
+            {models.map((model, index) => (
+              <tr key={`${model.provider}-${model.model}-${index}`}>
+                <td className="whitespace-nowrap font-medium text-ink">
+                  {model.provider}
                 </td>
-                <td className="px-5 py-3 font-mono font-semibold text-violet-300">
-                  {m.model}
+                <td className="whitespace-nowrap font-mono text-[11.5px] text-ink-2">
+                  {model.model}
                 </td>
-                <td className="px-5 py-3 font-mono text-zinc-400">{m.context}</td>
-                <td className="px-5 py-3 text-right font-mono text-zinc-300">
-                  {m.inputPerM}
+                <td className="whitespace-nowrap text-ink-3 tnum">
+                  {model.context}
                 </td>
-                <td className="px-5 py-3 text-right font-mono font-medium text-emerald-400">
-                  {m.outputPerM}
+                <td className="text-right text-ink-2 tnum">
+                  {model.inputPerM}
                 </td>
-                <td className="px-5 py-3 text-right font-mono text-cyan-400">
-                  {m.cachedPerM}
+                <td className="text-right font-medium text-ink tnum">
+                  {model.outputPerM}
                 </td>
-                <td className="px-5 py-3 text-zinc-400">{m.bestFor}</td>
+                <td className="hidden text-right text-ink-3 tnum lg:table-cell">
+                  {model.cachedPerM}
+                </td>
+                <td className="hidden max-w-[220px] truncate text-ink-3 xl:table-cell">
+                  {model.bestFor}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-    </div>
+
+      {/* Mobile list */}
+      <div className="row-divide md:hidden">
+        {models.map((model, index) => (
+          <div key={`${model.provider}-${model.model}-${index}`} className="px-4 py-3.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-mono text-[11.5px] text-ink">
+                  {model.model}
+                </p>
+                <p className="mt-0.5 text-[10.5px] text-ink-3">
+                  {model.provider} · {model.context} context
+                </p>
+              </div>
+            </div>
+            <div className="mt-2.5 grid grid-cols-3 gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.06em] text-ink-3">
+                  Input
+                </p>
+                <p className="mt-0.5 text-[12px] text-ink-2 tnum">
+                  {model.inputPerM}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.06em] text-ink-3">
+                  Output
+                </p>
+                <p className="mt-0.5 text-[12px] font-medium text-ink tnum">
+                  {model.outputPerM}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.06em] text-ink-3">
+                  Cached
+                </p>
+                <p className="mt-0.5 text-[12px] text-ink-2 tnum">
+                  {model.cachedPerM}
+                </p>
+              </div>
+            </div>
+            {model.bestFor && (
+              <p className="mt-2 line-clamp-2 text-[10.5px] text-ink-3">
+                {model.bestFor}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }

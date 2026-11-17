@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import type { SubscriptionData } from "./types"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -14,6 +15,15 @@ export function formatCurrency(amount: number, currency: string = "INR"): string
   }
   const symbol = symbols[currency] || currency + " "
   return `${symbol}${amount.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+}
+
+/** Monthly-equivalent value for a subscription price. */
+export function getMonthlyEquivalent(
+  price: number,
+  billingCycle: string
+): number {
+  if (billingCycle === "yearly") return price / 12
+  return price
 }
 
 export function formatNumber(num: number): string {
@@ -46,39 +56,66 @@ export function getUsagePercentage(used: number | null | undefined, quota: numbe
   return Math.min(Math.round((used / quota) * 100), 100)
 }
 
+export interface PrimaryUsage {
+  used: number
+  quota: number
+  unit: string
+}
+
+/** The first metered quota on a subscription, if any. */
+export function getPrimaryUsage(sub: SubscriptionData): PrimaryUsage | null {
+  if (sub.quotaMessages && sub.quotaMessages > 0) {
+    return { used: sub.usedMessages, quota: sub.quotaMessages, unit: "messages" }
+  }
+  if (sub.quotaRequests && sub.quotaRequests > 0) {
+    return { used: sub.usedRequests, quota: sub.quotaRequests, unit: "requests" }
+  }
+  if (sub.quotaTokens && sub.quotaTokens > 0) {
+    return { used: sub.usedTokens, quota: sub.quotaTokens, unit: "tokens" }
+  }
+  if (sub.quotaCredits && sub.quotaCredits > 0) {
+    return { used: sub.usedCredits, quota: sub.quotaCredits, unit: "credits" }
+  }
+  return null
+}
+
 export function getUsageColor(percentage: number): string {
-  if (percentage >= 90) return "text-red-400"
-  if (percentage >= 75) return "text-amber-400"
-  return "text-emerald-400"
+  if (percentage >= 90) return "text-danger"
+  if (percentage >= 75) return "text-warning"
+  return "text-success"
 }
 
 export function getUsageBarColor(percentage: number): string {
-  if (percentage >= 90) return "bg-red-500"
-  if (percentage >= 75) return "bg-amber-500"
-  return "bg-emerald-500"
+  if (percentage >= 90) return "bg-danger"
+  if (percentage >= 75) return "bg-warning"
+  return "bg-success"
 }
 
 export function getStatusColor(status: string): string {
   switch (status) {
-    case "active": return "text-emerald-400"
-    case "paused": return "text-amber-400"
-    case "expired": return "text-red-400"
-    case "cancelled": return "text-zinc-500"
-    case "trial": return "text-violet-400"
-    default: return "text-zinc-400"
+    case "active": return "text-success"
+    case "connected": return "text-success"
+    case "paused": return "text-warning"
+    case "expired": return "text-danger"
+    case "error": return "text-danger"
+    case "cancelled": return "text-ink-3"
+    case "trial": return "text-accent"
+    case "manual": return "text-info"
+    default: return "text-ink-2"
   }
 }
 
 export function getStatusBadgeColor(status: string): string {
   switch (status) {
-    case "active": return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-    case "paused": return "bg-amber-500/10 text-amber-400 border-amber-500/20"
-    case "expired": return "bg-red-500/10 text-red-400 border-red-500/20"
-    case "cancelled": return "bg-zinc-500/10 text-zinc-500 border-zinc-500/20"
-    case "trial": return "bg-violet-500/10 text-violet-400 border-violet-500/20"
-    case "connected": return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-    case "manual": return "bg-blue-500/10 text-blue-400 border-blue-500/20"
-    case "error": return "bg-red-500/10 text-red-400 border-red-500/20"
-    default: return "bg-zinc-500/10 text-zinc-400 border-zinc-500/20"
+    case "active": return "bg-success-soft text-success"
+    case "connected": return "bg-success-soft text-success"
+    case "paused": return "bg-warning-soft text-warning"
+    case "expired": return "bg-danger-soft text-danger"
+    case "error": return "bg-danger-soft text-danger"
+    case "cancelled": return "bg-surface-2 text-ink-3"
+    case "trial": return "bg-accent-soft text-accent"
+    case "manual": return "bg-info-soft text-info"
+    case "not_connected": return "bg-surface-2 text-ink-3"
+    default: return "bg-surface-2 text-ink-2"
   }
 }

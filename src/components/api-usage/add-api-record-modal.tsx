@@ -1,10 +1,16 @@
 "use client"
 
+/* eslint-disable react-hooks/set-state-in-effect -- modal fields reset when opened */
+
 import { useState, useEffect } from "react"
-import { X, Terminal, UploadCloud } from "lucide-react"
+import { Terminal, X } from "lucide-react"
 
 interface AddApiRecordModalProps {
-  apiAccounts: Array<{ id: string; providerName: string; accountName: string | null }>
+  apiAccounts: Array<{
+    id: string
+    providerName: string
+    accountName: string | null
+  }>
   selectedAccountId?: string | null
   isOpen: boolean
   onClose: () => void
@@ -32,8 +38,11 @@ export function AddApiRecordModal({
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    if (!isOpen) return
+    setAccountId(selectedAccountId || apiAccounts[0]?.id || "")
     setDate(new Date().toISOString().split("T")[0])
-  }, [isOpen])
+    setError(null)
+  }, [isOpen, selectedAccountId, apiAccounts])
 
   if (!isOpen) return null
 
@@ -67,166 +76,156 @@ export function AddApiRecordModal({
 
       onSuccess()
       onClose()
-    } catch (err: any) {
-      setError(err.message || "Failed to save record")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save record")
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-      <div className="relative w-full max-w-md rounded-2xl glass-elevated border border-white/[0.08] p-6 shadow-2xl">
-        <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm animate-fade-in">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="api-record-modal-title"
+        className="glass-panel relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl"
+      >
+        <div className="flex items-center justify-between gap-4 border-b border-line px-5 py-3.5">
           <div className="flex items-center gap-2">
-            <Terminal className="h-5 w-5 text-violet-400" />
-            <h2 className="text-base font-semibold text-zinc-100">
-              Log API Usage Record
-            </h2>
+            <Terminal className="h-4 w-4 text-accent" strokeWidth={1.8} />
+            <div>
+              <h2
+                id="api-record-modal-title"
+                className="text-[14px] font-semibold text-ink"
+              >
+                Log API usage
+              </h2>
+              <p className="text-[11.5px] text-ink-3">
+                Record tokens, cost and request volume
+              </p>
+            </div>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200"
-          >
-            <X className="h-5 w-5" />
+          <button onClick={onClose} className="icon-btn" aria-label="Close">
+            <X className="h-4 w-4" strokeWidth={2} />
           </button>
         </div>
 
-        {error && (
-          <div className="mt-4 rounded-lg bg-red-500/10 border border-red-500/20 p-2.5 text-xs text-red-300">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="mt-5 space-y-4 text-xs">
-          <div>
-            <label className="block text-zinc-400 mb-1 font-medium">
-              API Account
-            </label>
-            <select
-              value={accountId}
-              onChange={(e) => setAccountId(e.target.value)}
-              className="w-full rounded-lg glass border border-white/[0.08] px-3 py-2 text-zinc-200 outline-none focus:border-violet-500/50"
-            >
-              {apiAccounts.map((a) => (
-                <option key={a.id} value={a.id} className="bg-[#18181b]">
-                  {a.accountName || a.providerName}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-zinc-400 mb-1 font-medium">
-                Model Identifier
-              </label>
-              <input
-                type="text"
-                required
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder="e.g. gpt-4o, claude-3-5-sonnet"
-                className="w-full rounded-lg glass border border-white/[0.08] px-3 py-2 text-zinc-200 outline-none focus:border-violet-500/50"
-              />
-            </div>
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-4 px-5 py-4">
+            {error && (
+              <div className="rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-[12px] text-danger">
+                {error}
+              </div>
+            )}
 
             <div>
-              <label className="block text-zinc-400 mb-1 font-medium">Date</label>
-              <input
-                type="date"
-                required
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full rounded-lg glass border border-white/[0.08] px-3 py-2 text-zinc-200 outline-none focus:border-violet-500/50"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="block text-zinc-400 mb-1 font-medium">
-                Input Tokens
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={inputTokens}
-                onChange={(e) => setInputTokens(Number(e.target.value))}
-                className="w-full rounded-lg glass border border-white/[0.08] px-2.5 py-1.5 text-zinc-200 outline-none focus:border-violet-500/50"
-              />
+              <label className="label">API account</label>
+              <select
+                value={accountId}
+                onChange={(e) => setAccountId(e.target.value)}
+                className="select"
+              >
+                {apiAccounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.accountName || account.providerName}
+                  </option>
+                ))}
+              </select>
             </div>
 
-            <div>
-              <label className="block text-zinc-400 mb-1 font-medium">
-                Output Tokens
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={outputTokens}
-                onChange={(e) => setOutputTokens(Number(e.target.value))}
-                className="w-full rounded-lg glass border border-white/[0.08] px-2.5 py-1.5 text-zinc-200 outline-none focus:border-violet-500/50"
-              />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="label">Model identifier</label>
+                <input
+                  type="text"
+                  required
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  placeholder="e.g. gpt-4o, claude-sonnet"
+                  className="field font-mono text-[12px]"
+                />
+              </div>
+              <div>
+                <label className="label">Date</label>
+                <input
+                  type="date"
+                  required
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="field"
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="block text-zinc-400 mb-1 font-medium">
-                Cached Tokens
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={cachedTokens}
-                onChange={(e) => setCachedTokens(Number(e.target.value))}
-                className="w-full rounded-lg glass border border-white/[0.08] px-2.5 py-1.5 text-zinc-200 outline-none focus:border-violet-500/50"
-              />
+            <div className="grid grid-cols-3 gap-2.5">
+              <div>
+                <label className="label">Input</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={inputTokens}
+                  onChange={(e) => setInputTokens(Number(e.target.value))}
+                  className="field tnum"
+                />
+              </div>
+              <div>
+                <label className="label">Output</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={outputTokens}
+                  onChange={(e) => setOutputTokens(Number(e.target.value))}
+                  className="field tnum"
+                />
+              </div>
+              <div>
+                <label className="label">Cached</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={cachedTokens}
+                  onChange={(e) => setCachedTokens(Number(e.target.value))}
+                  className="field tnum"
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-zinc-400 mb-1 font-medium">
-                Total Cost ($ USD)
-              </label>
-              <input
-                type="number"
-                step="any"
-                min="0"
-                value={cost}
-                onChange={(e) => setCost(parseFloat(e.target.value) || 0)}
-                className="w-full rounded-lg glass border border-white/[0.08] px-3 py-2 text-zinc-200 outline-none focus:border-violet-500/50"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Total cost (USD)</label>
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  value={cost}
+                  onChange={(e) => setCost(parseFloat(e.target.value) || 0)}
+                  className="field tnum"
+                />
+              </div>
+              <div>
+                <label className="label">Request count</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={requests}
+                  onChange={(e) => setRequests(Number(e.target.value))}
+                  className="field tnum"
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="block text-zinc-400 mb-1 font-medium">
-                Request Count
-              </label>
-              <input
-                type="number"
-                min="1"
-                value={requests}
-                onChange={(e) => setRequests(Number(e.target.value))}
-                className="w-full rounded-lg glass border border-white/[0.08] px-3 py-2 text-zinc-200 outline-none focus:border-violet-500/50"
-              />
-            </div>
+            <p className="help-text">
+              Total tokens are computed as input plus output tokens when saved.
+            </p>
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/[0.06]">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg px-4 py-2 font-medium text-zinc-400 hover:text-zinc-200 transition-colors"
-            >
+          <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
+            <button type="button" onClick={onClose} className="btn-ghost">
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="rounded-lg bg-violet-600 px-5 py-2 font-medium text-white shadow-lg shadow-violet-500/20 transition-all hover:bg-violet-500 active:scale-95 disabled:opacity-50"
-            >
-              {submitting ? "Saving..." : "Add Record"}
+            <button type="submit" disabled={submitting} className="btn-primary">
+              {submitting ? "Saving…" : "Add record"}
             </button>
           </div>
         </form>

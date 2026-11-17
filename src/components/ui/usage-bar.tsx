@@ -19,45 +19,49 @@ export function UsageBar({
     return (
       <div className={cn("space-y-1.5", className)}>
         {showLabel && (
-          <div className="flex justify-between text-xs text-zinc-400">
-            <span>{used.toLocaleString()} {unit}</span>
-            <span className="text-zinc-500 font-mono">Unlimited / Unmetered</span>
+          <div className="flex items-center justify-between gap-3 text-[11.5px] text-ink-3">
+            <span className="tnum">
+              {used.toLocaleString()} {unit}
+            </span>
+            <span>Unmetered</span>
           </div>
         )}
-        <div className="h-2 w-full overflow-hidden rounded-full bg-white/[0.06]">
-          <div className="h-full w-full bg-violet-500/30 rounded-full" />
+        <div className="h-1 w-full overflow-hidden rounded-full bg-surface-3">
+          <div className="h-full w-1/3 rounded-full bg-ink-3/40" />
         </div>
       </div>
     )
   }
 
   const percentage = Math.min(Math.round((used / quota) * 100), 100)
-  const barColor = getUsageBarColor(percentage)
 
   return (
     <div className={cn("space-y-1.5", className)}>
       {showLabel && (
-        <div className="flex justify-between text-xs">
-          <span className="text-zinc-300 font-medium">
+        <div className="flex items-center justify-between gap-3 text-[11.5px]">
+          <span className="text-ink-2 tnum">
             {used.toLocaleString()} / {quota.toLocaleString()} {unit}
           </span>
           <span
             className={cn(
-              "font-mono font-semibold",
+              "font-medium tnum",
               percentage >= 90
-                ? "text-red-400"
+                ? "text-danger"
                 : percentage >= 75
-                ? "text-amber-400"
-                : "text-emerald-400"
+                  ? "text-warning"
+                  : "text-success"
             )}
           >
             {percentage}%
           </span>
         </div>
       )}
-      <div className="h-2 w-full overflow-hidden rounded-full bg-white/[0.06]">
+      <div className="h-1 w-full overflow-hidden rounded-full bg-surface-3">
         <div
-          className={cn("h-full rounded-full transition-all duration-500", barColor)}
+          className={cn(
+            "h-full rounded-full transition-[width] duration-500 ease-out",
+            getUsageBarColor(percentage)
+          )}
           style={{ width: `${percentage}%` }}
         />
       </div>

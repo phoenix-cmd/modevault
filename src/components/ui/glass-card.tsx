@@ -7,6 +7,10 @@ interface GlassCardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode
 }
 
+/**
+ * The original card primitive, now a solid surface. The `glow` prop is kept
+ * for call-site compatibility but renders as a restrained hover border.
+ */
 export function GlassCard({
   variant = "default",
   glow = "none",
@@ -14,25 +18,18 @@ export function GlassCard({
   children,
   ...props
 }: GlassCardProps) {
-  const variantClass = {
-    default: "glass-card",
-    elevated: "glass-elevated",
-    subtle: "glass-subtle",
-  }[variant]
-
-  const glowClass = {
-    none: "",
-    violet: "hover:glow-violet",
-    blue: "hover:glow-blue",
-    cyan: "hover:glow-cyan",
-  }[glow]
+  const variants = {
+    default: "border-line bg-surface shadow-card",
+    elevated: "border-line bg-surface shadow-panel",
+    subtle: "border-line bg-surface-2/60",
+  }
 
   return (
     <div
       className={cn(
-        "rounded-xl border border-white/[0.06] p-6 text-zinc-100 transition-all duration-200",
-        variantClass,
-        glowClass,
+        "rounded-xl border text-ink transition-colors duration-150",
+        variants[variant],
+        glow !== "none" && "hover:border-line-strong",
         className
       )}
       {...props}

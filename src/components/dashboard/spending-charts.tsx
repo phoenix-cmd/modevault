@@ -1,234 +1,266 @@
 "use client"
 
-import { motion } from "framer-motion"
 import {
-  AreaChart,
-  Area,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  Cell,
-  PieChart,
-  Pie,
 } from "recharts"
-import { cn, formatCurrency } from "@/lib/utils"
+import { ProviderIcon } from "@/components/ui/provider-icon"
+import { formatCurrency } from "@/lib/utils"
 import type { SpendingDataPoint, ProviderSpendingData } from "@/lib/types"
 
-/* ─── Custom Tooltip ─── */
+/* ─── Chart palette (hex for cross-theme reliability) ─── */
 
-function GlassTooltip({
+const CHART_ACCENT = "#5b61d6"
+const CHART_TEAL = "#2f8f83"
+const GRID_COLOR = "rgba(115, 121, 130, 0.14)"
+const AXIS_COLOR = "#9aa0a8"
+const CURSOR_COLOR = "#d6dae1"
+
+/* ─── Tooltip ─── */
+
+interface TooltipEntry {
+  name?: string
+  value?: number
+  color?: string
+  dataKey?: string
+}
+
+function ChartTooltip({
   active,
   payload,
   label,
 }: {
   active?: boolean
-  payload?: Array<{ name: string; value: number; color: string }>
+  payload?: TooltipEntry[]
   label?: string
 }) {
   if (!active || !payload?.length) return null
+
   return (
-    <div className="glass-elevated rounded-lg px-3 py-2 shadow-xl">
-      <p className="mb-1 text-xs font-medium text-zinc-400">{label}</p>
-      {payload.map((entry) => (
-        <p key={entry.name} className="text-xs" style={{ color: entry.color }}>
-          {entry.name}: {formatCurrency(entry.value, "INR")}
-        </p>
-      ))}
+    <div className="glass-panel rounded-lg px-3 py-2">
+      {label && (
+        <p className="mb-1 text-[11px] font-medium text-ink-3">{label}</p>
+      )}
+      <div className="space-y-1">
+        {payload.map((entry) => (
+          <div
+            key={entry.dataKey ?? entry.name}
+            className="flex items-center justify-between gap-5 text-[12px]"
+          >
+            <span className="flex items-center gap-1.5 text-ink-2">
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ background: entry.color }}
+              />
+              {entry.name}
+            </span>
+            <span className="font-medium text-ink tnum">
+              {formatCurrency(Number(entry.value ?? 0), "INR")}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
 
-/* ─── Monthly Spending Trend ─── */
-
-interface MonthlyChartProps {
-  data: SpendingDataPoint[]
+function compactCurrency(value: number) {
+  if (value >= 1000) return `₹${Math.round(value / 1000)}k`
+  return `₹${Math.round(value)}`
 }
 
-function MonthlySpendingChart({ data }: MonthlyChartProps) {
+/* ─── Monthly spending trend ─── */
+
+function MonthlySpendingChart({ data }: { data: SpendingDataPoint[] }) {
   return (
-    <div className="glass-card rounded-xl p-5 space-y-4">
-      <h3 className="text-sm font-semibold text-vault-text">
-        Monthly Spending Trend
-      </h3>
-      <div className="h-[260px]">
+    <section className="panel flex h-full flex-col overflow-hidden">
+      <div className="panel-header">
+        <div>
+          <h2 className="panel-title">Spending trend</h2>
+          <p className="panel-subtitle">Subscription vs API cost by month</p>
+        </div>
+        <div className="hidden items-center gap-3 sm:flex">
+          <span className="flex items-center gap-1.5 text-[11px] text-ink-3">
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ background: CHART_ACCENT }}
+            />
+            Subscriptions
+          </span>
+          <span className="flex items-center gap-1.5 text-[11px] text-ink-3">
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ background: CHART_TEAL }}
+            />
+            API
+          </span>
+        </div>
+      </div>
+
+      <div className="h-[260px] w-full px-3 py-4 sm:px-4">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-            <defs>
-              <linearGradient id="gradSubs" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="gradApi" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="#06b6d4" stopOpacity={0} />
-              </linearGradient>
-            </defs>
+          <LineChart
+            data={data}
+            margin={{ top: 4, right: 12, left: -18, bottom: 0 }}
+          >
             <CartesianGrid
+              stroke={GRID_COLOR}
               strokeDasharray="3 3"
-              stroke="rgba(255,255,255,0.04)"
               vertical={false}
             />
             <XAxis
               dataKey="month"
-              tick={{ fill: "#71717a", fontSize: 11 }}
+              tick={{ fill: AXIS_COLOR, fontSize: 11 }}
               axisLine={false}
               tickLine={false}
+              dy={6}
             />
             <YAxis
-              tick={{ fill: "#71717a", fontSize: 11 }}
+              tick={{ fill: AXIS_COLOR, fontSize: 11 }}
               axisLine={false}
               tickLine={false}
-              tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}k`}
+              tickFormatter={compactCurrency}
+              width={48}
             />
-            <Tooltip content={<GlassTooltip />} />
-            <Area
+            <Tooltip
+              content={<ChartTooltip />}
+              cursor={{ stroke: CURSOR_COLOR, strokeDasharray: "4 4" }}
+            />
+            <Line
               type="monotone"
               dataKey="subscriptions"
               name="Subscriptions"
-              stroke="#8b5cf6"
-              strokeWidth={2}
-              fill="url(#gradSubs)"
+              stroke={CHART_ACCENT}
+              strokeWidth={1.5}
+              dot={false}
+              activeDot={{ r: 3, strokeWidth: 0 }}
             />
-            <Area
+            <Line
               type="monotone"
               dataKey="api"
               name="API"
-              stroke="#06b6d4"
-              strokeWidth={2}
-              fill="url(#gradApi)"
+              stroke={CHART_TEAL}
+              strokeWidth={1.5}
+              dot={false}
+              activeDot={{ r: 3, strokeWidth: 0 }}
             />
-          </AreaChart>
+          </LineChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </section>
   )
 }
 
-/* ─── Provider-wise Spending ─── */
+/* ─── Provider-wise spending ─── */
 
-interface ProviderChartProps {
-  data: ProviderSpendingData[]
-}
-
-function ProviderSpendingChart({ data }: ProviderChartProps) {
-  const sorted = [...data].sort((a, b) => b.amount - a.amount)
+function ProviderSpendingChart({ data }: { data: ProviderSpendingData[] }) {
+  const sorted = [...data].sort((a, b) => b.amount - a.amount).slice(0, 6)
+  const max = Math.max(...sorted.map((d) => d.amount), 1)
 
   return (
-    <div className="glass-card rounded-xl p-5 space-y-4">
-      <h3 className="text-sm font-semibold text-vault-text">
-        Spending by Provider
-      </h3>
-      <div className="h-[260px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={sorted}
-            layout="vertical"
-            margin={{ top: 4, right: 20, left: 10, bottom: 0 }}
-          >
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke="rgba(255,255,255,0.04)"
-              horizontal={false}
-            />
-            <XAxis
-              type="number"
-              tick={{ fill: "#71717a", fontSize: 11 }}
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}k`}
-            />
-            <YAxis
-              type="category"
-              dataKey="provider"
-              tick={{ fill: "#a1a1aa", fontSize: 11 }}
-              axisLine={false}
-              tickLine={false}
-              width={80}
-            />
-            <Tooltip content={<GlassTooltip />} />
-            <Bar dataKey="amount" name="Spend" radius={[0, 4, 4, 0]} barSize={20}>
-              {sorted.map((entry) => (
-                <Cell key={entry.provider} fill={entry.color} fillOpacity={0.8} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+    <section className="panel overflow-hidden">
+      <div className="panel-header">
+        <h2 className="panel-title">By provider</h2>
       </div>
-    </div>
+      <div className="row-divide">
+        {sorted.length === 0 ? (
+          <p className="px-4 py-6 text-[12px] text-ink-3">
+            No provider spend recorded yet.
+          </p>
+        ) : (
+          sorted.map((entry) => (
+            <div
+              key={entry.provider}
+              className="flex items-center gap-2.5 px-4 py-2.5"
+            >
+              <ProviderIcon slug={entry.providerSlug} size="sm" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="truncate text-[12px] text-ink-2">
+                    {entry.provider}
+                  </span>
+                  <span className="shrink-0 text-[12px] font-medium text-ink tnum">
+                    {formatCurrency(entry.amount, "INR")}
+                  </span>
+                </div>
+                <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-surface-3">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.max((entry.amount / max) * 100, 3)}%`,
+                      background: CHART_ACCENT,
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </section>
   )
 }
 
-/* ─── API vs Subscription Split ─── */
+/* ─── API vs subscription split ─── */
 
-interface SplitChartProps {
-  spending: SpendingDataPoint[]
-}
-
-function ApiVsSubscriptionSplit({ spending }: SplitChartProps) {
-  const totalSubs = spending.reduce((s, d) => s + d.subscriptions, 0)
-  const totalApi = spending.reduce((s, d) => s + d.api, 0)
+function ApiVsSubscriptionSplit({ spending }: { spending: SpendingDataPoint[] }) {
+  const totalSubs = spending.reduce((sum, d) => sum + d.subscriptions, 0)
+  const totalApi = spending.reduce((sum, d) => sum + d.api, 0)
   const total = totalSubs + totalApi || 1
+  const subsPct = Math.round((totalSubs / total) * 100)
+  const apiPct = 100 - subsPct
 
-  const data = [
-    { name: "Subscriptions", value: totalSubs, color: "#8b5cf6" },
-    { name: "API Usage", value: totalApi, color: "#06b6d4" },
+  const rows = [
+    { name: "Subscriptions", value: totalSubs, percent: subsPct, color: CHART_ACCENT },
+    { name: "API usage", value: totalApi, percent: apiPct, color: CHART_TEAL },
   ]
 
   return (
-    <div className="glass-card rounded-xl p-5 space-y-4">
-      <h3 className="text-sm font-semibold text-vault-text">
-        API vs Subscription Split
-      </h3>
-      <div className="flex items-center gap-6">
-        <div className="h-[160px] w-[160px] shrink-0">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={data}
-                cx="50%"
-                cy="50%"
-                innerRadius={48}
-                outerRadius={72}
-                paddingAngle={4}
-                dataKey="value"
-                stroke="none"
-              >
-                {data.map((entry) => (
-                  <Cell key={entry.name} fill={entry.color} fillOpacity={0.85} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
+    <section className="panel overflow-hidden">
+      <div className="panel-header">
+        <h2 className="panel-title">Composition</h2>
+      </div>
+      <div className="px-4 py-3.5">
+        <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-surface-3">
+          <div
+            className="h-full"
+            style={{ width: `${subsPct}%`, background: CHART_ACCENT }}
+          />
+          <div
+            className="h-full"
+            style={{ width: `${apiPct}%`, background: CHART_TEAL }}
+          />
         </div>
-        <div className="space-y-3">
-          {data.map((item) => (
-            <div key={item.name} className="flex items-center gap-2.5">
-              <div
-                className="h-2.5 w-2.5 rounded-full"
-                style={{ background: item.color }}
-              />
-              <div>
-                <p className="text-xs text-zinc-400">{item.name}</p>
-                <p className="text-sm font-semibold text-vault-text">
-                  {formatCurrency(item.value, "INR")}{" "}
-                  <span className="text-xs font-normal text-zinc-500">
-                    ({Math.round((item.value / total) * 100)}%)
-                  </span>
-                </p>
+        <div className="mt-3 flex items-center justify-between gap-4">
+          {rows.map((row) => (
+            <div key={row.name} className="min-w-0">
+              <div className="flex items-center gap-1.5 text-[11px] text-ink-3">
+                <span
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ background: row.color }}
+                />
+                {row.name}
               </div>
+              <p className="mt-0.5 text-[12px] font-medium text-ink tnum">
+                {formatCurrency(row.value, "INR")}
+                <span className="ml-1 text-[10.5px] font-normal text-ink-3">
+                  {row.percent}%
+                </span>
+              </p>
             </div>
           ))}
         </div>
       </div>
-    </div>
+    </section>
   )
 }
 
-/* ─── Combined Spending Charts Section ─── */
+/* ─── Combined section ─── */
 
 interface SpendingChartsProps {
   monthlySpending: SpendingDataPoint[]
@@ -240,37 +272,55 @@ export function SpendingCharts({
   providerSpending,
 }: SpendingChartsProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: 0.2, ease: "easeOut" }}
-      className="space-y-4"
-    >
-      <h2 className="text-lg font-semibold text-vault-text">
-        Spending Analytics
-      </h2>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div className="grid gap-3 lg:grid-cols-3">
+      <div className="lg:col-span-2">
         <MonthlySpendingChart data={monthlySpending} />
-        <ProviderSpendingChart data={providerSpending} />
       </div>
-      <ApiVsSubscriptionSplit spending={monthlySpending} />
-    </motion.div>
+      <div className="flex flex-col gap-3">
+        <ProviderSpendingChart data={providerSpending} />
+        <ApiVsSubscriptionSplit spending={monthlySpending} />
+      </div>
+    </div>
   )
 }
 
 export function SpendingChartsSkeleton() {
   return (
-    <div className="space-y-4">
-      <div className="skeleton h-6 w-40" />
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="glass-card rounded-xl p-5">
-          <div className="skeleton mb-4 h-4 w-40" />
-          <div className="skeleton h-[260px] w-full rounded-lg" />
+    <div className="grid gap-3 lg:grid-cols-3">
+      <section className="panel overflow-hidden lg:col-span-2">
+        <div className="panel-header">
+          <div className="space-y-2">
+            <div className="skeleton h-3.5 w-28" />
+            <div className="skeleton h-2.5 w-44" />
+          </div>
         </div>
-        <div className="glass-card rounded-xl p-5">
-          <div className="skeleton mb-4 h-4 w-40" />
-          <div className="skeleton h-[260px] w-full rounded-lg" />
+        <div className="px-4 py-4">
+          <div className="skeleton h-[236px] w-full rounded-md" />
         </div>
+      </section>
+      <div className="flex flex-col gap-3">
+        <section className="panel overflow-hidden">
+          <div className="panel-header">
+            <div className="skeleton h-3.5 w-20" />
+          </div>
+          <div className="space-y-3 px-4 py-3.5">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div key={index} className="space-y-1.5">
+                <div className="skeleton h-2.5 w-full" />
+                <div className="skeleton h-1 w-full rounded-full" />
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="panel overflow-hidden">
+          <div className="panel-header">
+            <div className="skeleton h-3.5 w-24" />
+          </div>
+          <div className="space-y-3 px-4 py-3.5">
+            <div className="skeleton h-1.5 w-full rounded-full" />
+            <div className="skeleton h-6 w-full" />
+          </div>
+        </section>
       </div>
     </div>
   )

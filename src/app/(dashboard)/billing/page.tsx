@@ -1,38 +1,41 @@
 "use client"
 
+/* eslint-disable react-hooks/set-state-in-effect -- session state is hydrated from the API on mount */
+
 import { useEffect, useState } from "react"
-import {
-  Receipt,
-  Download,
-  Filter,
-  Plus,
-  ExternalLink,
-  CreditCard,
-  Wallet,
-  ArrowUpRight,
-} from "lucide-react"
+import { Download, Plus, Receipt, X } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
-import { GlassCard } from "@/components/ui/glass-card"
-import { CardSkeleton } from "@/components/ui/skeleton-loader"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import { cn, formatCurrency, formatDate } from "@/lib/utils"
+import type { BillingRecordData, BillingSummaryData } from "@/lib/types"
+
+const TYPE_LABEL: Record<string, string> = {
+  subscription_payment: "Subscription",
+  api_topup: "API top-up",
+  refund: "Refund",
+}
+
+const TYPE_STYLE: Record<string, string> = {
+  subscription_payment: "bg-accent-soft text-accent",
+  api_topup: "bg-success-soft text-success",
+  refund: "bg-warning-soft text-warning",
+}
 
 export default function BillingPage() {
   const [loading, setLoading] = useState(true)
-  const [records, setRecords] = useState<any[]>([])
-  const [summary, setSummary] = useState<any>(null)
+  const [records, setRecords] = useState<BillingRecordData[]>([])
+  const [summary, setSummary] = useState<BillingSummaryData | null>(null)
   const [filterType, setFilterType] = useState<string>("all")
 
-  // New billing record modal
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [amount, setAmount] = useState(1700)
   const [type, setType] = useState("subscription_payment")
   const [desc, setDesc] = useState("Manual renewal entry")
   const [date, setDate] = useState("")
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     setDate(new Date().toISOString().split("T")[0])
   }, [])
-  const [submitting, setSubmitting] = useState(false)
 
   const fetchData = async () => {
     try {
@@ -89,207 +92,314 @@ export default function BillingPage() {
     return r.type === filterType
   })
 
+  const metrics = summary
+    ? [
+        {
+          label: "Billed this month",
+          value: formatCurrency(summary.totalSpentCurrentMonth, "INR"),
+          meta: "Current calendar month",
+        },
+        {
+          label: "Year to date",
+          value: formatCurrency(summary.totalSpentCurrentYear, "INR"),
+          meta: "January 1 — present",
+        },
+        {
+          label: "All-time recorded",
+          value: formatCurrency(summary.totalSpentAllTime, "INR"),
+          meta: "Subscriptions and top-ups",
+        },
+      ]
+    : []
+
+  const typeBadge = (recordType: string) => (
+    <span
+      className={cn(
+        "badge",
+        TYPE_STYLE[recordType] || "bg-surface-2 text-ink-3"
+      )}
+    >
+      {TYPE_LABEL[recordType] || recordType}
+    </span>
+  )
+
   return (
-    <div className="space-y-8 pb-16">
+    <div className="space-y-5 pb-12">
       <PageHeader
-        title="Billing & Expenses"
-        description="Consolidated expense auditing, payment logs, tax invoices, and recurring subscription receipts."
+        title="Billing"
+        description="Consolidated expense history, payment records and recurring subscription receipts."
         action={
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-medium text-white shadow-lg shadow-violet-500/20 transition-all hover:bg-violet-500 active:scale-95"
+            className="btn-primary"
           >
-            <Plus className="h-4 w-4" />
-            Record Payment / Invoice
+            <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+            Record payment
           </button>
         }
       />
 
-      {/* Financial Summary */}
-      {summary && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <GlassCard variant="subtle" className="p-4 space-y-1">
-            <p className="text-xs text-zinc-500 font-medium">Billed This Month</p>
-            <p className="text-2xl font-bold text-zinc-100">
-              {formatCurrency(summary.totalSpentCurrentMonth, "INR")}
-            </p>
-            <p className="text-[11px] text-zinc-500">Current calendar month</p>
-          </GlassCard>
-
-          <GlassCard variant="subtle" className="p-4 space-y-1">
-            <p className="text-xs text-zinc-500 font-medium">Year-to-Date Spend (2026)</p>
-            <p className="text-2xl font-bold text-zinc-100">
-              {formatCurrency(summary.totalSpentCurrentYear, "INR")}
-            </p>
-            <p className="text-[11px] text-zinc-500">Jan 1 — Present</p>
-          </GlassCard>
-
-          <GlassCard variant="subtle" className="p-4 space-y-1">
-            <p className="text-xs text-zinc-500 font-medium">All-Time Recorded AI Capital</p>
-            <p className="text-2xl font-bold text-violet-300">
-              {formatCurrency(summary.totalSpentAllTime, "INR")}
-            </p>
-            <p className="text-[11px] text-zinc-500">All subscriptions & top-ups</p>
-          </GlassCard>
+      {loading ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="panel px-4 py-3.5">
+              <div className="skeleton h-2.5 w-24" />
+              <div className="skeleton mt-3 h-6 w-28" />
+              <div className="skeleton mt-2 h-2.5 w-32" />
+            </div>
+          ))}
         </div>
-      )}
+      ) : summary ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {metrics.map(({ label, value, meta }) => (
+            <div key={label} className="panel px-4 py-3.5">
+              <p className="metric-label">{label}</p>
+              <p className="metric-value">{value}</p>
+              <p className="metric-meta">{meta}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
-      {/* Filter Strip */}
-      <div className="flex items-center justify-between gap-4">
-        <h3 className="text-sm font-semibold text-zinc-200">
-          Payment Transactions
-        </h3>
-
-        <div className="flex items-center gap-2">
+      <section className="panel overflow-hidden">
+        <div className="flex flex-col gap-3 border-b border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="panel-title">Transactions</h2>
+            <p className="panel-subtitle">
+              {filtered.length} payment record{filtered.length === 1 ? "" : "s"}
+            </p>
+          </div>
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
-            className="rounded-lg bg-white/[0.03] border border-white/[0.06] px-3 py-1.5 text-xs text-zinc-300 outline-none focus:border-violet-500/40"
+            className="select select-sm w-auto"
+            aria-label="Filter transaction type"
           >
-            <option value="all" className="bg-[#18181b]">All Transaction Types</option>
-            <option value="subscription_payment" className="bg-[#18181b]">
-              Subscription Charges
-            </option>
-            <option value="api_topup" className="bg-[#18181b]">
-              API Credit Top-ups
-            </option>
-            <option value="refund" className="bg-[#18181b]">Refunds</option>
+            <option value="all">All transaction types</option>
+            <option value="subscription_payment">Subscription charges</option>
+            <option value="api_topup">API credit top-ups</option>
+            <option value="refund">Refunds</option>
           </select>
         </div>
-      </div>
 
-      {/* Transactions Table */}
-      <div className="overflow-x-auto rounded-xl border border-white/[0.06] glass">
-        <table className="w-full text-left text-xs text-zinc-300">
-          <thead className="border-b border-white/[0.06] bg-white/[0.02] uppercase tracking-wider text-[11px] text-zinc-500">
-            <tr>
-              <th className="px-5 py-3.5 font-medium">Billing Date</th>
-              <th className="px-5 py-3.5 font-medium">Description</th>
-              <th className="px-5 py-3.5 font-medium">Type</th>
-              <th className="px-5 py-3.5 font-medium text-right">Amount</th>
-              <th className="px-5 py-3.5 font-medium text-right">Invoice</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/[0.03]">
-            {filtered.map((item) => (
-              <tr key={item.id} className="hover:bg-white/[0.02] transition-colors">
-                <td className="px-5 py-3 font-mono text-zinc-400">
-                  {formatDate(item.billingDate)}
-                </td>
-                <td className="px-5 py-3 font-medium text-zinc-200">
-                  {item.description || "Recurring charge"}
-                  {item.subscription && (
-                    <span className="ml-2 text-[10px] text-zinc-500">
-                      ({item.subscription.provider?.name})
-                    </span>
-                  )}
-                </td>
-                <td className="px-5 py-3">
-                  <span
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium uppercase ${
-                      item.type === "subscription_payment"
-                        ? "bg-violet-500/10 text-violet-300 border border-violet-500/20"
-                        : "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
-                    }`}
-                  >
-                    {item.type === "subscription_payment" ? "Subscription" : "API Top-up"}
-                  </span>
-                </td>
-                <td className="px-5 py-3 text-right font-mono font-semibold text-zinc-100">
-                  {formatCurrency(item.amount, item.currency)}
-                </td>
-                <td className="px-5 py-3 text-right">
-                  <button
-                    onClick={() =>
-                      alert(`Invoice receipt for: ${item.description || "Charge"}\nAmount: ${item.currency} ${item.amount}`)
-                    }
-                    className="inline-flex items-center gap-1 text-[11px] text-zinc-400 hover:text-violet-300 transition-colors"
-                  >
-                    <Download className="h-3 w-3" />
-                    Receipt
-                  </button>
-                </td>
-              </tr>
+        {loading ? (
+          <div>
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div
+                key={index}
+                className="flex items-center gap-3 border-b border-line px-4 py-3.5 last:border-b-0"
+              >
+                <div className="skeleton h-3.5 w-20" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="skeleton h-3.5 w-40" />
+                  <div className="skeleton h-2.5 w-24" />
+                </div>
+                <div className="skeleton h-4 w-16" />
+              </div>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="px-4 py-12 text-center">
+            <p className="text-[13px] font-medium text-ink">
+              No transactions found
+            </p>
+            <p className="mt-1 text-[12px] text-ink-3">
+              Record a payment or change the filter to see history.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Desktop table */}
+            <div className="hidden md:block">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Billing date</th>
+                    <th>Description</th>
+                    <th>Type</th>
+                    <th className="text-right">Amount</th>
+                    <th className="text-right">Invoice</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((item) => (
+                    <tr key={item.id}>
+                      <td className="whitespace-nowrap text-ink-2 tnum">
+                        {formatDate(item.billingDate)}
+                      </td>
+                      <td>
+                        <p className="text-[13px] font-medium text-ink">
+                          {item.description || "Recurring charge"}
+                        </p>
+                        {item.subscription && (
+                          <p className="text-[11px] text-ink-3">
+                            {item.subscription.provider?.name}
+                          </p>
+                        )}
+                      </td>
+                      <td>{typeBadge(item.type)}</td>
+                      <td className="text-right text-[13px] font-medium text-ink tnum">
+                        {formatCurrency(item.amount, item.currency)}
+                      </td>
+                      <td className="text-right">
+                        <button
+                          onClick={() =>
+                            alert(
+                              `Invoice receipt for: ${item.description || "Charge"}\nAmount: ${item.currency} ${item.amount}`
+                            )
+                          }
+                          className="btn-ghost btn-sm"
+                        >
+                          <Download className="h-3 w-3" strokeWidth={2} />
+                          Receipt
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-      {/* Record Payment Modal */}
+            {/* Mobile list */}
+            <div className="row-divide md:hidden">
+              {filtered.map((item) => (
+                <div key={item.id} className="px-4 py-3.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-medium text-ink">
+                        {item.description || "Recurring charge"}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-ink-3">
+                        {formatDate(item.billingDate)}
+                        {item.subscription
+                          ? ` · ${item.subscription.provider?.name}`
+                          : ""}
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-[13px] font-medium text-ink tnum">
+                      {formatCurrency(item.amount, item.currency)}
+                    </p>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    {typeBadge(item.type)}
+                    <button
+                      onClick={() =>
+                        alert(
+                          `Invoice receipt for: ${item.description || "Charge"}\nAmount: ${item.currency} ${item.amount}`
+                        )
+                      }
+                      className="btn-ghost btn-sm"
+                    >
+                      <Download className="h-3 w-3" strokeWidth={2} />
+                      Receipt
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-          <div className="relative w-full max-w-md rounded-2xl glass-elevated border border-white/[0.08] p-6 shadow-2xl">
-            <h3 className="text-base font-semibold text-zinc-100 pb-3 border-b border-white/[0.06]">
-              Record Payment or Invoice
-            </h3>
-
-            <form onSubmit={handleCreate} className="mt-4 space-y-4 text-xs">
-              <div>
-                <label className="block text-zinc-400 mb-1">Description</label>
-                <input
-                  type="text"
-                  required
-                  value={desc}
-                  onChange={(e) => setDesc(e.target.value)}
-                  className="w-full rounded-lg glass border border-white/[0.08] px-3 py-2 text-zinc-200 outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm animate-fade-in">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="record-payment-title"
+            className="glass-panel relative w-full max-w-md rounded-xl"
+          >
+            <div className="flex items-center justify-between gap-4 border-b border-line px-5 py-3.5">
+              <div className="flex items-center gap-2">
+                <Receipt className="h-4 w-4 text-accent" strokeWidth={1.8} />
                 <div>
-                  <label className="block text-zinc-400 mb-1">Amount (₹)</label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    value={amount}
-                    onChange={(e) => setAmount(Number(e.target.value))}
-                    className="w-full rounded-lg glass border border-white/[0.08] px-3 py-2 text-zinc-200 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-zinc-400 mb-1">Billing Date</label>
-                  <input
-                    type="date"
-                    required
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="w-full rounded-lg glass border border-white/[0.08] px-3 py-2 text-zinc-200 outline-none"
-                  />
+                  <h2
+                    id="record-payment-title"
+                    className="text-[14px] font-semibold text-ink"
+                  >
+                    Record payment
+                  </h2>
+                  <p className="text-[11.5px] text-ink-3">
+                    Add an invoice or manual charge
+                  </p>
                 </div>
               </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="icon-btn"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" strokeWidth={2} />
+              </button>
+            </div>
 
-              <div>
-                <label className="block text-zinc-400 mb-1">Type</label>
-                <select
-                  value={type}
-                  onChange={(e) => setType(e.target.value)}
-                  className="w-full rounded-lg glass border border-white/[0.08] px-3 py-2 text-zinc-200 outline-none"
-                >
-                  <option value="subscription_payment" className="bg-[#18181b]">
-                    Subscription Payment
-                  </option>
-                  <option value="api_topup" className="bg-[#18181b]">
-                    API Credit Top-up
-                  </option>
-                  <option value="refund" className="bg-[#18181b]">Refund</option>
-                </select>
+            <form onSubmit={handleCreate}>
+              <div className="space-y-4 px-5 py-4">
+                <div>
+                  <label className="label">Description</label>
+                  <input
+                    type="text"
+                    required
+                    value={desc}
+                    onChange={(e) => setDesc(e.target.value)}
+                    className="field"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Amount (₹)</label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      value={amount}
+                      onChange={(e) => setAmount(Number(e.target.value))}
+                      className="field tnum"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Billing date</label>
+                    <input
+                      type="date"
+                      required
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="field"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="label">Type</label>
+                  <select
+                    value={type}
+                    onChange={(e) => setType(e.target.value)}
+                    className="select"
+                  >
+                    <option value="subscription_payment">
+                      Subscription payment
+                    </option>
+                    <option value="api_topup">API credit top-up</option>
+                    <option value="refund">Refund</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/[0.06]">
+              <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-3 py-1.5 text-zinc-400 hover:text-zinc-200"
+                  className="btn-ghost"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-lg bg-violet-600 px-4 py-1.5 text-white shadow-lg hover:bg-violet-500"
+                  className="btn-primary"
                 >
-                  {submitting ? "Saving..." : "Save Record"}
+                  {submitting ? "Saving…" : "Save record"}
                 </button>
               </div>
             </form>

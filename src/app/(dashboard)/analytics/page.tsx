@@ -1,18 +1,39 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { BarChart3, TrendingUp, Layers, DollarSign, Wallet } from "lucide-react"
+import { useEffect, useState, type ComponentProps } from "react"
+import { Activity, Layers, TrendingUp, Wallet } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
-import { GlassCard } from "@/components/ui/glass-card"
-import { CardSkeleton } from "@/components/ui/skeleton-loader"
-import { SpendingCharts } from "@/components/dashboard/spending-charts"
+import {
+  SpendingCharts,
+  SpendingChartsSkeleton,
+} from "@/components/dashboard/spending-charts"
 import { SmartIntelligenceCards } from "@/components/analytics/smart-intelligence-cards"
 import { ModelComparisonTable } from "@/components/analytics/model-comparison-table"
-import { formatCurrency } from "@/lib/utils"
+import { PROVIDERS } from "@/lib/providers"
+import { cn, formatCurrency } from "@/lib/utils"
+import type { ProviderSpendingData, SpendingDataPoint } from "@/lib/types"
+
+interface AnalyticsData {
+  spendingTrends: SpendingDataPoint[]
+  providerBreakdown: Array<{
+    name: string
+    amount: number
+    color: string
+    count: number
+  }>
+  overview: {
+    monthlySubscriptions: number
+    annualSubscriptions: number
+    apiSpent: number
+    apiBalance: number
+  }
+  insights: ComponentProps<typeof SmartIntelligenceCards>["insights"]
+  modelComparison: ComponentProps<typeof ModelComparisonTable>["models"]
+}
 
 export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true)
-  const [data, setData] = useState<any>(null)
+  const [data, setData] = useState<AnalyticsData | null>(null)
   const [currency, setCurrency] = useState("INR")
 
   useEffect(() => {
@@ -22,7 +43,7 @@ export default function AnalyticsPage() {
         const res = await fetch("/api/analytics")
         const json = await res.json()
         if (json.data) {
-          setData(json.data)
+          setData(json.data as AnalyticsData)
         }
       } catch (err) {
         console.error("Failed to fetch analytics:", err)
@@ -34,99 +55,131 @@ export default function AnalyticsPage() {
   }, [])
 
   const rate = 84.5 // USD to INR
+  const inr = (amount: number) =>
+    currency === "INR"
+      ? formatCurrency(amount, "INR")
+      : formatCurrency(amount / rate, "USD")
+  const usd = (amount: number) =>
+    currency === "INR"
+      ? formatCurrency(amount * rate, "INR")
+      : formatCurrency(amount, "USD")
+
+  const providerSpending: ProviderSpendingData[] = (
+    data?.providerBreakdown ?? []
+  ).map((entry) => {
+    const known = Object.values(PROVIDERS).find(
+      (provider) => provider.name === entry.name
+    )
+    return {
+      provider: entry.name,
+      providerSlug: known?.slug ?? "openai",
+      amount: entry.amount,
+      color: entry.color,
+    }
+  })
+
+  const metrics = data?.overview
+    ? [
+        {
+          label: "Monthly subscriptions",
+          value: inr(data.overview.monthlySubscriptions),
+          meta: "Fixed recurring spend",
+          icon: Layers,
+        },
+        {
+          label: "Annual run-rate",
+          value: inr(data.overview.annualSubscriptions),
+          meta: "Projected 12-month baseline",
+          icon: TrendingUp,
+        },
+        {
+          label: "API spend",
+          value: usd(data.overview.apiSpent),
+          meta: "Metered developer consumption",
+          icon: Activity,
+        },
+        {
+          label: "Prepaid balance",
+          value: usd(data.overview.apiBalance),
+          meta: "Available across accounts",
+          icon: Wallet,
+        },
+      ]
+    : []
 
   return (
-    <div className="space-y-8 pb-16">
+    <div className="space-y-5 pb-12">
       <PageHeader
-        title="Analytics & Spend Intelligence"
-        description="Cross-portfolio financial forensics, usage efficiency vectors, and predictive cost modeling."
+        title="Analytics"
+        description="Spend trends, portfolio composition and optimization signals across your AI stack."
         action={
           <div className="flex items-center gap-2">
-            <span className="text-xs text-zinc-500">Currency:</span>
-            <div className="flex rounded-lg border border-white/[0.06] bg-white/[0.03] p-0.5 text-xs">
+            <span className="text-[11.5px] text-ink-3">Currency</span>
+            <div className="segmented" role="group" aria-label="Display currency">
               <button
                 onClick={() => setCurrency("INR")}
-                className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
-                  currency === "INR"
-                    ? "bg-violet-600 text-white"
-                    : "text-zinc-400 hover:text-zinc-200"
-                }`}
+                className={cn(
+                  "segmented-item",
+                  currency === "INR" && "segmented-item-active"
+                )}
+                aria-pressed={currency === "INR"}
               >
-                INR (₹)
+                INR ₹
               </button>
               <button
                 onClick={() => setCurrency("USD")}
-                className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
-                  currency === "USD"
-                    ? "bg-violet-600 text-white"
-                    : "text-zinc-400 hover:text-zinc-200"
-                }`}
+                className={cn(
+                  "segmented-item",
+                  currency === "USD" && "segmented-item-active"
+                )}
+                aria-pressed={currency === "USD"}
               >
-                USD ($)
+                USD $
               </button>
             </div>
           </div>
         }
       />
 
-      {/* Financial Overview Metrics */}
-      {data?.overview && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <GlassCard variant="subtle" className="p-4 space-y-1">
-            <p className="text-xs text-zinc-500 font-medium">Monthly Committed Subscriptions</p>
-            <p className="text-xl font-bold text-zinc-100">
-              {currency === "INR"
-                ? formatCurrency(data.overview.monthlySubscriptions, "INR")
-                : formatCurrency(data.overview.monthlySubscriptions / rate, "USD")}
-            </p>
-            <p className="text-[11px] text-zinc-500">Fixed recurring subscriptions</p>
-          </GlassCard>
-
-          <GlassCard variant="subtle" className="p-4 space-y-1">
-            <p className="text-xs text-zinc-500 font-medium">Annualized Subscription Run-rate</p>
-            <p className="text-xl font-bold text-zinc-100">
-              {currency === "INR"
-                ? formatCurrency(data.overview.annualSubscriptions, "INR")
-                : formatCurrency(data.overview.annualSubscriptions / rate, "USD")}
-            </p>
-            <p className="text-[11px] text-zinc-500">Projected 12-month baseline</p>
-          </GlassCard>
-
-          <GlassCard variant="subtle" className="p-4 space-y-1">
-            <p className="text-xs text-zinc-500 font-medium">API Incurred Spend (Total)</p>
-            <p className="text-xl font-bold text-emerald-400">
-              {currency === "INR"
-                ? formatCurrency(data.overview.apiSpent * rate, "INR")
-                : formatCurrency(data.overview.apiSpent, "USD")}
-            </p>
-            <p className="text-[11px] text-zinc-500">Metered developer consumption</p>
-          </GlassCard>
-
-          <GlassCard variant="subtle" className="p-4 space-y-1">
-            <p className="text-xs text-zinc-500 font-medium">Remaining API Prepaid Balance</p>
-            <p className="text-xl font-bold text-cyan-400">
-              {currency === "INR"
-                ? formatCurrency(data.overview.apiBalance * rate, "INR")
-                : formatCurrency(data.overview.apiBalance, "USD")}
-            </p>
-            <p className="text-[11px] text-zinc-500">Available across developer accounts</p>
-          </GlassCard>
+      {loading || !data?.overview ? (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="panel px-4 py-3.5">
+              <div className="skeleton h-2.5 w-24" />
+              <div className="skeleton mt-3 h-6 w-28" />
+              <div className="skeleton mt-2 h-2.5 w-32" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {metrics.map(({ label, value, meta, icon: Icon }) => (
+            <div key={label} className="panel px-4 py-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <p className="metric-label">{label}</p>
+                <Icon className="h-3.5 w-3.5 text-ink-3" strokeWidth={1.8} />
+              </div>
+              <p className="metric-value">{value}</p>
+              <p className="metric-meta">{meta}</p>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Spending Charts (Trends & Provider Split) */}
-      {data && (
+      {loading ? (
+        <SpendingChartsSkeleton />
+      ) : data ? (
         <SpendingCharts
           monthlySpending={data.spendingTrends}
-          providerSpending={data.providerBreakdown}
+          providerSpending={providerSpending}
         />
+      ) : null}
+
+      {!loading && data?.insights && (
+        <SmartIntelligenceCards insights={data.insights} />
       )}
 
-      {/* Subscription Intelligence Engine */}
-      {data?.insights && <SmartIntelligenceCards insights={data.insights} />}
-
-      {/* Frontier Model Economics */}
-      {data?.modelComparison && (
+      {!loading && data?.modelComparison && (
         <ModelComparisonTable models={data.modelComparison} />
       )}
     </div>

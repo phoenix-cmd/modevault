@@ -1,7 +1,7 @@
 "use client"
 
-import { motion } from "framer-motion"
 import { Database, Zap, MessageCircle, Coins } from "lucide-react"
+import { ProviderIcon } from "@/components/ui/provider-icon"
 import {
   cn,
   formatNumber,
@@ -10,7 +10,6 @@ import {
   getUsageColor,
 } from "@/lib/utils"
 import type { SubscriptionData, DataSource, UsageUnit } from "@/lib/types"
-import { PROVIDERS } from "@/lib/providers"
 
 interface UsageMetric {
   label: string
@@ -58,32 +57,19 @@ function extractUsageMetrics(sub: SubscriptionData): UsageMetric[] {
   return metrics
 }
 
-function DataSourceBadge({ source }: { source: DataSource }) {
-  const config: Record<DataSource, { label: string; className: string }> = {
-    api_sync: {
-      label: "API Synced",
-      className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-    },
-    manual: {
-      label: "Manual",
-      className: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-    },
-    estimated: {
-      label: "Estimated",
-      className: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-    },
-  }
-  const { label, className } = config[source]
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
-        className
-      )}
-    >
-      {label}
-    </span>
-  )
+const DATA_SOURCE_STYLE: Record<DataSource, { label: string; className: string }> = {
+  api_sync: {
+    label: "Synced",
+    className: "bg-success-soft text-success",
+  },
+  manual: {
+    label: "Manual",
+    className: "bg-info-soft text-info",
+  },
+  estimated: {
+    label: "Estimated",
+    className: "bg-warning-soft text-warning",
+  },
 }
 
 const UNIT_ICON: Record<UsageUnit, React.ElementType> = {
@@ -108,106 +94,119 @@ export function UsageOverview({ subscriptions }: UsageOverviewProps) {
   }
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-vault-text">Usage Overview</h2>
-      <div className="space-y-3">
-        {subsWithUsage.map((sub, index) => {
+    <section className="panel overflow-hidden">
+      <div className="panel-header">
+        <div>
+          <h2 className="panel-title">Usage &amp; quota</h2>
+          <p className="panel-subtitle">
+            Consumption across {subsWithUsage.length} metered plan
+            {subsWithUsage.length === 1 ? "" : "s"}
+          </p>
+        </div>
+      </div>
+
+      <div className="row-divide">
+        {subsWithUsage.map((sub) => {
           const metrics = extractUsageMetrics(sub)
-          const color = PROVIDERS[sub.providerSlug]?.brandColor || "#8b5cf6"
+          const source = DATA_SOURCE_STYLE[sub.dataSource]
 
           return (
-            <motion.div
-              key={sub.id}
-              initial={{ opacity: 0, x: -12 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{
-                duration: 0.35,
-                delay: index * 0.06,
-                ease: "easeOut",
-              }}
-              className="glass-card rounded-xl p-5 space-y-3"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className="h-2 w-2 rounded-full"
-                    style={{ background: color }}
-                  />
-                  <span className="text-sm font-semibold text-vault-text">
-                    {sub.providerName}
-                  </span>
-                  <span className="text-xs text-zinc-500">
-                    — {sub.planName}
-                  </span>
+            <div key={sub.id} className="px-4 py-4 sm:px-5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <ProviderIcon slug={sub.providerSlug} size="sm" />
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-medium text-ink">
+                      {sub.providerName}
+                    </p>
+                    <p className="truncate text-[11.5px] text-ink-3">
+                      {sub.planName}
+                    </p>
+                  </div>
                 </div>
-                <DataSourceBadge source={sub.dataSource} />
+                <span className={cn("badge shrink-0", source.className)}>
+                  {source.label}
+                </span>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-3.5 sm:grid-cols-2">
                 {metrics.map((metric) => {
                   const pct = getUsagePercentage(metric.used, metric.quota)
-                  const barColor = getUsageBarColor(pct)
-                  const textColor = getUsageColor(pct)
                   const UnitIcon = UNIT_ICON[metric.unit]
 
                   return (
-                    <div key={metric.unit} className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="flex items-center gap-1.5 text-zinc-400">
-                          <UnitIcon className="h-3 w-3" />
+                    <div key={metric.unit}>
+                      <div className="mb-1.5 flex items-center justify-between gap-3 text-[11.5px]">
+                        <span className="flex items-center gap-1.5 text-ink-3">
+                          <UnitIcon className="h-3 w-3" strokeWidth={1.8} />
                           {metric.label}
                         </span>
-                        <span className={cn("font-medium", textColor)}>
+                        <span
+                          className={cn(
+                            "font-medium tnum",
+                            getUsageColor(pct)
+                          )}
+                        >
                           {pct}%
                         </span>
                       </div>
-                      <div className="h-1.5 w-full rounded-full bg-white/5">
+                      <div className="h-1 w-full overflow-hidden rounded-full bg-surface-3">
                         <div
                           className={cn(
-                            "h-full rounded-full transition-all",
-                            barColor
+                            "h-full rounded-full transition-[width] duration-500 ease-out",
+                            getUsageBarColor(pct)
                           )}
                           style={{ width: `${pct}%` }}
                         />
                       </div>
-                      <p className="text-[11px] text-zinc-500">
-                        {formatNumber(metric.used)} /{" "}
-                        {formatNumber(metric.quota)} {metric.unit}
+                      <p className="mt-1.5 text-[10.5px] text-ink-3 tnum">
+                        {formatNumber(metric.used)} / {formatNumber(metric.quota)}{" "}
+                        {metric.unit}
                       </p>
                     </div>
                   )
                 })}
               </div>
-            </motion.div>
+            </div>
           )
         })}
       </div>
-    </div>
+    </section>
   )
 }
 
 export function UsageOverviewSkeleton() {
   return (
-    <div className="space-y-4">
-      <div className="skeleton h-6 w-36" />
-      {Array.from({ length: 3 }).map((_, i) => (
-        <div key={i} className="glass-card rounded-xl p-5 space-y-3">
-          <div className="flex justify-between">
-            <div className="skeleton h-4 w-32" />
-            <div className="skeleton h-4 w-16" />
+    <section className="panel overflow-hidden">
+      <div className="panel-header">
+        <div className="space-y-2">
+          <div className="skeleton h-3.5 w-32" />
+          <div className="skeleton h-2.5 w-44" />
+        </div>
+      </div>
+      {Array.from({ length: 2 }).map((_, index) => (
+        <div key={index} className="border-b border-line px-5 py-4 last:border-b-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="skeleton h-7 w-7 rounded-[6px]" />
+              <div className="space-y-1.5">
+                <div className="skeleton h-3.5 w-28" />
+                <div className="skeleton h-2.5 w-20" />
+              </div>
+            </div>
+            <div className="skeleton h-4 w-14 rounded" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <div className="skeleton h-3 w-full" />
-              <div className="skeleton h-1.5 w-full rounded-full" />
-            </div>
-            <div className="space-y-1.5">
-              <div className="skeleton h-3 w-full" />
-              <div className="skeleton h-1.5 w-full rounded-full" />
-            </div>
+          <div className="mt-4 grid grid-cols-2 gap-6">
+            {Array.from({ length: 2 }).map((__, i) => (
+              <div key={i} className="space-y-2">
+                <div className="skeleton h-2.5 w-full" />
+                <div className="skeleton h-1 w-full rounded-full" />
+                <div className="skeleton h-2.5 w-24" />
+              </div>
+            ))}
           </div>
         </div>
       ))}
-    </div>
+    </section>
   )
 }

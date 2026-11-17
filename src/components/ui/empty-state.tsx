@@ -1,4 +1,4 @@
-import { LucideIcon, Sparkles } from "lucide-react"
+import { LucideIcon, Layers } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface EmptyStateProps {
@@ -11,7 +11,7 @@ interface EmptyStateProps {
 }
 
 export function EmptyState({
-  icon: Icon = Sparkles,
+  icon: Icon = Layers,
   title,
   description,
   actionLabel,
@@ -21,20 +21,19 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "glass-subtle flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.08] p-12 text-center",
+        "flex flex-col items-center justify-center rounded-xl border border-dashed border-line-strong bg-surface px-6 py-14 text-center",
         className
       )}
     >
-      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20 mb-4">
-        <Icon className="h-6 w-6" />
+      <div className="mb-3.5 flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-surface-2 text-ink-3">
+        <Icon className="h-4.5 w-4.5" strokeWidth={1.8} />
       </div>
-      <h3 className="text-base font-semibold text-zinc-100">{title}</h3>
-      <p className="mt-1 max-w-sm text-sm text-zinc-400">{description}</p>
+      <h3 className="text-[14px] font-semibold text-ink">{title}</h3>
+      <p className="mt-1 max-w-sm text-[12.5px] leading-relaxed text-ink-2">
+        {description}
+      </p>
       {actionLabel && onAction && (
-        <button
-          onClick={onAction}
-          className="mt-6 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-violet-500/20 transition-all hover:bg-violet-500 hover:shadow-violet-500/30 active:scale-95"
-        >
+        <button onClick={onAction} className="btn-primary btn-sm mt-5">
           {actionLabel}
         </button>
       )}

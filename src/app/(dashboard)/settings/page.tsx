@@ -2,20 +2,75 @@
 
 import { useState } from "react"
 import {
-  Settings,
   Bell,
-  Coins,
-  Shield,
-  Download,
-  Trash2,
   CheckCircle2,
+  Coins,
+  Download,
   Save,
-  Globe,
-  Sliders,
-  Sparkles,
+  Shield,
+  X,
 } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
-import { GlassCard } from "@/components/ui/glass-card"
+
+const CURRENCIES = [
+  { value: "INR", label: "INR — Indian Rupee (₹)", hint: "Default" },
+  { value: "USD", label: "USD — US Dollar ($)" },
+  { value: "EUR", label: "EUR — Euro (€)" },
+  { value: "GBP", label: "GBP — British Pound (£)" },
+]
+
+function Toggle({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean
+  onChange: (checked: boolean) => void
+  label: string
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-line ${
+        checked ? "bg-accent" : "bg-surface-3"
+      }`}
+    >
+      <span
+        className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-150 ${
+          checked ? "translate-x-[18px]" : "translate-x-[3px]"
+        }`}
+      />
+    </button>
+  )
+}
+
+function SectionHeader({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>
+  title: string
+  description: string
+}) {
+  return (
+    <div className="panel-header items-start">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-surface-2 text-ink-2">
+          <Icon className="h-3.5 w-3.5" strokeWidth={1.8} />
+        </span>
+        <div>
+          <h2 className="panel-title">{title}</h2>
+          <p className="panel-subtitle">{description}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function SettingsPage() {
   const [currency, setCurrency] = useState("INR")
@@ -23,7 +78,6 @@ export default function SettingsPage() {
   const [userEmail, setUserEmail] = useState("demo@modelvault.dev")
   const [threshold80, setThreshold80] = useState(true)
   const [threshold90, setThreshold90] = useState(true)
-  const [threshold100, setThreshold100] = useState(true)
   const [renewalNoticeDays, setRenewalNoticeDays] = useState(7)
   const [creditAlertMin, setCreditAlertMin] = useState(15)
   const [savedMessage, setSavedMessage] = useState(false)
@@ -35,233 +89,233 @@ export default function SettingsPage() {
   }
 
   const exportData = () => {
-    alert("Export initiated: Generating comprehensive encrypted JSON archive of subscriptions, usage logs, and billing history...")
+    alert(
+      "Export initiated: Generating comprehensive encrypted JSON archive of subscriptions, usage logs, and billing history..."
+    )
   }
 
   return (
-    <div className="space-y-8 pb-16 max-w-4xl">
+    <div className="max-w-4xl space-y-5 pb-12">
       <PageHeader
-        title="Settings & Preferences"
-        description="Global command center parameters, currency conversion, smart alerting thresholds, and security controls."
+        title="Settings"
+        description="Currency, alert thresholds, identity and data portability for your workspace."
+        action={
+          <button type="submit" form="settings-form" className="btn-primary">
+            <Save className="h-3.5 w-3.5" strokeWidth={2} />
+            Save preferences
+          </button>
+        }
       />
 
       {savedMessage && (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-xs text-emerald-300 flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4" />
-          <span>Settings saved successfully!</span>
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-success/25 bg-success-soft px-3.5 py-2.5 text-[12px] text-success animate-fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} />
+            <span>Settings saved successfully.</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSavedMessage(false)}
+            className="text-success/70 transition-colors hover:text-success"
+            aria-label="Dismiss"
+          >
+            <X className="h-3.5 w-3.5" strokeWidth={2} />
+          </button>
         </div>
       )}
 
-      <form onSubmit={handleSave} className="space-y-6">
-        {/* Profile Card */}
-        <GlassCard className="p-6 space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-white/[0.06]">
-            <Shield className="h-4 w-4 text-violet-400" />
-            <h3 className="text-sm font-semibold text-zinc-100">
-              Identity & Access
-            </h3>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <form id="settings-form" onSubmit={handleSave} className="space-y-4">
+        <section className="panel">
+          <SectionHeader
+            icon={Shield}
+            title="Identity & access"
+            description="Displayed on exports, audit logs and notifications."
+          />
+          <div className="panel-body grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-xs text-zinc-400 mb-1.5 font-medium">
-                Full Name
+              <label htmlFor="full-name" className="label">
+                Full name
               </label>
               <input
+                id="full-name"
                 type="text"
                 value={userName}
                 onChange={(e) => setUserName(e.target.value)}
-                className="w-full rounded-lg glass border border-white/[0.08] px-3 py-2 text-xs text-zinc-200 outline-none focus:border-violet-500/50"
+                className="field"
               />
             </div>
-
             <div>
-              <label className="block text-xs text-zinc-400 mb-1.5 font-medium">
-                Email Address
+              <label htmlFor="email" className="label">
+                Email address
               </label>
               <input
+                id="email"
                 type="email"
                 value={userEmail}
                 onChange={(e) => setUserEmail(e.target.value)}
-                className="w-full rounded-lg glass border border-white/[0.08] px-3 py-2 text-xs text-zinc-200 outline-none focus:border-violet-500/50"
+                className="field"
               />
             </div>
           </div>
-        </GlassCard>
+        </section>
 
-        {/* Currency & Financial Configuration */}
-        <GlassCard className="p-6 space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-white/[0.06]">
-            <Coins className="h-4 w-4 text-blue-400" />
-            <h3 className="text-sm font-semibold text-zinc-100">
-              Currency & Multi-Unit Financial Display
-            </h3>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1.5 font-medium">
-                Default Currency Presentation
+        <section className="panel">
+          <SectionHeader
+            icon={Coins}
+            title="Currency"
+            description="Applied to spend totals, invoices and analytics."
+          />
+          <div className="panel-body space-y-3">
+            <div className="sm:max-w-xs">
+              <label htmlFor="currency" className="label">
+                Default currency
               </label>
               <select
+                id="currency"
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                className="w-full sm:w-64 rounded-lg glass border border-white/[0.08] px-3 py-2 text-xs text-zinc-200 outline-none focus:border-violet-500/50"
+                className="select"
               >
-                <option value="INR" className="bg-[#18181b]">
-                  INR — Indian Rupee (₹) [Default]
-                </option>
-                <option value="USD" className="bg-[#18181b]">
-                  USD — US Dollar ($)
-                </option>
-                <option value="EUR" className="bg-[#18181b]">
-                  EUR — Euro (€)
-                </option>
-                <option value="GBP" className="bg-[#18181b]">
-                  GBP — British Pound (£)
-                </option>
+                {CURRENCIES.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                    {item.hint ? ` [${item.hint}]` : ""}
+                  </option>
+                ))}
               </select>
             </div>
 
-            <div className="rounded-lg bg-white/[0.02] border border-white/[0.05] p-3 text-xs text-zinc-400 space-y-1">
-              <div className="flex items-center justify-between text-zinc-300 font-medium">
-                <span>Exchange Rate Reference:</span>
-                <span className="font-mono text-emerald-400">1 USD = 84.50 INR</span>
+            <div className="rounded-lg border border-line bg-surface-2/50 px-3.5 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[12px] font-medium text-ink-2">
+                  Exchange rate reference
+                </span>
+                <span className="tnum rounded-md bg-surface px-2 py-0.5 font-mono text-[12px] text-ink">
+                  1 USD = 84.50 INR
+                </span>
               </div>
-              <p className="text-[11px] text-zinc-500">
-                Source: Reference Market Benchmark (Nov 2026). Conversions across global provider invoices dynamically compute against this index.
+              <p className="mt-1 text-[11px] leading-relaxed text-ink-3">
+                Benchmark dated Nov 2026. Conversions across provider invoices
+                are computed against this index.
               </p>
             </div>
           </div>
-        </GlassCard>
+        </section>
 
-        {/* Smart Thresholds & Automation */}
-        <GlassCard className="p-6 space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-white/[0.06]">
-            <Bell className="h-4 w-4 text-amber-400" />
-            <h3 className="text-sm font-semibold text-zinc-100">
-              Smart Alerts & Quota Threshold Automation
-            </h3>
-          </div>
-
-          <div className="space-y-3 text-xs">
-            <div className="flex items-center justify-between py-2 border-b border-white/[0.03]">
-              <div>
-                <p className="font-medium text-zinc-200">
-                  80% Quota Warning Trigger
+        <section className="panel">
+          <SectionHeader
+            icon={Bell}
+            title="Smart alerts"
+            description="Quota and spend notifications across all providers."
+          />
+          <div className="row-divide px-4 sm:px-5">
+            <div className="flex items-center justify-between gap-4 py-3.5">
+              <div className="min-w-0">
+                <p className="text-[13px] font-medium text-ink">
+                  80% quota warning
                 </p>
-                <p className="text-zinc-500 text-[11px]">
-                  Alert when subscription message or request quotas surpass 80%
+                <p className="mt-0.5 text-[11.5px] leading-relaxed text-ink-3">
+                  Alert when message or request quotas surpass 80%.
                 </p>
               </div>
-              <input
-                type="checkbox"
+              <Toggle
                 checked={threshold80}
-                onChange={(e) => setThreshold80(e.target.checked)}
-                className="h-4 w-4 accent-violet-600 rounded"
+                onChange={setThreshold80}
+                label="80% quota warning"
               />
             </div>
 
-            <div className="flex items-center justify-between py-2 border-b border-white/[0.03]">
-              <div>
-                <p className="font-medium text-zinc-200">
-                  90% & 100% Critical Ceiling Alerts
+            <div className="flex items-center justify-between gap-4 py-3.5">
+              <div className="min-w-0">
+                <p className="text-[13px] font-medium text-ink">
+                  90% and 100% critical alerts
                 </p>
-                <p className="text-zinc-500 text-[11px]">
-                  Emergency notifications when entering rate-limit throttling territory
+                <p className="mt-0.5 text-[11.5px] leading-relaxed text-ink-3">
+                  Emergency notices before rate-limit throttling begins.
                 </p>
               </div>
-              <input
-                type="checkbox"
+              <Toggle
                 checked={threshold90}
-                onChange={(e) => setThreshold90(e.target.checked)}
-                className="h-4 w-4 accent-violet-600 rounded"
+                onChange={setThreshold90}
+                label="90% and 100% critical alerts"
               />
             </div>
 
-            <div className="flex items-center justify-between py-2 border-b border-white/[0.03]">
-              <div>
-                <p className="font-medium text-zinc-200">
-                  Subscription Renewal Advance Notice
+            <div className="flex items-center justify-between gap-4 py-3.5">
+              <div className="min-w-0">
+                <p className="text-[13px] font-medium text-ink">
+                  Renewal advance notice
                 </p>
-                <p className="text-zinc-500 text-[11px]">
-                  Days ahead of renewal to highlight upcoming auto-debit charges
+                <p className="mt-0.5 text-[11.5px] leading-relaxed text-ink-3">
+                  Days ahead of an auto-debit charge to send a reminder.
                 </p>
               </div>
               <select
                 value={renewalNoticeDays}
                 onChange={(e) => setRenewalNoticeDays(Number(e.target.value))}
-                className="rounded-lg glass border border-white/[0.08] px-2.5 py-1 text-xs text-zinc-200 outline-none"
+                aria-label="Renewal advance notice"
+                className="select select-sm w-24 shrink-0"
               >
-                <option value={3} className="bg-[#18181b]">3 Days</option>
-                <option value={7} className="bg-[#18181b]">7 Days</option>
-                <option value={14} className="bg-[#18181b]">14 Days</option>
+                <option value={3}>3 days</option>
+                <option value={7}>7 days</option>
+                <option value={14}>14 days</option>
               </select>
             </div>
 
-            <div className="flex items-center justify-between py-2">
-              <div>
-                <p className="font-medium text-zinc-200">
-                  Low API Credit Depletion Threshold
+            <div className="flex items-center justify-between gap-4 py-3.5">
+              <div className="min-w-0">
+                <p className="text-[13px] font-medium text-ink">
+                  Low credit threshold
                 </p>
-                <p className="text-zinc-500 text-[11px]">
-                  Warning when prepaid developer balance dips below target
+                <p className="mt-0.5 text-[11.5px] leading-relaxed text-ink-3">
+                  Warning when prepaid developer balance falls below this value.
                 </p>
               </div>
-              <div className="flex items-center gap-1 font-mono">
-                <span>$</span>
+              <div className="relative w-24 shrink-0">
+                <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[12px] text-ink-3">
+                  $
+                </span>
                 <input
                   type="number"
                   min="1"
                   value={creditAlertMin}
                   onChange={(e) => setCreditAlertMin(Number(e.target.value))}
-                  className="w-16 rounded-lg glass border border-white/[0.08] px-2 py-1 text-xs text-zinc-200 outline-none text-right"
+                  aria-label="Low credit threshold in dollars"
+                  className="field select-sm pl-6 text-right tnum"
                 />
               </div>
             </div>
           </div>
-        </GlassCard>
+        </section>
 
-        {/* Data Portability */}
-        <GlassCard className="p-6 space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-white/[0.06]">
-            <Download className="h-4 w-4 text-emerald-400" />
-            <h3 className="text-sm font-semibold text-zinc-100">
-              Data Sovereignty & Portability
-            </h3>
-          </div>
-
-          <p className="text-xs text-zinc-400">
-            Export your entire MODELVAULT database, including subscription contracts, usage telemetry, and billing entries into portable formats.
-          </p>
-
-          <div className="flex items-center gap-3">
+        <section className="panel">
+          <SectionHeader
+            icon={Download}
+            title="Data portability"
+            description="Take your subscription, usage and billing data with you."
+          />
+          <div className="panel-body space-y-3">
+            <p className="text-[12px] leading-relaxed text-ink-2">
+              Export the entire MODELVAULT database — subscription contracts,
+              usage telemetry and billing entries — as a single JSON archive.
+            </p>
             <button
               type="button"
               onClick={exportData}
-              className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-3.5 py-2 text-xs font-medium text-zinc-200 hover:bg-white/[0.08] transition-colors flex items-center gap-2"
+              className="btn-secondary"
             >
-              <Download className="h-3.5 w-3.5 text-zinc-400" />
-              Export Database (JSON)
+              <Download className="h-3.5 w-3.5" strokeWidth={2} />
+              Export database (JSON)
             </button>
           </div>
-        </GlassCard>
+        </section>
 
-        {/* Product Identity */}
-        <div className="rounded-xl border border-white/[0.04] bg-white/[0.01] p-4 text-center text-xs text-zinc-500 space-y-1">
-          <p className="font-semibold text-gradient">MODELVAULT v1.0.0 Enterprise</p>
+        <div className="flex flex-col gap-2 border-t border-line pt-4 text-[11.5px] text-ink-3 sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            <span className="font-medium text-ink-2">MODELVAULT</span> v1.0.0 ·
+            Enterprise
+          </p>
           <p>Your AI ecosystem. One command center.</p>
-        </div>
-
-        {/* Save button */}
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            className="flex items-center gap-2 rounded-xl bg-violet-600 px-6 py-2.5 text-xs font-semibold text-white shadow-lg shadow-violet-500/25 transition-all hover:bg-violet-500 active:scale-95"
-          >
-            <Save className="h-4 w-4" />
-            Save Preferences
-          </button>
         </div>
       </form>
     </div>

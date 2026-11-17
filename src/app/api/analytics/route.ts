@@ -9,7 +9,7 @@ export async function GET(_request: NextRequest) {
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
 
     // 1. Subscriptions & API accounts
-    const [subscriptions, apiAccounts, billingRecords, apiUsage] = await Promise.all([
+    const [subscriptions, apiAccounts, billingRecords] = await Promise.all([
       prisma.subscription.findMany({
         where: { userId: DEMO_USER_ID },
         include: { provider: true },
@@ -24,14 +24,6 @@ export async function GET(_request: NextRequest) {
           billingDate: { gte: sixMonthsAgo },
         },
         orderBy: { billingDate: "asc" },
-      }),
-      prisma.apiUsageRecord.findMany({
-        where: {
-          apiAccount: { userId: DEMO_USER_ID },
-        },
-        include: {
-          apiAccount: { include: { provider: true } },
-        },
       }),
     ])
 

@@ -1,21 +1,42 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
+import { CalendarDays, Plus } from "lucide-react"
 import { SummaryCards, SummaryCardsSkeleton } from "@/components/dashboard/summary-cards"
-import { ProviderGrid } from "@/components/dashboard/provider-grid"
+import { ProviderGrid, ProviderGridSkeleton } from "@/components/dashboard/provider-grid"
 import { UsageOverview, UsageOverviewSkeleton } from "@/components/dashboard/usage-overview"
 import { SpendingCharts, SpendingChartsSkeleton } from "@/components/dashboard/spending-charts"
-import { ActivityFeed } from "@/components/dashboard/activity-feed"
-import { QuickInsights } from "@/components/dashboard/quick-insights"
+import { ActivityFeed, ActivityFeedSkeleton } from "@/components/dashboard/activity-feed"
+import { QuickInsights, QuickInsightsSkeleton } from "@/components/dashboard/quick-insights"
 import { PageHeader } from "@/components/ui/page-header"
+import { PROVIDERS } from "@/lib/providers"
 import type {
   DashboardSummary,
   SpendingDataPoint,
   ProviderSpendingData,
   ActivityItem,
+  RawSubscription,
   SubscriptionData,
   NotificationData,
 } from "@/lib/types"
+
+interface DashboardApiData {
+  activeSubscriptions: number
+  totalMonthlySpend: number
+  totalAnnualSpend: number
+  totalApiBalance: number
+  upcomingRenewals: number
+  spendingByMonth?: Record<string, number>
+  providerSpending?: Record<string, number>
+  recentActivity?: Array<{
+    id: string
+    type: string
+    title: string
+    description?: string
+    date: string
+  }>
+}
 
 export default function OverviewPage() {
   const [loading, setLoading] = useState(true)
@@ -25,13 +46,26 @@ export default function OverviewPage() {
   const [activities, setActivities] = useState<ActivityItem[]>([])
   const [spendingHistory, setSpendingHistory] = useState<SpendingDataPoint[]>([])
   const [providerSpending, setProviderSpending] = useState<ProviderSpendingData[]>([])
+  const [reportingPeriod, setReportingPeriod] = useState("—")
+
+  useEffect(() => {
+    // Resolve after hydration so the prerender stays deterministic.
+    const frame = requestAnimationFrame(() =>
+      setReportingPeriod(
+        new Date().toLocaleString("default", {
+          month: "long",
+          year: "numeric",
+        })
+      )
+    )
+    return () => cancelAnimationFrame(frame)
+  }, [])
 
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true)
 
-        // 1. Fetch dashboard stats
         const [dashRes, subRes, notifRes] = await Promise.all([
           fetch("/api/dashboard"),
           fetch("/api/subscriptions"),
@@ -45,7 +79,7 @@ export default function OverviewPage() {
         ])
 
         if (dashJson.data) {
-          const d = dashJson.data
+          const d = dashJson.data as DashboardApiData
           setSummary({
             activeSubscriptions: d.activeSubscriptions,
             totalMonthlySpend: d.totalMonthlySpend,
@@ -55,10 +89,9 @@ export default function OverviewPage() {
             currency: "INR",
           })
 
-          // Transform spending by month
           if (d.spendingByMonth) {
             const points: SpendingDataPoint[] = Object.entries(d.spendingByMonth).map(
-              ([key, amount]: [string, any]) => {
+              ([key, amount]) => {
                 const date = new Date(`${key}-01`)
                 const month = date.toLocaleString("default", { month: "short" })
                 return {
@@ -72,50 +105,42 @@ export default function OverviewPage() {
             setSpendingHistory(points)
           }
 
-          // Transform provider spending
           if (d.providerSpending) {
-            const provPoints: ProviderSpendingData[] = Object.entries(d.providerSpending).map(
-              ([name, amount]: [string, any]) => {
-                const slug = name.toLowerCase().replace(/ /g, "-") as any
-                const colors: Record<string, string> = {
-                  OpenAI: "#10a37f",
-                  Anthropic: "#d4a574",
-                  Google: "#4285f4",
-                  "GitHub Copilot": "#6e40c9",
-                  Cursor: "#00d4aa",
-                  Perplexity: "#20b2aa",
-                  Windsurf: "#059669",
-                  OpenRouter: "#6366f1",
-                  "Hugging Face": "#ff9d00",
-                }
-                return {
-                  provider: name,
-                  providerSlug: slug,
-                  amount: Math.round(Number(amount)),
-                  color: colors[name] || "#8b5cf6",
-                }
+            const provPoints: ProviderSpendingData[] = Object.entries(
+              d.providerSpending
+            ).map(([name, amount]) => {
+              const known = Object.values(PROVIDERS).find(
+                (provider) => provider.name === name
+              )
+              return {
+                provider: name,
+                providerSlug: known?.slug ?? "openai",
+                amount: Math.round(Number(amount)),
+                color: "#5b61d6",
               }
-            )
+            })
             setProviderSpending(provPoints)
           }
 
           if (d.recentActivity) {
-            const mappedActivities: ActivityItem[] = d.recentActivity.map((a: any) => ({
-              id: a.id,
-              type: a.type === "billing" ? "billing" : a.type === "sync" ? "sync" : "alert",
-              title: a.title,
-              description: a.description || "",
-              provider: null,
-              providerSlug: null,
-              timestamp: a.date,
-              severity: "info",
-            }))
+            const mappedActivities: ActivityItem[] = d.recentActivity.map(
+              (a) => ({
+                id: a.id,
+                type: a.type === "billing" ? "billing" : a.type === "sync" ? "sync" : "alert",
+                title: a.title,
+                description: a.description || "",
+                provider: null,
+                providerSlug: null,
+                timestamp: a.date,
+                severity: "info",
+              })
+            )
             setActivities(mappedActivities)
           }
         }
 
         if (subJson.data) {
-          const subs: SubscriptionData[] = subJson.data.map((s: any) => ({
+          const subs: SubscriptionData[] = subJson.data.map((s: RawSubscription) => ({
             id: s.id,
             userId: s.userId,
             providerId: s.providerId,
@@ -162,47 +187,32 @@ export default function OverviewPage() {
   }, [])
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-6 pb-12">
       <PageHeader
-        title="Command Center"
-        description="Unified monitoring, quota utilization, and expenditure analytics across your AI stack."
-        badge={
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-0.5 text-xs font-medium text-violet-300">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            Live Ecosystem
-          </span>
+        title="Dashboard"
+        description="A single view of subscription spend, quota consumption and upcoming renewals across your AI stack."
+        action={
+          <>
+            <Link href="/analytics" className="btn-secondary">
+              View analytics
+            </Link>
+            <Link href="/subscriptions" className="btn-primary">
+              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+              Add subscription
+            </Link>
+          </>
         }
       />
 
-      {/* Summary Cards */}
-      {loading || !summary ? (
-        <SummaryCardsSkeleton />
-      ) : (
-        <SummaryCards data={summary} />
-      )}
-
-      {/* Provider Cards Overview */}
-      <ProviderGrid subscriptions={subscriptions} />
-
-      {/* Two Column Section: Usage Overview & Quick Insights */}
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          {loading ? (
-            <UsageOverviewSkeleton />
-          ) : (
-            <UsageOverview subscriptions={subscriptions} />
-          )}
-        </div>
-        <div>
-          <QuickInsights
-            subscriptions={subscriptions}
-            notifications={notifications}
-            totalProviders={subscriptions.length}
-          />
-        </div>
+      <div className="-mt-2 flex items-center gap-1.5 text-[11.5px] text-ink-3">
+        <CalendarDays className="h-3.5 w-3.5" strokeWidth={1.8} />
+        Reporting period
+        <span className="text-ink-2">·</span>
+        <span className="font-medium text-ink-2">{reportingPeriod}</span>
       </div>
 
-      {/* Spending Analytics */}
+      {loading || !summary ? <SummaryCardsSkeleton /> : <SummaryCards data={summary} />}
+
       {loading ? (
         <SpendingChartsSkeleton />
       ) : (
@@ -212,8 +222,43 @@ export default function OverviewPage() {
         />
       )}
 
-      {/* Recent Activity Timeline */}
-      {activities.length > 0 && <ActivityFeed activities={activities} />}
+      <div className="grid items-start gap-3 lg:grid-cols-3">
+        <div className="min-w-0 lg:col-span-2">
+          {loading ? (
+            <UsageOverviewSkeleton />
+          ) : (
+            <UsageOverview subscriptions={subscriptions} />
+          )}
+        </div>
+        <div className="min-w-0">
+          {loading ? (
+            <QuickInsightsSkeleton />
+          ) : (
+            <QuickInsights
+              subscriptions={subscriptions}
+              notifications={notifications}
+              totalProviders={subscriptions.length}
+            />
+          )}
+        </div>
+      </div>
+
+      <div className="grid items-start gap-3 lg:grid-cols-3">
+        <div className="min-w-0 lg:col-span-2">
+          {loading ? (
+            <ProviderGridSkeleton />
+          ) : (
+            <ProviderGrid subscriptions={subscriptions} />
+          )}
+        </div>
+        <div className="min-w-0">
+          {loading ? (
+            <ActivityFeedSkeleton />
+          ) : (
+            <ActivityFeed activities={activities} />
+          )}
+        </div>
+      </div>
     </div>
   )
 }

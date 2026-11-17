@@ -1,172 +1,198 @@
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { motion, AnimatePresence } from "framer-motion"
+import { AnimatePresence, motion } from "framer-motion"
 import {
-  LayoutDashboard,
-  CreditCard,
   Activity,
   BarChart3,
-  Receipt,
-  Calendar,
+  BookOpen,
+  CalendarDays,
+  CreditCard,
+  LayoutDashboard,
   Plug,
+  Receipt,
   Settings,
-  Plus,
-  Bell,
-  Shield,
-  Menu,
+  ShieldCheck,
   X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-const navItems = [
-  { href: "/overview", label: "Overview", icon: LayoutDashboard },
-  { href: "/subscriptions", label: "My Subscriptions", icon: CreditCard },
-  { href: "/api-usage", label: "API Usage", icon: Activity },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/billing", label: "Billing & Expenses", icon: Receipt },
-  { href: "/calendar", label: "Renewal Calendar", icon: Calendar },
-  { href: "/integrations", label: "Integrations", icon: Plug },
-  { href: "/settings", label: "Settings", icon: Settings },
+const navSections = [
+  {
+    label: "Overview",
+    items: [
+      { href: "/overview", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/subscriptions", label: "Subscriptions", icon: CreditCard },
+      { href: "/api-usage", label: "API Usage", icon: Activity },
+      { href: "/analytics", label: "Analytics", icon: BarChart3 },
+    ],
+  },
+  {
+    label: "Management",
+    items: [
+      { href: "/billing", label: "Billing", icon: Receipt },
+      { href: "/calendar", label: "Renewal Calendar", icon: CalendarDays },
+      { href: "/integrations", label: "Integrations", icon: Plug },
+    ],
+  },
+  {
+    label: "Preferences",
+    items: [{ href: "/settings", label: "Settings", icon: Settings }],
+  },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  mobileOpen: boolean
+  onClose: () => void
+}
+
+function Brand() {
+  return (
+    <Link href="/overview" className="flex items-center gap-2.5">
+      <span className="flex h-7 w-7 items-center justify-center rounded-[7px] bg-ink text-canvas">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path
+            d="M8 1.75 14 4.5 8 7.25 2 4.5 8 1.75Z"
+            stroke="currentColor"
+            strokeWidth="1.2"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M2 8 8 10.75 14 8"
+            stroke="currentColor"
+            strokeWidth="1.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M2 11.5 8 14.25 14 11.5"
+            stroke="currentColor"
+            strokeWidth="1.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+      <span className="text-[13px] font-semibold uppercase tracking-[0.11em] text-ink">
+        MODEL<span className="text-ink-3">VAULT</span>
+      </span>
+    </Link>
+  )
+}
+
+function NavContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
-  const [mobileOpen, setMobileOpen] = useState(false)
-  const unreadCount = 3
 
   return (
-    <>
-      {/* Mobile toggle */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="fixed top-4 left-4 z-50 rounded-lg p-2 glass md:hidden"
-        aria-label="Open menu"
-      >
-        <Menu className="h-5 w-5 text-zinc-300" />
-      </button>
+    <div className="flex h-full flex-col">
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-5">
+        <Brand />
+      </div>
 
-      {/* Overlay */}
-      <AnimatePresence>
-        {mobileOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-black/60 md:hidden"
-            onClick={() => setMobileOpen(false)}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Sidebar */}
-      <aside
-        className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-64 flex-col glass transition-transform duration-300 md:translate-x-0",
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
-        )}
-      >
-        {/* Mobile close */}
-        <button
-          onClick={() => setMobileOpen(false)}
-          className="absolute top-4 right-4 rounded-lg p-1 text-zinc-400 hover:text-zinc-200 md:hidden"
-          aria-label="Close menu"
-        >
-          <X className="h-5 w-5" />
-        </button>
-
-        {/* Logo */}
-        <div className="flex items-center gap-3 px-6 pt-6 pb-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/15 ring-1 ring-violet-500/25">
-            <Shield className="h-5 w-5 text-violet-400" />
+      <nav className="flex-1 overflow-y-auto px-2.5 pb-4">
+        {navSections.map((section) => (
+          <div key={section.label}>
+            <p className="nav-section-label px-3">{section.label}</p>
+            <ul className="space-y-0.5">
+              {section.items.map((item) => {
+                const isActive =
+                  pathname === item.href || pathname.startsWith(`${item.href}/`)
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      onClick={onNavigate}
+                      aria-current={isActive ? "page" : undefined}
+                      className={cn(
+                        "group flex h-8 items-center gap-2.5 rounded-md px-3 text-[13px] transition-colors duration-150",
+                        isActive
+                          ? "bg-accent-soft font-medium text-accent"
+                          : "text-ink-2 hover:bg-surface-2 hover:text-ink"
+                      )}
+                    >
+                      <item.icon
+                        className={cn(
+                          "h-[16px] w-[16px] shrink-0",
+                          isActive ? "text-accent" : "text-ink-3 group-hover:text-ink-2"
+                        )}
+                        strokeWidth={1.8}
+                      />
+                      <span className="truncate">{item.label}</span>
+                    </Link>
+                  </li>
+                )
+              })}
+            </ul>
           </div>
-          <span className="text-gradient text-lg font-bold tracking-tight">
-            MODELVAULT
-          </span>
-        </div>
+        ))}
+      </nav>
 
-        {/* Quick add */}
-        <div className="px-4 pt-4 pb-2">
+      <div className="shrink-0 border-t border-line p-3.5">
+        <div className="flex items-center justify-between rounded-lg border border-line bg-surface-2/60 px-3 py-2">
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-ink-2">
+            <span className="brand-dot bg-success" />
+            All systems operational
+          </span>
+          <ShieldCheck className="h-3.5 w-3.5 text-ink-3" strokeWidth={1.8} />
+        </div>
+        <div className="mt-3 flex items-center justify-between px-1 text-[10.5px] text-ink-3">
+          <span className="font-medium tracking-[0.04em]">MODELVAULT v1.0</span>
           <Link
-            href="/subscriptions"
-            onClick={() => setMobileOpen(false)}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-violet-500/20 bg-violet-500/10 px-3 py-2 text-sm font-medium text-violet-300 transition-colors hover:bg-violet-500/20 active:scale-95"
+            href="/settings"
+            onClick={onNavigate}
+            className="inline-flex items-center gap-1 transition-colors hover:text-ink-2"
           >
-            <Plus className="h-4 w-4" />
-            Add Subscription
+            <BookOpen className="h-3 w-3" strokeWidth={1.8} />
+            Help
           </Link>
         </div>
+      </div>
+    </div>
+  )
+}
 
-        {/* Navigation */}
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setMobileOpen(false)}
-                className={cn(
-                  "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                  isActive
-                    ? "bg-violet-500/15 text-violet-300"
-                    : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200"
-                )}
-              >
-                <item.icon
-                  className={cn(
-                    "h-[18px] w-[18px] shrink-0 transition-colors",
-                    isActive
-                      ? "text-violet-400"
-                      : "text-zinc-500 group-hover:text-zinc-300"
-                  )}
-                />
-                {item.label}
-                {isActive && (
-                  <motion.div
-                    layoutId="sidebar-active"
-                    className="absolute left-0 h-6 w-[3px] rounded-r-full bg-violet-500"
-                    transition={{ type: "spring", stiffness: 350, damping: 30 }}
-                  />
-                )}
-              </Link>
-            )
-          })}
-        </nav>
-
-        {/* Bottom section */}
-        <div className="border-t border-white/[0.06] p-4 space-y-3">
-          {/* Notification bell */}
-          <button className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-white/[0.04] hover:text-zinc-200">
-            <div className="relative">
-              <Bell className="h-[18px] w-[18px]" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-500 px-1 text-[10px] font-bold text-white">
-                  {unreadCount}
-                </span>
-              )}
-            </div>
-            Notifications
-          </button>
-
-          {/* User profile */}
-          <div className="flex items-center gap-3 rounded-lg px-3 py-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-blue-500 text-xs font-bold text-white">
-              AK
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-zinc-200">
-                Alex Kumar
-              </p>
-              <p className="truncate text-xs text-zinc-500">
-                alex@example.com
-              </p>
-            </div>
-          </div>
-        </div>
+export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
+  return (
+    <>
+      {/* Desktop rail */}
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 border-r border-line bg-surface lg:block">
+        <NavContent />
       </aside>
+
+      {/* Mobile drawer */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <>
+            <motion.div
+              key="sidebar-overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px] lg:hidden"
+              onClick={onClose}
+            />
+            <motion.aside
+              key="sidebar-drawer"
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+              className="fixed inset-y-0 left-0 z-50 w-[264px] border-r border-line bg-surface lg:hidden"
+            >
+              <button
+                onClick={onClose}
+                className="icon-btn absolute right-2.5 top-3 z-10"
+                aria-label="Close navigation"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <NavContent onNavigate={onClose} />
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
     </>
   )
 }

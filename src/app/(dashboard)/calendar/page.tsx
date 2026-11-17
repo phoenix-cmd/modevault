@@ -1,25 +1,17 @@
 "use client"
 
+/* eslint-disable react-hooks/set-state-in-effect -- session state is hydrated from the API on mount */
+
 import { useEffect, useState } from "react"
-import {
-  Calendar as CalendarIcon,
-  Clock,
-  AlertCircle,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  CreditCard,
-} from "lucide-react"
+import { AlertCircle, CheckCircle2, CreditCard } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
-import { GlassCard } from "@/components/ui/glass-card"
 import { ProviderIcon } from "@/components/ui/provider-icon"
 import { formatCurrency, formatDate, formatRelativeDate } from "@/lib/utils"
-import type { SubscriptionData } from "@/lib/types"
+import type { RawSubscription, SubscriptionData } from "@/lib/types"
 
 export default function CalendarPage() {
   const [subscriptions, setSubscriptions] = useState<SubscriptionData[]>([])
   const [loading, setLoading] = useState(true)
-
   const [now, setNow] = useState<Date | null>(null)
 
   useEffect(() => {
@@ -31,8 +23,8 @@ export default function CalendarPage() {
         const json = await res.json()
         if (json.data) {
           const subs: SubscriptionData[] = json.data
-            .filter((s: any) => s.status === "active" && s.renewalDate)
-            .map((s: any) => ({
+            .filter((s: RawSubscription) => s.status === "active" && s.renewalDate)
+            .map((s: RawSubscription) => ({
               id: s.id,
               userId: s.userId,
               providerId: s.providerId,
@@ -63,7 +55,7 @@ export default function CalendarPage() {
               updatedAt: s.updatedAt,
             }))
             .sort(
-              (a: any, b: any) =>
+              (a: SubscriptionData, b: SubscriptionData) =>
                 new Date(a.renewalDate!).getTime() -
                 new Date(b.renewalDate!).getTime()
             )
@@ -80,7 +72,6 @@ export default function CalendarPage() {
 
   const currentTime = now ? now.getTime() : 0
 
-  // Categorize
   const next7Days = now
     ? subscriptions.filter((s) => {
         const diff = new Date(s.renewalDate!).getTime() - currentTime
@@ -91,14 +82,9 @@ export default function CalendarPage() {
   const next30Days = now
     ? subscriptions.filter((s) => {
         const diff = new Date(s.renewalDate!).getTime() - currentTime
-        return diff > 7 * 24 * 60 * 60 * 1000 && diff <= 30 * 24 * 60 * 60 * 1000
-      })
-    : []
-
-  const laterRenewals = now
-    ? subscriptions.filter((s) => {
-        const diff = new Date(s.renewalDate!).getTime() - currentTime
-        return diff > 30 * 24 * 60 * 60 * 1000
+        return (
+          diff > 7 * 24 * 60 * 60 * 1000 && diff <= 30 * 24 * 60 * 60 * 1000
+        )
       })
     : []
 
@@ -107,168 +93,265 @@ export default function CalendarPage() {
     0
   )
 
-  return (
-    <div className="space-y-8 pb-16">
-      <PageHeader
-        title="Renewal Calendar"
-        description="Forward-looking billing schedule, renewal forecasts, and cancellation warning horizons."
-      />
+  const metrics = [
+    {
+      label: "Next 7 days",
+      value: String(next7Days.length),
+      meta: next7Days.length > 0 ? "Imminent renewals" : "Nothing imminent",
+      icon: AlertCircle,
+      accent: next7Days.length > 0,
+    },
+    {
+      label: "30-day committed",
+      value: formatCurrency(totalUpcoming30Days, "INR"),
+      meta: "Scheduled charges",
+      icon: CreditCard,
+    },
+    {
+      label: "Active schedules",
+      value: String(subscriptions.length),
+      meta: "Subscriptions with a renewal date",
+      icon: CheckCircle2,
+    },
+  ]
 
-      {/* Overview Stats */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <GlassCard variant="subtle" className="p-4 flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-xs text-zinc-500 font-medium">Imminent (Within 7 Days)</p>
-            <p className="text-2xl font-bold text-red-400">{next7Days.length}</p>
-          </div>
-          <div className="h-10 w-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-400">
-            <AlertCircle className="h-5 w-5" />
-          </div>
-        </GlassCard>
-
-        <GlassCard variant="subtle" className="p-4 flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-xs text-zinc-500 font-medium">Next 30 Days Committed</p>
-            <p className="text-2xl font-bold text-zinc-100">
-              {formatCurrency(totalUpcoming30Days, "INR")}
-            </p>
-          </div>
-          <div className="h-10 w-10 rounded-xl bg-violet-500/10 flex items-center justify-center text-violet-400">
-            <CreditCard className="h-5 w-5" />
-          </div>
-        </GlassCard>
-
-        <GlassCard variant="subtle" className="p-4 flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-xs text-zinc-500 font-medium">Tracked Active Schedules</p>
-            <p className="text-2xl font-bold text-emerald-400">{subscriptions.length}</p>
-          </div>
-          <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400">
-            <CheckCircle2 className="h-5 w-5" />
-          </div>
-        </GlassCard>
-      </div>
-
-      {/* Imminent Renewals Timeline */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-red-400 animate-pulse" />
-          <h2 className="text-sm font-semibold text-zinc-200">
-            Imminent Renewals (Next 7 Days)
-          </h2>
+  if (loading) {
+    return (
+      <div className="space-y-5 pb-12">
+        <PageHeader
+          title="Renewal calendar"
+          description="Forward-looking billing schedule and renewal forecast."
+        />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="panel px-4 py-3.5">
+              <div className="skeleton h-2.5 w-20" />
+              <div className="skeleton mt-3 h-6 w-24" />
+              <div className="skeleton mt-2 h-2.5 w-32" />
+            </div>
+          ))}
         </div>
-
-        {next7Days.length === 0 ? (
-          <GlassCard className="p-6 text-center text-xs text-zinc-500">
-            No subscriptions renew in the next 7 days.
-          </GlassCard>
-        ) : (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            {next7Days.map((sub) => (
-              <GlassCard
-                key={sub.id}
-                className="p-4 border-red-500/30 bg-red-500/[0.02] flex items-center justify-between"
-              >
-                <div className="flex items-center gap-3">
-                  <ProviderIcon slug={sub.providerSlug} name={sub.providerName} size="md" />
-                  <div>
-                    <h4 className="font-semibold text-zinc-100 text-sm">{sub.providerName}</h4>
-                    <p className="text-xs text-zinc-400">{sub.planName}</p>
-                    <p className="text-[11px] text-red-400 font-medium mt-1">
-                      Renews {formatRelativeDate(sub.renewalDate!)}
-                    </p>
+        <div className="grid gap-3 lg:grid-cols-2">
+          {Array.from({ length: 2 }).map((_, index) => (
+            <div key={index} className="panel px-4 py-4">
+              <div className="skeleton mb-3 h-3.5 w-32" />
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((__, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <div className="skeleton h-7 w-7 rounded-[6px]" />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="skeleton h-3 w-28" />
+                      <div className="skeleton h-2.5 w-20" />
+                    </div>
+                    <div className="skeleton h-4 w-14" />
                   </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-base font-bold text-zinc-100">
-                    {formatCurrency(sub.price, sub.currency)}
-                  </p>
-                  <p className="text-[10px] text-zinc-500 capitalize">{sub.billingCycle}</p>
-                </div>
-              </GlassCard>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Next 30 Days Renewals */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-amber-400" />
-          <h2 className="text-sm font-semibold text-zinc-200">
-            Upcoming in 30 Days
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {next30Days.map((sub) => (
-            <GlassCard
-              key={sub.id}
-              className="p-4 border-amber-500/20 bg-amber-500/[0.01] flex items-center justify-between"
-            >
-              <div className="flex items-center gap-3">
-                <ProviderIcon slug={sub.providerSlug} name={sub.providerName} size="sm" />
-                <div>
-                  <h4 className="font-medium text-zinc-200 text-xs">{sub.providerName}</h4>
-                  <p className="text-[11px] text-zinc-400">{sub.planName}</p>
-                  <p className="text-[11px] text-zinc-400 mt-1">
-                    {formatRelativeDate(sub.renewalDate!)}
-                  </p>
-                </div>
+                ))}
               </div>
-              <div className="text-right">
-                <p className="text-sm font-semibold text-zinc-100">
-                  {formatCurrency(sub.price, sub.currency)}
-                </p>
-                <p className="text-[10px] text-zinc-500">{formatDate(sub.renewalDate!)}</p>
-              </div>
-            </GlassCard>
+            </div>
           ))}
         </div>
       </div>
+    )
+  }
 
-      {/* Full Chronological Schedule Table */}
-      <div className="space-y-4">
-        <h2 className="text-sm font-semibold text-zinc-200">
-          Full Chronological Calendar Schedule
-        </h2>
+  return (
+    <div className="space-y-5 pb-12">
+      <PageHeader
+        title="Renewal calendar"
+        description="A forward-looking schedule of upcoming auto-debits and cancellation warning horizons."
+      />
 
-        <div className="overflow-x-auto rounded-xl border border-white/[0.06] glass">
-          <table className="w-full text-left text-xs text-zinc-300">
-            <thead className="border-b border-white/[0.06] bg-white/[0.02] uppercase tracking-wider text-[11px] text-zinc-500">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {metrics.map(({ label, value, meta, icon: Icon, accent }) => (
+          <div key={label} className="panel px-4 py-3.5">
+            <div className="flex items-start justify-between gap-3">
+              <p className="metric-label">{label}</p>
+              <Icon
+                className={
+                  accent ? "h-3.5 w-3.5 text-accent" : "h-3.5 w-3.5 text-ink-3"
+                }
+                strokeWidth={1.8}
+              />
+            </div>
+            <p className="metric-value">{value}</p>
+            <p className="metric-meta">{meta}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid items-start gap-3 lg:grid-cols-2">
+        <section className="panel overflow-hidden">
+          <div className="panel-header">
+            <div>
+              <h2 className="panel-title">Next 7 days</h2>
+              <p className="panel-subtitle">Imminent charges to review</p>
+            </div>
+            <span className="badge bg-warning-soft text-warning">
+              {next7Days.length}
+            </span>
+          </div>
+
+          <div className="row-divide">
+            {next7Days.length === 0 ? (
+              <p className="px-4 py-8 text-center text-[12px] text-ink-3">
+                No subscriptions renew in the next 7 days.
+              </p>
+            ) : (
+              next7Days.map((sub) => (
+                <div
+                  key={sub.id}
+                  className="flex items-center justify-between gap-3 px-4 py-3"
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <ProviderIcon slug={sub.providerSlug} size="sm" />
+                    <div className="min-w-0">
+                      <p className="truncate text-[12.5px] font-medium text-ink">
+                        {sub.providerName}
+                      </p>
+                      <p className="truncate text-[11px] text-ink-3">
+                        {sub.planName} ·{" "}
+                        <span className="text-warning">
+                          {formatRelativeDate(sub.renewalDate!)}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-[12.5px] font-medium text-ink tnum">
+                      {formatCurrency(sub.price, sub.currency)}
+                    </p>
+                    <p className="text-[10.5px] capitalize text-ink-3">
+                      {sub.billingCycle}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section className="panel overflow-hidden">
+          <div className="panel-header">
+            <div>
+              <h2 className="panel-title">Days 8–30</h2>
+              <p className="panel-subtitle">Upcoming later this month</p>
+            </div>
+            <span className="badge bg-surface-2 text-ink-3">
+              {next30Days.length}
+            </span>
+          </div>
+
+          <div className="row-divide">
+            {next30Days.length === 0 ? (
+              <p className="px-4 py-8 text-center text-[12px] text-ink-3">
+                Nothing scheduled for the rest of the 30-day window.
+              </p>
+            ) : (
+              next30Days.map((sub) => (
+                <div
+                  key={sub.id}
+                  className="flex items-center justify-between gap-3 px-4 py-3"
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <ProviderIcon slug={sub.providerSlug} size="sm" />
+                    <div className="min-w-0">
+                      <p className="truncate text-[12.5px] font-medium text-ink">
+                        {sub.providerName}
+                      </p>
+                      <p className="truncate text-[11px] text-ink-3">
+                        {sub.planName} · {formatRelativeDate(sub.renewalDate!)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-[12.5px] font-medium text-ink tnum">
+                      {formatCurrency(sub.price, sub.currency)}
+                    </p>
+                    <p className="text-[10.5px] text-ink-3">
+                      {formatDate(sub.renewalDate!)}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      </div>
+
+      <section className="panel overflow-hidden">
+        <div className="panel-header">
+          <div>
+            <h2 className="panel-title">Full schedule</h2>
+            <p className="panel-subtitle">All active renewals in date order</p>
+          </div>
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden md:block">
+          <table className="data-table">
+            <thead>
               <tr>
-                <th className="px-5 py-3 font-medium">Renewal Date</th>
-                <th className="px-5 py-3 font-medium">Provider & Service</th>
-                <th className="px-5 py-3 font-medium">Billing Period</th>
-                <th className="px-5 py-3 font-medium text-right">Scheduled Charge</th>
-                <th className="px-5 py-3 font-medium text-right">Countdown</th>
+                <th>Renewal date</th>
+                <th>Provider &amp; plan</th>
+                <th>Billing period</th>
+                <th className="text-right">Scheduled charge</th>
+                <th className="text-right">Countdown</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/[0.03]">
-              {subscriptions.map((s) => (
-                <tr key={s.id} className="hover:bg-white/[0.02] transition-colors">
-                  <td className="px-5 py-3 font-mono font-medium text-zinc-200">
-                    {formatDate(s.renewalDate!)}
+            <tbody>
+              {subscriptions.map((sub) => (
+                <tr key={sub.id}>
+                  <td className="whitespace-nowrap font-medium text-ink tnum">
+                    {formatDate(sub.renewalDate!)}
                   </td>
-                  <td className="px-5 py-3">
-                    <span className="font-semibold text-zinc-100">{s.providerName}</span>
-                    <span className="ml-2 text-zinc-500">{s.planName}</span>
+                  <td>
+                    <p className="text-[13px] font-medium text-ink">
+                      {sub.providerName}
+                    </p>
+                    <p className="text-[11px] text-ink-3">{sub.planName}</p>
                   </td>
-                  <td className="px-5 py-3 capitalize text-zinc-400">
-                    {s.billingCycle}
+                  <td className="capitalize text-ink-2">{sub.billingCycle}</td>
+                  <td className="text-right font-medium text-ink tnum">
+                    {formatCurrency(sub.price, sub.currency)}
                   </td>
-                  <td className="px-5 py-3 text-right font-mono font-semibold text-zinc-100">
-                    {formatCurrency(s.price, s.currency)}
-                  </td>
-                  <td className="px-5 py-3 text-right font-medium text-violet-300 font-mono">
-                    {formatRelativeDate(s.renewalDate!)}
+                  <td className="text-right text-ink-2 tnum">
+                    {formatRelativeDate(sub.renewalDate!)}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </div>
+
+        {/* Mobile list */}
+        <div className="row-divide md:hidden">
+          {subscriptions.map((sub) => (
+            <div key={sub.id} className="px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <ProviderIcon slug={sub.providerSlug} size="sm" />
+                  <div className="min-w-0">
+                    <p className="truncate text-[12.5px] font-medium text-ink">
+                      {sub.providerName}
+                    </p>
+                    <p className="truncate text-[11px] text-ink-3">
+                      {formatDate(sub.renewalDate!)} · {sub.planName}
+                    </p>
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-[12.5px] font-medium text-ink tnum">
+                    {formatCurrency(sub.price, sub.currency)}
+                  </p>
+                  <p className="text-[10.5px] text-ink-3 tnum">
+                    {formatRelativeDate(sub.renewalDate!)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   )
 }

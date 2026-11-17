@@ -6,30 +6,29 @@ interface StatusBadgeProps {
   pulse?: boolean
 }
 
-export function StatusBadge({ status, className, pulse = false }: StatusBadgeProps) {
-  const badgeStyle = getStatusBadgeColor(status)
+const DOT_COLOR: Record<string, string> = {
+  active: "bg-success",
+  connected: "bg-success",
+  paused: "bg-warning",
+  trial: "bg-accent",
+  expired: "bg-danger",
+  error: "bg-danger",
+  cancelled: "bg-ink-3",
+  manual: "bg-info",
+}
 
+export function StatusBadge({ status, className, pulse = false }: StatusBadgeProps) {
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium capitalize",
-        badgeStyle,
-        className
-      )}
-    >
+    <span className={cn("badge", getStatusBadgeColor(status), className)}>
       {pulse && (
         <span
           className={cn(
-            "h-1.5 w-1.5 rounded-full",
-            status === "active" || status === "connected"
-              ? "bg-emerald-400 animate-pulse"
-              : status === "warning" || status === "paused"
-              ? "bg-amber-400"
-              : "bg-red-400"
+            "h-1.5 w-1.5 shrink-0 rounded-full",
+            DOT_COLOR[status] || "bg-ink-3"
           )}
         />
       )}
-      {status}
+      {status.replace("_", " ")}
     </span>
   )
 }

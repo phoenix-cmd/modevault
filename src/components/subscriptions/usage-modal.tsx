@@ -1,7 +1,9 @@
 "use client"
 
-import { useState } from "react"
-import { X, Gauge, RefreshCw } from "lucide-react"
+/* eslint-disable react-hooks/set-state-in-effect -- modal fields reset when opened */
+
+import { useEffect, useState } from "react"
+import { Gauge, X } from "lucide-react"
 import type { SubscriptionData } from "@/lib/types"
 
 interface UsageModalProps {
@@ -17,14 +19,23 @@ export function UsageModal({
   onClose,
   onSuccess,
 }: UsageModalProps) {
-  if (!isOpen || !subscription) return null
-
-  const [usedMessages, setUsedMessages] = useState(subscription.usedMessages || 0)
-  const [usedRequests, setUsedRequests] = useState(subscription.usedRequests || 0)
-  const [usedTokens, setUsedTokens] = useState(subscription.usedTokens || 0)
-  const [usedCredits, setUsedCredits] = useState(subscription.usedCredits || 0)
+  const [usedMessages, setUsedMessages] = useState(0)
+  const [usedRequests, setUsedRequests] = useState(0)
+  const [usedTokens, setUsedTokens] = useState(0)
+  const [usedCredits, setUsedCredits] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!subscription || !isOpen) return
+    setUsedMessages(subscription.usedMessages || 0)
+    setUsedRequests(subscription.usedRequests || 0)
+    setUsedTokens(subscription.usedTokens || 0)
+    setUsedCredits(subscription.usedCredits || 0)
+    setError(null)
+  }, [subscription, isOpen])
+
+  if (!isOpen || !subscription) return null
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,13 +43,16 @@ export function UsageModal({
     setError(null)
 
     try {
-      const payload: any = {}
-      if (subscription.quotaMessages !== null) payload.usedMessages = Number(usedMessages)
-      if (subscription.quotaRequests !== null) payload.usedRequests = Number(usedRequests)
-      if (subscription.quotaTokens !== null) payload.usedTokens = Number(usedTokens)
-      if (subscription.quotaCredits !== null) payload.usedCredits = Number(usedCredits)
+      const payload: Record<string, number> = {}
+      if (subscription.quotaMessages !== null)
+        payload.usedMessages = Number(usedMessages)
+      if (subscription.quotaRequests !== null)
+        payload.usedRequests = Number(usedRequests)
+      if (subscription.quotaTokens !== null)
+        payload.usedTokens = Number(usedTokens)
+      if (subscription.quotaCredits !== null)
+        payload.usedCredits = Number(usedCredits)
 
-      // Also support updating default if no quota was specified
       if (Object.keys(payload).length === 0) {
         payload.usedMessages = Number(usedMessages)
       }
@@ -56,147 +70,136 @@ export function UsageModal({
 
       onSuccess()
       onClose()
-    } catch (err: any) {
-      setError(err.message || "Failed to update usage")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update usage")
     } finally {
       setSubmitting(false)
     }
   }
 
+  const fields = [
+    {
+      key: "messages",
+      label: "Messages used",
+      quota: subscription.quotaMessages,
+      value: usedMessages,
+      setValue: setUsedMessages,
+      step: undefined,
+    },
+    {
+      key: "requests",
+      label: "Requests used",
+      quota: subscription.quotaRequests,
+      value: usedRequests,
+      setValue: setUsedRequests,
+      step: undefined,
+    },
+    {
+      key: "tokens",
+      label: "Tokens consumed",
+      quota: subscription.quotaTokens,
+      value: usedTokens,
+      setValue: setUsedTokens,
+      step: undefined,
+    },
+    {
+      key: "credits",
+      label: "Credits used ($)",
+      quota: subscription.quotaCredits,
+      value: usedCredits,
+      setValue: setUsedCredits,
+      step: "any",
+    },
+  ]
+
+  const hasQuota = fields.some((field) => field.quota !== null)
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-      <div className="relative w-full max-w-md rounded-2xl glass-elevated border border-white/[0.08] p-6 shadow-2xl">
-        <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm animate-fade-in">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="usage-modal-title"
+        className="glass-panel relative w-full max-w-md rounded-xl"
+      >
+        <div className="flex items-center justify-between gap-4 border-b border-line px-5 py-3.5">
           <div className="flex items-center gap-2">
-            <Gauge className="h-5 w-5 text-violet-400" />
-            <h2 className="text-base font-semibold text-zinc-100">
-              Record Usage — {subscription.providerName}
-            </h2>
+            <Gauge className="h-4 w-4 text-accent" strokeWidth={1.8} />
+            <div>
+              <h2
+                id="usage-modal-title"
+                className="text-[14px] font-semibold text-ink"
+              >
+                Record usage
+              </h2>
+              <p className="text-[11.5px] text-ink-3">
+                {subscription.providerName} · {subscription.planName}
+              </p>
+            </div>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/[0.06] hover:text-zinc-200"
-          >
-            <X className="h-5 w-5" />
+          <button onClick={onClose} className="icon-btn" aria-label="Close">
+            <X className="h-4 w-4" strokeWidth={2} />
           </button>
         </div>
 
-        {error && (
-          <div className="mt-4 rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-xs text-red-300">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="mt-5 space-y-4 text-sm">
-          <p className="text-xs text-zinc-400">
-            Update current consumption for {subscription.planName}. Metrics entered here immediately sync with your command center dashboards.
-          </p>
-
-          {subscription.quotaMessages !== null && (
-            <div>
-              <div className="flex justify-between text-xs text-zinc-300 mb-1.5">
-                <span>Messages Used</span>
-                <span className="text-zinc-500">
-                  Quota: {subscription.quotaMessages.toLocaleString()}
-                </span>
+        <form onSubmit={handleSubmit}>
+          <div className="space-y-4 px-5 py-4">
+            {error && (
+              <div className="rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-[12px] text-danger">
+                {error}
               </div>
-              <input
-                type="number"
-                min="0"
-                value={usedMessages}
-                onChange={(e) => setUsedMessages(Number(e.target.value))}
-                className="w-full rounded-lg glass border border-white/[0.08] px-3 py-2 text-zinc-200 outline-none focus:border-violet-500/50"
-              />
-            </div>
-          )}
+            )}
 
-          {subscription.quotaRequests !== null && (
-            <div>
-              <div className="flex justify-between text-xs text-zinc-300 mb-1.5">
-                <span>Requests Used</span>
-                <span className="text-zinc-500">
-                  Quota: {subscription.quotaRequests.toLocaleString()}
-                </span>
-              </div>
-              <input
-                type="number"
-                min="0"
-                value={usedRequests}
-                onChange={(e) => setUsedRequests(Number(e.target.value))}
-                className="w-full rounded-lg glass border border-white/[0.08] px-3 py-2 text-zinc-200 outline-none focus:border-violet-500/50"
-              />
-            </div>
-          )}
+            <p className="help-text">
+              Consumption entered here updates dashboards and quota signals
+              immediately.
+            </p>
 
-          {subscription.quotaTokens !== null && (
-            <div>
-              <div className="flex justify-between text-xs text-zinc-300 mb-1.5">
-                <span>Tokens Consumed</span>
-                <span className="text-zinc-500">
-                  Quota: {subscription.quotaTokens.toLocaleString()}
-                </span>
-              </div>
-              <input
-                type="number"
-                min="0"
-                value={usedTokens}
-                onChange={(e) => setUsedTokens(Number(e.target.value))}
-                className="w-full rounded-lg glass border border-white/[0.08] px-3 py-2 text-zinc-200 outline-none focus:border-violet-500/50"
-              />
-            </div>
-          )}
-
-          {subscription.quotaCredits !== null && (
-            <div>
-              <div className="flex justify-between text-xs text-zinc-300 mb-1.5">
-                <span>Credits Used ($)</span>
-                <span className="text-zinc-500">
-                  Quota: ${subscription.quotaCredits.toLocaleString()}
-                </span>
-              </div>
-              <input
-                type="number"
-                step="any"
-                min="0"
-                value={usedCredits}
-                onChange={(e) => setUsedCredits(Number(e.target.value))}
-                className="w-full rounded-lg glass border border-white/[0.08] px-3 py-2 text-zinc-200 outline-none focus:border-violet-500/50"
-              />
-            </div>
-          )}
-
-          {subscription.quotaMessages === null &&
-            subscription.quotaRequests === null &&
-            subscription.quotaTokens === null &&
-            subscription.quotaCredits === null && (
+            {hasQuota ? (
+              fields
+                .filter((field) => field.quota !== null)
+                .map((field) => (
+                  <div key={field.key}>
+                    <div className="mb-1.5 flex items-center justify-between text-[12px]">
+                      <label className="font-medium text-ink-2">
+                        {field.label}
+                      </label>
+                      <span className="text-ink-3 tnum">
+                        Quota: {field.quota?.toLocaleString()}
+                      </span>
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      step={field.step}
+                      value={field.value}
+                      onChange={(e) =>
+                        field.setValue(Number(e.target.value))
+                      }
+                      className="field tnum"
+                    />
+                  </div>
+                ))
+            ) : (
               <div>
-                <label className="block text-xs text-zinc-300 mb-1.5">
-                  Messages / Units Used
-                </label>
+                <label className="label">Messages / units used</label>
                 <input
                   type="number"
                   min="0"
                   value={usedMessages}
                   onChange={(e) => setUsedMessages(Number(e.target.value))}
-                  className="w-full rounded-lg glass border border-white/[0.08] px-3 py-2 text-zinc-200 outline-none focus:border-violet-500/50"
+                  className="field tnum"
                 />
               </div>
             )}
+          </div>
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/[0.06]">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg px-4 py-2 text-xs font-medium text-zinc-400 hover:text-zinc-200 transition-colors"
-            >
+          <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
+            <button type="button" onClick={onClose} className="btn-ghost">
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="rounded-lg bg-violet-600 px-5 py-2 text-xs font-medium text-white shadow-lg shadow-violet-500/20 transition-all hover:bg-violet-500 active:scale-95 disabled:opacity-50"
-            >
-              {submitting ? "Updating..." : "Update Usage"}
+            <button type="submit" disabled={submitting} className="btn-primary">
+              {submitting ? "Updating…" : "Update usage"}
             </button>
           </div>
         </form>

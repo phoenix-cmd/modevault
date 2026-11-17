@@ -32,55 +32,68 @@ export function DeleteDialog({
       })
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error || "Failed to cancel subscription")
+        throw new Error(data.error || "Failed to delete subscription")
       }
       onSuccess()
       onClose()
-    } catch (err: any) {
-      setError(err.message || "Failed to delete subscription")
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to delete subscription"
+      )
     } finally {
       setSubmitting(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-      <div className="relative w-full max-w-sm rounded-2xl glass-elevated border border-white/[0.08] p-6 shadow-2xl">
-        <div className="flex items-start gap-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500/10 text-red-400 ring-1 ring-red-500/20">
-            <AlertTriangle className="h-5 w-5" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm animate-fade-in">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-dialog-title"
+        className="glass-panel relative w-full max-w-sm rounded-xl"
+      >
+        <div className="flex items-start justify-between gap-3 px-5 pt-5">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-danger/20 bg-danger-soft text-danger">
+              <AlertTriangle className="h-4 w-4" strokeWidth={1.8} />
+            </div>
+            <div>
+              <h3
+                id="delete-dialog-title"
+                className="text-[14px] font-semibold text-ink"
+              >
+                Delete subscription
+              </h3>
+              <p className="mt-1 text-[12px] leading-relaxed text-ink-2">
+                Are you sure you want to remove {subscriptionName}? This
+                archives the record and excludes it from active cost
+                projections.
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-base font-semibold text-zinc-100">
-              Cancel Subscription
-            </h3>
-            <p className="mt-1 text-xs text-zinc-400">
-              Are you sure you want to cancel or remove {subscriptionName}? This will archive the record and exclude it from active cost projections.
-            </p>
-          </div>
+          <button onClick={onClose} className="icon-btn" aria-label="Close">
+            <X className="h-4 w-4" strokeWidth={2} />
+          </button>
         </div>
 
         {error && (
-          <div className="mt-4 rounded-lg bg-red-500/10 border border-red-500/20 p-2.5 text-xs text-red-300">
+          <div className="mx-5 mt-4 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-[12px] text-danger">
             {error}
           </div>
         )}
 
-        <div className="mt-6 flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-200 transition-colors"
-          >
-            Keep Subscription
+        <div className="mt-5 flex items-center justify-end gap-2 border-t border-line px-5 py-3">
+          <button type="button" onClick={onClose} className="btn-ghost">
+            Keep subscription
           </button>
           <button
             type="button"
             disabled={submitting}
             onClick={handleDelete}
-            className="rounded-lg bg-red-600 px-4 py-1.5 text-xs font-medium text-white shadow-lg shadow-red-500/20 transition-all hover:bg-red-500 active:scale-95 disabled:opacity-50"
+            className="btn-danger"
           >
-            {submitting ? "Cancelling..." : "Confirm Cancellation"}
+            {submitting ? "Deleting…" : "Confirm delete"}
           </button>
         </div>
       </div>

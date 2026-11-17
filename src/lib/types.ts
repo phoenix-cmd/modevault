@@ -114,6 +114,119 @@ export interface ApiUsageData {
   dataSource: DataSource
 }
 
+/** Raw subscription row returned by /api/subscriptions (provider and plan included). */
+export interface RawSubscription {
+  id: string
+  userId: string
+  providerId: string
+  provider: { slug: ProviderSlug; name: string } | null
+  plan: { name: string } | null
+  customPlanName: string | null
+  type: SubscriptionType
+  status: SubscriptionStatus
+  billingCycle: BillingCycle
+  price: number
+  currency: string
+  startDate: string
+  renewalDate: string | null
+  expiryDate: string | null
+  quotaMessages: number | null
+  quotaTokens: number | null
+  quotaRequests: number | null
+  quotaCredits: number | null
+  usedMessages: number | null
+  usedTokens: number | null
+  usedRequests: number | null
+  usedCredits: number | null
+  quotaResetDate: string | null
+  quotaResetPeriod: string | null
+  dataSource: DataSource
+  notes: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** Raw developer account row returned by /api/api-accounts (provider included). */
+export interface RawApiAccount {
+  id: string
+  userId: string
+  providerId: string
+  provider: { slug: ProviderSlug; name: string } | null
+  accountName: string | null
+  apiKeyLastFour: string | null
+  prepaidBalance: number | null
+  totalSpent: number | null
+  currency: string | null
+  rateLimit: number | null
+  rateLimitTokens: number | null
+  integrationStatus: IntegrationStatus
+  lastSyncAt: string | null
+  lastSyncStatus: string | null
+  lastSyncError: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** API usage record enriched with its account and provider. */
+export interface ApiUsageRecordData extends ApiUsageData {
+  apiAccount?: {
+    provider?: { name: string; slug: ProviderSlug } | null
+  } | null
+}
+
+/** Aggregated totals returned by /api/api-usage/summary. */
+export interface ApiUsageSummaryData {
+  totalTokens: number
+  totalCost: number
+  totalRequests: number
+  totalCachedTokens: number
+  byModel: Array<{
+    model: string
+    tokens: number
+    cost: number
+    requests: number
+    provider: string
+  }>
+  dailyTrend: Array<{
+    date: string
+    tokens: number
+    cost: number
+    requests: number
+  }>
+  byProvider: Array<{
+    provider: string
+    tokens: number
+    cost: number
+  }>
+}
+
+/** Billing record returned by /api/billing. */
+export interface BillingRecordData {
+  id: string
+  type: string
+  amount: number
+  currency: string
+  billingDate: string
+  description: string | null
+  invoiceUrl: string | null
+  subscription?: {
+    provider?: { name: string; slug: ProviderSlug } | null
+  } | null
+}
+
+/** Totals returned by /api/billing/summary. */
+export interface BillingSummaryData {
+  totalSpentCurrentMonth: number
+  totalSpentCurrentYear: number
+  totalSpentAllTime: number
+  monthlyHistory: Array<{
+    month: string
+    subscription: number
+    api: number
+    total: number
+  }>
+}
+
 export interface NotificationData {
   id: string
   type: NotificationType

@@ -1,8 +1,8 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- standalone Node seed script */
 // MODELVAULT — Database Seed Script
 // Seeds providers and creates a demo user with sample subscriptions
 
 const { PrismaClient } = require("@prisma/client")
-const { randomUUID } = require("crypto")
 
 const prisma = new PrismaClient()
 

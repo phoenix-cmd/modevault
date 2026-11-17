@@ -2,22 +2,18 @@
 
 import { useState } from "react"
 import {
-  Plug,
+  Check,
   CheckCircle2,
-  AlertCircle,
   Key,
-  ShieldCheck,
-  RefreshCw,
-  ExternalLink,
   Lock,
-  Info,
-  Layers,
+  Minus,
+  ShieldCheck,
+  X,
 } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
-import { GlassCard } from "@/components/ui/glass-card"
 import { ProviderIcon } from "@/components/ui/provider-icon"
 import { StatusBadge } from "@/components/ui/status-badge"
-import { PROVIDER_LIST } from "@/lib/providers"
+import { cn } from "@/lib/utils"
 
 interface ProviderIntegrationState {
   slug: string
@@ -39,7 +35,8 @@ const INTEGRATION_CATALOG: ProviderIntegrationState[] = [
     status: "connected",
     lastSync: "10 mins ago",
     features: { subscriptionQuotas: false, apiTokens: true, invoices: true },
-    notes: "Official Usage API active for API keys. Consumer ChatGPT Plus limits tracked manually.",
+    notes:
+      "Official Usage API active for API keys. Consumer ChatGPT Plus limits tracked manually.",
   },
   {
     slug: "anthropic",
@@ -47,7 +44,8 @@ const INTEGRATION_CATALOG: ProviderIntegrationState[] = [
     status: "connected",
     lastSync: "25 mins ago",
     features: { subscriptionQuotas: false, apiTokens: true, invoices: false },
-    notes: "Claude API usage tracked via Admin API. Claude Pro 5x window recorded manually.",
+    notes:
+      "Claude API usage tracked via Admin API. Claude Pro 5x window recorded manually.",
   },
   {
     slug: "google",
@@ -55,7 +53,8 @@ const INTEGRATION_CATALOG: ProviderIntegrationState[] = [
     status: "manual",
     lastSync: "1 hour ago",
     features: { subscriptionQuotas: false, apiTokens: true, invoices: false },
-    notes: "Gemini API tracked via Google Cloud AI Studio credentials. Advanced subscription manual.",
+    notes:
+      "Gemini API tracked via Google Cloud AI Studio credentials. Advanced subscription manual.",
   },
   {
     slug: "openrouter",
@@ -63,7 +62,8 @@ const INTEGRATION_CATALOG: ProviderIntegrationState[] = [
     status: "connected",
     lastSync: "5 mins ago",
     features: { subscriptionQuotas: false, apiTokens: true, invoices: true },
-    notes: "Live balance & token accounting enabled via OpenRouter Key API.",
+    notes:
+      "Live balance and token accounting enabled via OpenRouter Key API.",
   },
   {
     slug: "github-copilot",
@@ -79,7 +79,8 @@ const INTEGRATION_CATALOG: ProviderIntegrationState[] = [
     status: "manual",
     lastSync: "Manual",
     features: { subscriptionQuotas: true, apiTokens: false, invoices: false },
-    notes: "Fast premium requests (500/mo) monitored via manual tracking ledger.",
+    notes:
+      "Fast premium requests (500/mo) monitored via manual tracking ledger.",
   },
   {
     slug: "perplexity",
@@ -109,7 +110,8 @@ const INTEGRATION_CATALOG: ProviderIntegrationState[] = [
 
 export default function IntegrationsPage() {
   const [integrations, setIntegrations] = useState(INTEGRATION_CATALOG)
-  const [selectedProvider, setSelectedProvider] = useState<ProviderIntegrationState | null>(null)
+  const [selectedProvider, setSelectedProvider] =
+    useState<ProviderIntegrationState | null>(null)
   const [apiKeyInput, setApiKeyInput] = useState("")
   const [syncing, setSyncing] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -129,161 +131,204 @@ export default function IntegrationsPage() {
       setSyncing(false)
       setSelectedProvider(null)
       setApiKeyInput("")
-      setToastMessage(`Securely synchronized ${selectedProvider.name} API integration!`)
+      setToastMessage(
+        `Securely synchronized ${selectedProvider.name} API integration.`
+      )
       setTimeout(() => setToastMessage(null), 4000)
     }, 1200)
   }
 
+  const capability = (label: string, supported: boolean) => (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] font-medium",
+        supported
+          ? "bg-success-soft text-success"
+          : "bg-surface-2 text-ink-3"
+      )}
+    >
+      {supported ? (
+        <Check className="h-2.5 w-2.5" strokeWidth={2.5} />
+      ) : (
+        <Minus className="h-2.5 w-2.5" strokeWidth={2.5} />
+      )}
+      {label}
+    </span>
+  )
+
   return (
-    <div className="space-y-8 pb-16">
+    <div className="space-y-5 pb-12">
       <PageHeader
-        title="Provider Integrations & Sync Adapters"
-        description="Unified connectors for live API metrics, zero-knowledge encrypted credential storage, and manual tracking fallbacks."
+        title="Integrations"
+        description="Connectors for live API telemetry, encrypted credential storage and manual tracking fallbacks."
       />
 
       {toastMessage && (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-xs text-emerald-300 flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-success/25 bg-success-soft px-3.5 py-2.5 text-[12px] text-success animate-fade-in">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4" />
+            <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} />
             <span>{toastMessage}</span>
           </div>
+          <button
+            onClick={() => setToastMessage(null)}
+            className="text-success/70 hover:text-success"
+            aria-label="Dismiss"
+          >
+            <X className="h-3.5 w-3.5" strokeWidth={2} />
+          </button>
         </div>
       )}
 
-      {/* Security Architecture Callout */}
-      <GlassCard variant="elevated" className="border-violet-500/20 bg-gradient-to-r from-violet-950/20 to-blue-950/20 p-5">
-        <div className="flex items-start gap-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-violet-400 ring-1 ring-violet-500/20">
-            <Lock className="h-5 w-5" />
+      <section className="panel p-4 sm:p-5">
+        <div className="flex items-start gap-3.5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-accent-line bg-accent-soft text-accent">
+            <Lock className="h-4 w-4" strokeWidth={1.8} />
           </div>
-          <div className="space-y-1.5 text-xs text-zinc-300">
-            <h3 className="text-sm font-semibold text-zinc-100">
-              Zero-Knowledge Credential Security & Anti-Scraping Guarantee
-            </h3>
-            <p className="text-zinc-400 leading-relaxed">
-              MODELVAULT strictly adheres to provider terms of service. We never prompt for account passwords or scrape private consumer portals. All developer API keys are encrypted at rest using server-side AES-GCM and never exposed to browser client bundles. For subscription quotas where official telemetry APIs do not exist, MODELVAULT provides transparent manual logging.
+          <div className="space-y-1">
+            <h2 className="text-[13px] font-semibold text-ink">
+              Zero-knowledge credential security
+            </h2>
+            <p className="text-[12px] leading-relaxed text-ink-2">
+              MODELVAULT adheres to provider terms of service. We never request
+              account passwords or scrape private consumer portals. Developer API
+              keys are encrypted at rest using server-side AES-GCM and never
+              exposed to browser bundles. Where official telemetry APIs do not
+              exist, we provide transparent manual logging.
             </p>
           </div>
         </div>
-      </GlassCard>
+      </section>
 
-      {/* Provider Cards Grid */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {integrations.map((item) => (
-          <GlassCard
+          <section
             key={item.slug}
-            className="flex flex-col justify-between p-5 hover:border-violet-500/30 transition-all duration-300"
+            className="panel flex flex-col p-4 transition-colors duration-150 hover:border-line-strong"
           >
-            <div>
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <ProviderIcon slug={item.slug} name={item.name} size="md" />
-                  <div>
-                    <h3 className="font-semibold text-zinc-100 text-sm">{item.name}</h3>
-                    <p className="text-[11px] text-zinc-500">
-                      Sync: {item.lastSync || "Manual"}
-                    </p>
-                  </div>
-                </div>
-                <StatusBadge status={item.status} />
-              </div>
-
-              <p className="mt-4 text-xs text-zinc-400 leading-relaxed">
-                {item.notes}
-              </p>
-
-              {/* Capability Checklist */}
-              <div className="mt-4 pt-3 border-t border-white/[0.04] space-y-1.5 text-[11px]">
-                <div className="flex items-center justify-between text-zinc-400">
-                  <span>Developer Token Telemetry:</span>
-                  <span className={item.features.apiTokens ? "text-emerald-400 font-medium" : "text-zinc-600"}>
-                    {item.features.apiTokens ? "Supported" : "N/A"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-zinc-400">
-                  <span>Subscription Quota Tracking:</span>
-                  <span className={item.features.subscriptionQuotas ? "text-emerald-400 font-medium" : "text-zinc-600"}>
-                    {item.features.subscriptionQuotas ? "Automated" : "Manual Log"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-zinc-400">
-                  <span>Billing / Invoicing:</span>
-                  <span className={item.features.invoices ? "text-emerald-400 font-medium" : "text-zinc-600"}>
-                    {item.features.invoices ? "Supported" : "N/A"}
-                  </span>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <ProviderIcon slug={item.slug} size="md" />
+                <div className="min-w-0">
+                  <h3 className="truncate text-[13px] font-medium text-ink">
+                    {item.name}
+                  </h3>
+                  <p className="text-[11px] text-ink-3">
+                    {item.lastSync || "Manual"} sync
+                  </p>
                 </div>
               </div>
+              <StatusBadge status={item.status} />
             </div>
 
-            <div className="mt-5 pt-3 border-t border-white/[0.04] flex items-center justify-between">
-              <span className="text-[10px] text-zinc-500 font-mono">
-                {item.status === "connected" ? "ENCRYPTED VAULT" : "MANUAL MODE"}
+            <p className="mt-3 flex-1 text-[11.5px] leading-relaxed text-ink-2">
+              {item.notes}
+            </p>
+
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {capability("Tokens", item.features.apiTokens)}
+              {capability("Quotas", item.features.subscriptionQuotas)}
+              {capability("Invoices", item.features.invoices)}
+            </div>
+
+            <div className="mt-3.5 flex items-center justify-between border-t border-line pt-3">
+              <span className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink-3">
+                {item.status === "connected" ? "Encrypted vault" : "Manual mode"}
               </span>
               <button
                 onClick={() => setSelectedProvider(item)}
-                className="rounded-lg bg-white/[0.05] hover:bg-violet-600/30 hover:text-violet-200 border border-white/[0.06] px-3 py-1.5 text-xs font-medium text-zinc-300 transition-all"
+                className="btn-secondary btn-sm"
               >
-                {item.status === "connected" ? "Re-configure Key" : "Configure Key"}
+                {item.status === "connected" ? "Reconfigure" : "Configure"}
               </button>
             </div>
-          </GlassCard>
+          </section>
         ))}
       </div>
 
-      {/* Connect API Key Modal */}
       {selectedProvider && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-          <div className="relative w-full max-w-md rounded-2xl glass-elevated border border-white/[0.08] p-6 shadow-2xl">
-            <h3 className="text-base font-semibold text-zinc-100 pb-3 border-b border-white/[0.06]">
-              Configure {selectedProvider.name} Adapter
-            </h3>
-
-            <form onSubmit={handleConnect} className="mt-4 space-y-4 text-xs">
-              <p className="text-zinc-400 leading-relaxed">
-                Enter your official API key for {selectedProvider.name}. Your key is transmitted via TLS and encrypted at rest using server-side keys.
-              </p>
-
-              <div>
-                <label className="block text-zinc-300 mb-1 font-medium">
-                  API Key or Access Token
-                </label>
-                <div className="relative">
-                  <Key className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
-                  <input
-                    type="password"
-                    required
-                    placeholder="sk-..."
-                    value={apiKeyInput}
-                    onChange={(e) => setApiKeyInput(e.target.value)}
-                    className="w-full rounded-lg glass border border-white/[0.08] pl-9 pr-3 py-2 text-zinc-200 outline-none focus:border-violet-500/50 font-mono"
-                  />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm animate-fade-in">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="configure-provider-title"
+            className="glass-panel relative w-full max-w-md rounded-xl"
+          >
+            <div className="flex items-center justify-between gap-4 border-b border-line px-5 py-3.5">
+              <div className="flex items-center gap-2">
+                <Key className="h-4 w-4 text-accent" strokeWidth={1.8} />
+                <div>
+                  <h2
+                    id="configure-provider-title"
+                    className="text-[14px] font-semibold text-ink"
+                  >
+                    Configure {selectedProvider.name}
+                  </h2>
+                  <p className="text-[11.5px] text-ink-3">
+                    Read-only telemetry adapter
+                  </p>
                 </div>
               </div>
+              <button
+                onClick={() => setSelectedProvider(null)}
+                className="icon-btn"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" strokeWidth={2} />
+              </button>
+            </div>
 
-              <div className="rounded-lg bg-white/[0.02] border border-white/[0.06] p-3 text-[11px] text-zinc-400 space-y-1">
-                <div className="flex items-center gap-1.5 text-emerald-400 font-medium">
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  <span>Encrypted Client Boundary</span>
-                </div>
-                <p>
-                  Keys are only used for read-only quota and balance telemetry. They are never transmitted to third parties.
+            <form onSubmit={handleConnect}>
+              <div className="space-y-4 px-5 py-4">
+                <p className="text-[12px] leading-relaxed text-ink-2">
+                  Enter your official API key for {selectedProvider.name}. The
+                  key is transmitted over TLS and encrypted at rest with
+                  server-side keys.
                 </p>
+
+                <div>
+                  <label className="label">API key or access token</label>
+                  <div className="relative">
+                    <Key
+                      className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3"
+                      strokeWidth={2}
+                    />
+                    <input
+                      type="password"
+                      required
+                      placeholder="sk-…"
+                      value={apiKeyInput}
+                      onChange={(e) => setApiKeyInput(e.target.value)}
+                      className="field pl-8 font-mono text-[12px]"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-line bg-surface-2/60 p-3">
+                  <div className="flex items-center gap-1.5 text-[11px] font-medium text-success">
+                    <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.8} />
+                    Encrypted client boundary
+                  </div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-ink-3">
+                    Keys are used only for read-only quota and balance telemetry
+                    and are never transmitted to third parties.
+                  </p>
+                </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/[0.06]">
+              <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
                 <button
                   type="button"
                   onClick={() => setSelectedProvider(null)}
-                  className="px-3 py-1.5 text-zinc-400 hover:text-zinc-200"
+                  className="btn-ghost"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={syncing}
-                  className="rounded-lg bg-violet-600 px-4 py-2 font-medium text-white shadow-lg hover:bg-violet-500"
+                  className="btn-primary"
                 >
-                  {syncing ? "Encrypting & Testing..." : "Save & Verify Adapter"}
+                  {syncing ? "Verifying…" : "Save and verify"}
                 </button>
               </div>
             </form>
