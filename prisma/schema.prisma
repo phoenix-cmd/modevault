@@ -1,0 +1,279 @@
+// MODELVAULT — Database Schema
+// PostgreSQL-backed relational model for AI subscription & usage tracking
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users ───────────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  currency      String    @default("INR")
+  timezone      String    @default("Asia/Kolkata")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  subscriptions Subscription[]
+  apiAccounts   ApiAccount[]
+  notifications Notification[]
+  syncLogs      SyncLog[]
+  billingRecords BillingRecord[]
+}
+
+// ─── Auth (NextAuth compatible) ──────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Providers ───────────────────────────────────────────────────────────────
+
+model Provider {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  logoUrl     String?
+  brandColor  String?
+  website     String?
+  hasApi      Boolean  @default(false)
+  hasConsumer Boolean  @default(false)
+  apiDocsUrl  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subscriptions Subscription[]
+  apiAccounts   ApiAccount[]
+  plans         Plan[]
+}
+
+// ─── Plans ───────────────────────────────────────────────────────────────────
+
+model Plan {
+  id             String   @id @default(cuid())
+  providerId     String
+  name           String
+  type           String   // "consumer" | "api" | "both"
+  priceMonthly   Float?
+  priceYearly    Float?
+  currency       String   @default("USD")
+  features       String?  // JSON string of features
+  quotaMessages  Int?
+  quotaTokens    Int?
+  quotaRequests  Int?
+  quotaCredits   Float?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  provider      Provider       @relation(fields: [providerId], references: [id])
+  subscriptions Subscription[]
+}
+
+// ─── Subscriptions ───────────────────────────────────────────────────────────
+
+model Subscription {
+  id               String   @id @default(cuid())
+  userId           String
+  providerId       String
+  planId           String?
+  customPlanName   String?
+  type             String   // "consumer" | "api"
+  status           String   @default("active") // "active" | "paused" | "expired" | "cancelled" | "trial"
+  billingCycle     String   @default("monthly") // "monthly" | "yearly" | "custom"
+  price            Float
+  currency         String   @default("INR")
+  startDate        DateTime
+  renewalDate      DateTime?
+  expiryDate       DateTime?
+  cancelledAt      DateTime?
+  quotaMessages    Int?
+  quotaTokens      Int?
+  quotaRequests    Int?
+  quotaCredits     Float?
+  usedMessages     Int?     @default(0)
+  usedTokens       Int?     @default(0)
+  usedRequests     Int?     @default(0)
+  usedCredits      Float?   @default(0)
+  quotaResetDate   DateTime?
+  quotaResetPeriod String?  // "daily" | "weekly" | "monthly" | "billing_cycle"
+  dataSource       String   @default("manual") // "manual" | "api_sync" | "estimated"
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider Provider @relation(fields: [providerId], references: [id])
+  plan     Plan?    @relation(fields: [planId], references: [id])
+  usageRecords UsageRecord[]
+  billingRecords BillingRecord[]
+}
+
+// ─── API Accounts ────────────────────────────────────────────────────────────
+
+model ApiAccount {
+  id               String   @id @default(cuid())
+  userId           String
+  providerId       String
+  accountName      String?
+  apiKeyEncrypted  String?  // Encrypted API key for sync
+  apiKeyLastFour   String?  // Last 4 chars for display
+  prepaidBalance   Float?   @default(0)
+  totalSpent       Float?   @default(0)
+  currency         String   @default("USD")
+  rateLimit        Int?     // requests per minute
+  rateLimitTokens  Int?     // tokens per minute
+  integrationStatus String  @default("manual") // "connected" | "manual" | "error" | "expired"
+  lastSyncAt       DateTime?
+  lastSyncStatus   String?  // "success" | "error" | "partial"
+  lastSyncError    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider Provider @relation(fields: [providerId], references: [id])
+  apiUsageRecords ApiUsageRecord[]
+}
+
+// ─── Usage Records (Consumer Subscriptions) ──────────────────────────────────
+
+model UsageRecord {
+  id              String   @id @default(cuid())
+  subscriptionId  String
+  date            DateTime
+  messagesUsed    Int?
+  tokensUsed      Int?
+  requestsUsed    Int?
+  creditsUsed     Float?
+  dataSource      String   @default("manual") // "manual" | "api_sync" | "estimated"
+  createdAt       DateTime @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+}
+
+// ─── API Usage Records ───────────────────────────────────────────────────────
+
+model ApiUsageRecord {
+  id              String   @id @default(cuid())
+  apiAccountId    String
+  date            DateTime
+  model           String?
+  inputTokens     Int?     @default(0)
+  outputTokens    Int?     @default(0)
+  cachedTokens    Int?     @default(0)
+  totalTokens     Int?     @default(0)
+  cost            Float?   @default(0)
+  currency        String   @default("USD")
+  requestCount    Int?     @default(0)
+  dataSource      String   @default("manual") // "manual" | "api_sync" | "csv_import"
+  metadata        String?  // JSON for extra fields
+  createdAt       DateTime @default(now())
+
+  apiAccount ApiAccount @relation(fields: [apiAccountId], references: [id], onDelete: Cascade)
+}
+
+// ─── Billing Records ─────────────────────────────────────────────────────────
+
+model BillingRecord {
+  id              String   @id @default(cuid())
+  userId          String
+  subscriptionId  String?
+  type            String   // "subscription_payment" | "api_topup" | "refund" | "trial"
+  amount          Float
+  currency        String   @default("INR")
+  billingDate     DateTime
+  description     String?
+  invoiceUrl      String?
+  createdAt       DateTime @default(now())
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+}
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // "quota_warning" | "renewal_reminder" | "credit_low" | "trial_expiring" | "sync_error" | "general"
+  title     String
+  message   String
+  severity  String   @default("info") // "info" | "warning" | "critical"
+  isRead    Boolean  @default(false)
+  actionUrl String?
+  metadata  String?  // JSON
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Sync Logs ───────────────────────────────────────────────────────────────
+
+model SyncLog {
+  id         String   @id @default(cuid())
+  userId     String
+  provider   String
+  status     String   // "success" | "error" | "partial"
+  message    String?
+  details    String?  // JSON
+  duration   Int?     // ms
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Exchange Rates ──────────────────────────────────────────────────────────
+
+model ExchangeRate {
+  id         String   @id @default(cuid())
+  fromCurrency String
+  toCurrency   String
+  rate         Float
+  source       String?
+  fetchedAt    DateTime @default(now())
+
+  @@unique([fromCurrency, toCurrency])
+}
