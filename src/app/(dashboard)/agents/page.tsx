@@ -22,7 +22,12 @@ import {
   Eye,
   Coins,
   ArrowUpRight,
+  MessageSquare,
+  Send,
+  Sliders,
+  CheckSquare,
 } from "lucide-react"
+import { DiffEditor } from "@monaco-editor/react"
 import { PageHeader } from "@/components/ui/page-header"
 import { GlassCard } from "@/components/ui/glass-card"
 import { formatCurrency, formatNumber } from "@/lib/utils"
@@ -43,15 +48,30 @@ function AgentCenterContent() {
   const [agents, setAgents] = useState<any[]>([])
   const [executions, setExecutions] = useState<any[]>([])
   const [selectedExecution, setSelectedExecution] = useState<any | null>(null)
-  const [activeTab, setActiveTab] = useState<"activity" | "diff" | "tasks" | "costs">("diff")
+  const [activeTab, setActiveTab] = useState<"diff" | "activity" | "tasks" | "comments" | "costs">("diff")
   const [loading, setLoading] = useState(true)
 
-  // Dispatch prompt state
+  // Dispatch prompt & planner state
   const [selectedProject, setSelectedProject] = useState(initialProjectId || "")
   const [selectedAgent, setSelectedAgent] = useState("agent_claude_code")
   const [prompt, setPrompt] = useState("")
   const [dispatching, setDispatching] = useState(false)
   const [actionSuccess, setActionSuccess] = useState<string | null>(null)
+
+  // Multi-Agent Plan preview modal state
+  const [planPreview, setPlanPreview] = useState<any | null>(null)
+  const [generatingPlan, setGeneratingPlan] = useState(false)
+  const [showPlanModal, setShowPlanModal] = useState(false)
+
+  // Monaco Diff Editor state
+  const [diffSideBySide, setDiffSideBySide] = useState(true)
+  const [diffTheme, setDiffTheme] = useState<"vs-dark" | "light">("vs-dark")
+
+  // Line Comments state
+  const [comments, setComments] = useState<any[]>([])
+  const [newCommentLine, setNewCommentLine] = useState<number | null>(null)
+  const [newCommentText, setNewCommentText] = useState("")
+  const [submittingComment, setSubmittingComment] = useState(false)
 
   const loadData = async () => {
     try {
@@ -79,6 +99,7 @@ function AgentCenterContent() {
         setExecutions(execJson.data)
         if (!selectedExecution && execJson.data.length > 0) {
           setSelectedExecution(execJson.data[0])
+          loadComments(execJson.data[0].id)
         }
       }
     } catch (err) {
@@ -88,15 +109,57 @@ function AgentCenterContent() {
     }
   }
 
+  const loadComments = async (executionId: string) => {
+    try {
+      const res = await fetch(`/api/executions/${executionId}/comments`)
+      const json = await res.json()
+      if (json.data) setComments(json.data)
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
   useEffect(() => {
     loadData()
   }, [])
 
-  const handleDispatch = async (e: React.FormEvent) => {
-    e.preventDefault()
+  useEffect(() => {
+    if (selectedExecution?.id) {
+      loadComments(selectedExecution.id)
+    }
+  }, [selectedExecution?.id])
+
+  // Preview Multi-Agent DAG Plan
+  const handlePreviewPlan = async () => {
+    if (!prompt) return
+    setGeneratingPlan(true)
+    try {
+      const res = await fetch("/api/orchestrator/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: selectedProject,
+          prompt,
+        }),
+      })
+      const json = await res.json()
+      if (json.data) {
+        setPlanPreview(json.data)
+        setShowPlanModal(true)
+      }
+    } catch (err) {
+      console.error("Plan generation error:", err)
+    } finally {
+      setGeneratingPlan(false)
+    }
+  }
+
+  const handleDispatch = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
     if (!prompt || !selectedProject) return
 
     setDispatching(true)
+    setShowPlanModal(false)
     try {
       const res = await fetch("/api/executions", {
         method: "POST",
@@ -112,6 +175,7 @@ function AgentCenterContent() {
       if (json.data) {
         setExecutions((prev) => [json.data, ...prev])
         setSelectedExecution(json.data)
+        loadComments(json.data.id)
         setPrompt("")
         setActionSuccess("Coding agent team dispatched and executed task plan!")
         setTimeout(() => setActionSuccess(null), 4000)
@@ -153,7 +217,121 @@ function AgentCenterContent() {
     }
   }
 
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedExecution || !newCommentText || newCommentLine === null) return
+
+    setSubmittingComment(true)
+    try {
+      const filePath = diffArtifact?.path || "src/app/api/checkout/route.ts"
+      const res = await fetch(`/api/executions/${selectedExecution.id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filePath,
+          lineNumber: newCommentLine,
+          comment: newCommentText,
+          authorName: "Alex Kumar (Tech Lead)",
+        }),
+      })
+
+      const json = await res.json()
+      if (json.data) {
+        setComments((prev) => [json.data, ...prev])
+        setNewCommentText("")
+        setNewCommentLine(null)
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSubmittingComment(false)
+    }
+  }
+
+  const handleResolveComment = async (commentId: string) => {
+    try {
+      const res = await fetch(`/api/executions/${selectedExecution.id}/comments`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commentId, status: "resolved" }),
+      })
+      const json = await res.json()
+      if (json.data) {
+        setComments((prev) =>
+          prev.map((c) => (c.id === commentId ? { ...c, status: "resolved" } : c))
+        )
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
   const diffArtifact = selectedExecution?.artifacts?.find((a: any) => a.type === "git_diff")
+
+  // Generate original vs modified code for Monaco Diff Editor
+  const originalCode = `export interface RequestConfig {
+  timeoutMs?: number;
+}
+
+export class ApiClient {
+  private baseUrl: string;
+
+  constructor(baseUrl: string = "") {
+    this.baseUrl = baseUrl;
+  }
+
+  async request<T>(endpoint: string, options: RequestConfig = {}): Promise<T> {
+    const res = await fetch(\`\${this.baseUrl}\${endpoint}\`, {
+      headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(options.timeoutMs ?? 10000),
+    });
+    if (!res.ok) throw new Error(\`HTTP \${res.status}\`);
+    return await res.json() as T;
+  }
+}`
+
+  const modifiedCode = `export interface RequestConfig {
+  timeoutMs?: number;
+  retryAttempts?: number;
+  idempotencyKey?: string;
+}
+
+export class ApiClient {
+  private baseUrl: string;
+
+  constructor(baseUrl: string = "") {
+    this.baseUrl = baseUrl;
+  }
+
+  /**
+   * Execute request with exponential backoff and automatic idempotency key generation.
+   */
+  async request<T>(endpoint: string, options: RequestConfig = {}): Promise<T> {
+    const maxRetries = options.retryAttempts ?? 3;
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          ...(options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : {}),
+        };
+        const res = await fetch(\`\${this.baseUrl}\${endpoint}\`, {
+          headers,
+          signal: AbortSignal.timeout(options.timeoutMs ?? 15000),
+        });
+        if (!res.ok) throw new Error(\`HTTP \${res.status}: \${res.statusText}\`);
+        return await res.json() as T;
+      } catch (err: any) {
+        lastError = err;
+        if (attempt < maxRetries) {
+          await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 200));
+        }
+      }
+    }
+    throw lastError ?? new Error("Request failed after retries");
+  }
+}`
 
   return (
     <div className="space-y-6 pb-16 max-w-7xl mx-auto">
@@ -212,7 +390,7 @@ function AgentCenterContent() {
             </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap sm:flex-nowrap gap-2">
             <input
               type="text"
               required
@@ -221,6 +399,15 @@ function AgentCenterContent() {
               placeholder="e.g. Implement atomic idempotency key validation on /api/checkout or fix responsive navbar drawer"
               className="flex-1 rounded-lg border border-[#E8EAED] bg-[#F8F9FB] px-3.5 py-2 text-xs text-[#17191C] placeholder-[#9AA0A8] outline-none focus:border-[#D5222D]/50 focus:bg-white"
             />
+            <button
+              type="button"
+              onClick={handlePreviewPlan}
+              disabled={generatingPlan || !prompt}
+              className="flex items-center gap-1.5 rounded-lg border border-[#E8EAED] bg-[#F2F3F5] px-3.5 py-2 text-xs font-semibold text-[#17191C] hover:bg-[#E8EAED] transition-colors disabled:opacity-50"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-[#D5222D]" />
+              <span>{generatingPlan ? "Planning..." : "Preview DAG"}</span>
+            </button>
             <button
               type="submit"
               disabled={dispatching}
@@ -232,6 +419,82 @@ function AgentCenterContent() {
           </div>
         </form>
       </GlassCard>
+
+      {/* Plan Preview Modal */}
+      {showPlanModal && planPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-[#E8EAED] bg-[#FFFFFF] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E8EAED]">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#040404] text-white">
+                  <Sparkles className="h-4 w-4 text-[#D5222D]" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-[#17191C]">Decomposed Multi-Agent Plan DAG</h3>
+                  <p className="text-[11px] text-[#737982]">Target: {planPreview.projectName} • Branch: {planPreview.targetBranch}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPlanModal(false)}
+                className="rounded-lg p-1 text-[#737982] hover:bg-[#F2F3F5]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-xl border border-[#E8EAED] bg-[#F8F9FB] p-3 text-center">
+                <p className="text-[10px] text-[#737982] font-semibold uppercase">Est. Tokens</p>
+                <p className="text-base font-bold font-mono text-[#17191C] mt-0.5">
+                  {formatNumber(planPreview.metrics.totalEstimatedTokens)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-[#E8EAED] bg-[#F8F9FB] p-3 text-center">
+                <p className="text-[10px] text-[#737982] font-semibold uppercase">Est. Cost</p>
+                <p className="text-base font-bold font-mono text-[#17191C] mt-0.5">
+                  ${planPreview.metrics.estimatedCost}
+                </p>
+              </div>
+              <div className="rounded-xl border border-[#E8EAED] bg-[#F8F9FB] p-3 text-center">
+                <p className="text-[10px] text-[#737982] font-semibold uppercase">Est. Runtime</p>
+                <p className="text-base font-bold font-mono text-[#17191C] mt-0.5">
+                  ~{planPreview.metrics.estimatedDurationSec}s
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {planPreview.stages.map((stage: any, idx: number) => (
+                <div key={stage.id} className="rounded-lg border border-[#E8EAED] bg-[#FFFFFF] p-3 space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-[#17191C]">{stage.name}</span>
+                    <span className="font-mono text-[11px] text-[#D5222D] font-medium">{stage.agentName}</span>
+                  </div>
+                  <p className="text-[11px] text-[#737982]">{stage.description}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E8EAED]">
+              <button
+                type="button"
+                onClick={() => setShowPlanModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-[#737982] hover:bg-[#F2F3F5] rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDispatch()}
+                className="flex items-center gap-1.5 rounded-lg bg-[#040404] px-4 py-2 text-xs font-semibold text-white hover:bg-[#202020]"
+              >
+                <Play className="h-3.5 w-3.5 fill-[#D5222D] text-[#D5222D]" />
+                Confirm & Launch Execution
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Workspace Split: Left (Executions List) & Right (Execution Detail & Diff) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
@@ -351,7 +614,22 @@ function AgentCenterContent() {
                       : "border-transparent text-[#737982] hover:text-[#17191C]"
                   }`}
                 >
-                  Source Git Diff
+                  Monaco Diff Review
+                </button>
+                <button
+                  onClick={() => setActiveTab("comments")}
+                  className={`py-3 px-3 border-b-2 transition-colors flex items-center gap-1.5 ${
+                    activeTab === "comments"
+                      ? "border-[#D5222D] text-[#17191C]"
+                      : "border-transparent text-[#737982] hover:text-[#17191C]"
+                  }`}
+                >
+                  <span>Line Comments</span>
+                  {comments.length > 0 && (
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#17191C] text-[9px] text-white">
+                      {comments.length}
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={() => setActiveTab("activity")}
@@ -389,43 +667,147 @@ function AgentCenterContent() {
               <div className="p-5">
                 {activeTab === "diff" && (
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between text-xs text-[#737982]">
-                      <span className="font-mono text-[#17191C] font-semibold">
-                        {diffArtifact?.path || "src/app/api/checkout/route.ts"}
-                      </span>
-                      <span className="text-[11px] text-[#1F7A4D] font-medium">
-                        +32 additions • -4 deletions
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#737982] pb-2 border-b border-[#E8EAED]">
+                      <div className="flex items-center gap-2">
+                        <FileCode className="h-4 w-4 text-[#D5222D]" />
+                        <span className="font-mono text-[#17191C] font-semibold">
+                          {diffArtifact?.path || "src/lib/services/api-client.ts"}
+                        </span>
+                        <span className="text-[11px] text-[#1F7A4D] font-medium">
+                          +32 additions • -4 deletions
+                        </span>
+                      </div>
+
+                      {/* Diff Editor Controls */}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setDiffSideBySide(!diffSideBySide)}
+                          className="rounded-lg border border-[#E8EAED] bg-[#F2F3F5] px-2.5 py-1 text-[11px] font-semibold text-[#17191C] hover:bg-[#E8EAED]"
+                        >
+                          {diffSideBySide ? "Inline View" : "Side-by-Side"}
+                        </button>
+                        <button
+                          onClick={() => setDiffTheme(diffTheme === "vs-dark" ? "light" : "vs-dark")}
+                          className="rounded-lg border border-[#E8EAED] bg-[#F2F3F5] px-2.5 py-1 text-[11px] font-semibold text-[#17191C] hover:bg-[#E8EAED]"
+                        >
+                          {diffTheme === "vs-dark" ? "Light Mode" : "Dark Mode"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setActiveTab("comments")
+                            setNewCommentLine(15)
+                          }}
+                          className="flex items-center gap-1 rounded-lg bg-[#040404] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#202020]"
+                        >
+                          <MessageSquare className="h-3 w-3 text-[#D5222D]" />
+                          Add Review Note
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Full Monaco Diff Editor Component */}
+                    <div className="rounded-xl border border-[#E8EAED] overflow-hidden shadow-xs">
+                      <DiffEditor
+                        height="440px"
+                        language="typescript"
+                        original={originalCode}
+                        modified={modifiedCode}
+                        theme={diffTheme}
+                        options={{
+                          renderSideBySide: diffSideBySide,
+                          readOnly: true,
+                          minimap: { enabled: false },
+                          fontSize: 12.5,
+                          fontFamily: "var(--font-geist-mono), monospace",
+                          scrollBeyondLastLine: false,
+                          smoothScrolling: true,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Line Comments Tab */}
+                {activeTab === "comments" && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between pb-2 border-b border-[#E8EAED]">
+                      <h4 className="text-xs font-semibold text-[#17191C]">
+                        Line-Level Review Comments & Directives
+                      </h4>
+                      <span className="text-xs text-[#737982] font-mono">
+                        {comments.filter((c) => c.status === "open").length} open threads
                       </span>
                     </div>
 
-                    {/* Diff viewer with syntax and additions/deletions highlighting */}
-                    <div className="rounded-xl border border-[#E8EAED] bg-[#040404] text-[#FDFDFD] font-mono text-[11.5px] p-4 overflow-x-auto leading-relaxed shadow-inner">
-                      <pre className="text-zinc-300">
-                        {(diffArtifact?.content || "No diff artifact recorded yet.")
-                          .split("\n")
-                          .map((line: string, idx: number) => {
-                            const isAdd = line.startsWith("+") && !line.startsWith("+++")
-                            const isDel = line.startsWith("-") && !line.startsWith("---")
-                            const isHeader = line.startsWith("@@") || line.startsWith("---") || line.startsWith("+++")
+                    {/* New Comment Box */}
+                    <form onSubmit={handleAddComment} className="rounded-xl border border-[#E8EAED] bg-[#F8F9FB] p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-[#17191C]">Comment on Line:</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="100"
+                          value={newCommentLine ?? ""}
+                          onChange={(e) => setNewCommentLine(parseInt(e.target.value, 10))}
+                          placeholder="e.g. 18"
+                          className="w-20 rounded-md border border-[#E8EAED] bg-white px-2 py-1 text-xs font-mono outline-none"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          required
+                          value={newCommentText}
+                          onChange={(e) => setNewCommentText(e.target.value)}
+                          placeholder="Add suggestion, require guard check, or prompt agent revision..."
+                          className="flex-1 rounded-lg border border-[#E8EAED] bg-white px-3 py-1.5 text-xs outline-none"
+                        />
+                        <button
+                          type="submit"
+                          disabled={submittingComment || !newCommentText}
+                          className="flex items-center gap-1.5 rounded-lg bg-[#040404] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#202020] disabled:opacity-50"
+                        >
+                          <Send className="h-3 w-3 text-[#D5222D]" />
+                          Post
+                        </button>
+                      </div>
+                    </form>
 
-                            return (
-                              <div
-                                key={idx}
-                                className={`px-2 py-0.5 rounded-xs ${
-                                  isAdd
-                                    ? "bg-[#1F7A4D]/25 text-[#5FC08C]"
-                                    : isDel
-                                    ? "bg-[#D5222D]/25 text-[#F0786E]"
-                                    : isHeader
-                                    ? "text-[#6E7891] font-semibold"
-                                    : "text-zinc-300"
-                                }`}
+                    {/* Comments List */}
+                    <div className="space-y-2">
+                      {comments.map((c) => (
+                        <div
+                          key={c.id}
+                          className={`rounded-xl border p-3 text-xs space-y-1.5 transition-colors ${
+                            c.status === "resolved"
+                              ? "border-[#E8EAED] bg-[#F8F9FB] opacity-60"
+                              : "border-[#17191C]/20 bg-white shadow-xs"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-[#17191C]">{c.authorName}</span>
+                              <span className="font-mono text-[11px] rounded bg-[#F2F3F5] px-1.5 py-0.5 text-[#737982]">
+                                Line {c.lineNumber}
+                              </span>
+                            </div>
+                            {c.status !== "resolved" ? (
+                              <button
+                                onClick={() => handleResolveComment(c.id)}
+                                className="flex items-center gap-1 text-[11px] font-medium text-[#1F7A4D] hover:underline"
                               >
-                                {line}
-                              </div>
-                            )
-                          })}
-                      </pre>
+                                <CheckSquare className="h-3 w-3" />
+                                Resolve
+                              </button>
+                            ) : (
+                              <span className="text-[10px] uppercase font-bold text-[#1F7A4D]">
+                                Resolved
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[#17191C] leading-relaxed">{c.comment}</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -433,7 +815,7 @@ function AgentCenterContent() {
                 {activeTab === "activity" && (
                   <div className="space-y-3">
                     <h4 className="text-xs font-semibold text-[#17191C]">
-                      Real-time Execution Telemetry
+                      Real-time Execution Telemetry & Terminal Logs
                     </h4>
                     <div className="space-y-2">
                       {(selectedExecution.events || []).map((ev: any, i: number) => {
@@ -467,7 +849,7 @@ function AgentCenterContent() {
                               </p>
                             ) : (
                               <p className="text-[#737982] font-mono text-[11px]">
-                                Tool: {payload.tool || "ast_inspection"}
+                                Payload: {JSON.stringify(payload)}
                               </p>
                             )}
                           </div>

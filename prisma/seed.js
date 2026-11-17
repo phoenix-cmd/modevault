@@ -311,8 +311,10 @@ async function main() {
   ]
 
   for (let i = 0; i < events.length; i++) {
-    await prisma.agentEvent.create({
-      data: {
+    await prisma.agentEvent.upsert({
+      where: { id: `event_exec_${i + 1}` },
+      update: events[i],
+      create: {
         id: `event_exec_${i + 1}`,
         ...events[i],
       },
@@ -495,6 +497,77 @@ async function main() {
       create: api,
     })
   }
+
+  // ─── Seed Workflow Definitions ─────────────────────────────────────────
+  const workflows = [
+    {
+      id: "wf_pr_review",
+      name: "Autonomous PR Review & Security Gate",
+      description: "Triggered on pull request: scans AST, flags CVE patterns with Claude 3.7, and requests human sign-off before merge.",
+      category: "security",
+      isTemplate: true,
+      nodesJson: JSON.stringify([
+        { id: "1", type: "trigger", position: { x: 50, y: 150 }, data: { label: "GitHub Pull Request", type: "trigger", description: "Webhook: opened or synchronized" } },
+        { id: "2", type: "agent", position: { x: 280, y: 80 }, data: { label: "AST & Dependency Scan", type: "agent", description: "Static AST analyzer & license check" } },
+        { id: "3", type: "agent", position: { x: 280, y: 220 }, data: { label: "Security & Vulnerability", type: "agent", description: "Claude 3.7 Sonnet deep reasoning" } },
+        { id: "4", type: "approval", position: { x: 540, y: 150 }, data: { label: "Human Review Gate", type: "approval", description: "Require tech lead approval on diff" } },
+        { id: "5", type: "action", position: { x: 780, y: 150 }, data: { label: "Merge & Deploy Preview", type: "action", description: "Fast-forward merge and trigger sandbox preview" } },
+      ]),
+      edgesJson: JSON.stringify([
+        { id: "e1-2", source: "1", target: "2", animated: true },
+        { id: "e1-3", source: "1", target: "3", animated: true },
+        { id: "e2-4", source: "2", target: "4" },
+        { id: "e3-4", source: "3", target: "4" },
+        { id: "e4-5", source: "4", target: "5", animated: true },
+      ]),
+    },
+    {
+      id: "wf_feature_pipeline",
+      name: "Full-Stack Feature Engineering Pipeline",
+      description: "Decomposes feature specifications into parallel UI and backend worker tasks, executing integration tests in cloud worktree.",
+      category: "development",
+      isTemplate: true,
+      nodesJson: JSON.stringify([
+        { id: "1", type: "trigger", position: { x: 50, y: 150 }, data: { label: "Feature Prompt / Jira", type: "trigger", description: "Incoming feature ticket or manual prompt" } },
+        { id: "2", type: "agent", position: { x: 280, y: 150 }, data: { label: "Lead Architect (DAG Planner)", type: "agent", description: "Claude 3.7 creates execution DAG" } },
+        { id: "3", type: "agent", position: { x: 540, y: 60 }, data: { label: "Frontend Engineer", type: "agent", description: "Synthesize React & Tailwind components" } },
+        { id: "4", type: "agent", position: { x: 540, y: 240 }, data: { label: "Backend Engineer", type: "agent", description: "Prisma schema & API route synthesis" } },
+        { id: "5", type: "action", position: { x: 780, y: 150 }, data: { label: "Test Runner & Preview", type: "action", description: "Run test suite and provision live sandbox" } },
+      ]),
+      edgesJson: JSON.stringify([
+        { id: "e1-2", source: "1", target: "2", animated: true },
+        { id: "e2-3", source: "2", target: "3", animated: true },
+        { id: "e2-4", source: "2", target: "4", animated: true },
+        { id: "e3-5", source: "3", target: "5" },
+        { id: "e4-5", source: "4", target: "5" },
+      ]),
+    },
+  ]
+
+  for (const wf of workflows) {
+    await prisma.workflowDefinition.upsert({
+      where: { id: wf.id },
+      update: wf,
+      create: wf,
+    })
+  }
+  console.log("✓ Workflow templates seeded")
+
+  // ─── Seed Review Comments for Initial Execution ─────────────────────────
+  await prisma.reviewComment.upsert({
+    where: { id: "rc_001" },
+    update: {},
+    create: {
+      id: "rc_001",
+      executionId: execution.id,
+      filePath: "src/lib/services/api-client.ts",
+      lineNumber: 182,
+      authorName: "Sarah Chen (Principal Eng)",
+      comment: "Good use of AbortSignal.timeout(). Ensure we log warning telemetry when retry attempt >= 2.",
+      status: "open",
+    },
+  })
+  console.log("✓ Review comments seeded")
 
   console.log("\n✅ MODELVAULT multi-agent platform database seeded successfully!")
 }

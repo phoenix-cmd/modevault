@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Code2,
   Play,
@@ -14,85 +14,112 @@ import {
   ExternalLink,
   Terminal,
   CheckCircle2,
+  Activity,
+  Layers,
+  Sparkles,
+  ArrowRight,
+  ShieldCheck,
+  Check,
+  CreditCard,
+  Lock,
 } from "lucide-react"
 import Editor from "@monaco-editor/react"
 import { PageHeader } from "@/components/ui/page-header"
 import { GlassCard } from "@/components/ui/glass-card"
 
-const SAMPLE_FILES: Record<string, string> = {
-  "src/app/api/checkout/route.ts": `import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
-
-export async function POST(req: NextRequest) {
-  try {
-    const idempotencyKey = req.headers.get("Idempotency-Key");
-    if (!idempotencyKey) {
-      return NextResponse.json({ error: "Missing Idempotency-Key header" }, { status: 400 });
-    }
-
-    // Atomic idempotency verification
-    const existing = await prisma.idempotencyRecord.findUnique({
-      where: { key: idempotencyKey }
-    });
-
-    if (existing && existing.status === "completed") {
-      return NextResponse.json(JSON.parse(existing.responseBody), { status: 200 });
-    }
-
-    const body = await req.json();
-    return NextResponse.json({
-      success: true,
-      transactionId: "tx_" + Date.now().toString(36),
-      amount: body.amount,
-      status: "confirmed"
-    });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
-}`,
-  "src/lib/services/api-client.ts": `export class ApiClient {
-  async request<T>(endpoint: string, options: any = {}): Promise<T> {
-    const headers = {
-      "Content-Type": "application/json",
-      ...(options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : {})
-    };
-    const res = await fetch(endpoint, { headers });
-    return await res.json() as T;
-  }
-}`,
-  "package.json": `{
-  "name": "fintech-checkout",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "test": "jest"
-  },
-  "dependencies": {
-    "next": "16.4.6",
-    "react": "19.3.0",
-    "prisma": "^6.19.3"
-  }
-}`,
-}
-
 export default function StudioPage() {
-  const [selectedFile, setSelectedFile] = useState("src/app/api/checkout/route.ts")
-  const [code, setCode] = useState(SAMPLE_FILES[selectedFile])
+  const [selectedFile, setSelectedFile] = useState("src/components/checkout-button.tsx")
+  const [fileList, setFileList] = useState<string[]>([
+    "src/components/checkout-button.tsx",
+    "src/app/api/checkout/route.ts",
+    "src/lib/services/api-client.ts",
+    "package.json",
+  ])
+  const [code, setCode] = useState("")
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop")
-  const [activePane, setActivePane] = useState<"editor" | "preview">("editor")
+  const [activePane, setActivePane] = useState<"split" | "editor" | "preview">("split")
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [devToolsTab, setDevToolsTab] = useState<"console" | "network" | "ast">("console")
+  const [showDevTools, setShowDevTools] = useState(true)
 
-  const handleSelectFile = (fileName: string) => {
-    setSelectedFile(fileName)
-    setCode(SAMPLE_FILES[fileName] || "// File content empty")
+  // Interactive sandbox simulation state
+  const [checkoutAmount, setCheckoutAmount] = useState(199)
+  const [simulatedStatus, setSimulatedStatus] = useState<"idle" | "loading" | "success">("idle")
+  const [lastTxId, setLastTxId] = useState<string | null>(null)
+
+  // DevTools logs
+  const [logs, setLogs] = useState<Array<{ id: number; time: string; type: string; text: string }>>([
+    { id: 1, time: "12:04:12", type: "system", text: "Sandbox nodejs-20 environment initialized on port 3001" },
+    { id: 2, time: "12:04:13", type: "build", text: "Ready in 1.4s — Fast Refresh enabled" },
+    { id: 3, time: "12:04:15", type: "http", text: "GET / 200 OK — 24ms" },
+  ])
+
+  const [networkRequests, setNetworkRequests] = useState<Array<{ id: number; method: string; path: string; status: number; duration: string }>>([
+    { id: 1, method: "GET", path: "/_next/static/chunks/main.js", status: 200, duration: "12ms" },
+    { id: 2, method: "GET", path: "/api/health", status: 200, duration: "8ms" },
+  ])
+
+  // Fetch file content
+  const fetchFile = async (path: string) => {
+    try {
+      const res = await fetch(`/api/projects/proj_001/files?file=${encodeURIComponent(path)}`)
+      const json = await res.json()
+      if (json.data && json.data.content) {
+        setCode(json.data.content)
+      } else {
+        setCode("// Select or create a file to inspect")
+      }
+    } catch {
+      setCode("// Unable to load file")
+    }
   }
+
+  useEffect(() => {
+    fetchFile(selectedFile)
+  }, [selectedFile])
 
   const handleSave = () => {
-    SAMPLE_FILES[selectedFile] = code
     setSaveSuccess(true)
+    setLogs((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        time: new Date().toLocaleTimeString(),
+        type: "build",
+        text: `Modified ${selectedFile} — recompiled in 48ms`,
+      },
+    ])
     setTimeout(() => setSaveSuccess(false), 2500)
+  }
+
+  const handleSimulateCheckout = () => {
+    setSimulatedStatus("loading")
+    const tx = `tx_${Date.now().toString(36)}`
+    const reqTime = new Date().toLocaleTimeString()
+
+    setTimeout(() => {
+      setSimulatedStatus("success")
+      setLastTxId(tx)
+      setLogs((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          time: reqTime,
+          type: "http",
+          text: `POST /api/checkout 201 Created — Idempotency-Key validated (tx: ${tx})`,
+        },
+      ])
+      setNetworkRequests((prev) => [
+        {
+          id: Date.now(),
+          method: "POST",
+          path: "/api/checkout",
+          status: 201,
+          duration: "45ms",
+        },
+        ...prev,
+      ])
+    }, 700)
   }
 
   return (
@@ -102,6 +129,12 @@ export default function StudioPage() {
         description="Browser-based Monaco code workspace with AST modifications and sandboxed preview reverse proxy."
         action={
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowDevTools(!showDevTools)}
+              className="rounded-lg border border-[#E8EAED] bg-[#FFFFFF] px-3 py-1.5 text-xs font-semibold text-[#17191C] hover:bg-[#F2F3F5]"
+            >
+              {showDevTools ? "Hide DevTools" : "Show DevTools"}
+            </button>
             <button
               onClick={handleSave}
               className="rounded-lg bg-[#040404] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#202020] active:scale-[0.98] transition-all"
@@ -113,9 +146,9 @@ export default function StudioPage() {
       />
 
       {/* Main Workspace Frame */}
-      <div className="rounded-xl border border-[#E8EAED] bg-[#FFFFFF] shadow-sm overflow-hidden flex flex-col h-[740px]">
+      <div className="rounded-xl border border-[#E8EAED] bg-[#FFFFFF] shadow-sm overflow-hidden flex flex-col h-[780px]">
         {/* Studio Top Control Bar */}
-        <div className="flex items-center justify-between border-b border-[#E8EAED] bg-[#F8F9FB] px-4 py-2 text-xs">
+        <div className="flex flex-wrap items-center justify-between border-b border-[#E8EAED] bg-[#F8F9FB] px-4 py-2 text-xs gap-2">
           <div className="flex items-center gap-3">
             <span className="font-mono text-[#17191C] font-semibold flex items-center gap-1.5">
               <FileCode className="h-3.5 w-3.5 text-[#D5222D]" />
@@ -151,19 +184,25 @@ export default function StudioPage() {
               </button>
             </div>
 
-            {/* Toggle Editor vs Live Preview */}
+            {/* Pane View Toggle */}
             <div className="flex rounded-lg border border-[#E8EAED] bg-[#FFFFFF] p-0.5 text-xs font-semibold">
+              <button
+                onClick={() => setActivePane("split")}
+                className={`px-2.5 py-1 rounded ${activePane === "split" ? "bg-[#040404] text-white" : "text-[#737982]"}`}
+              >
+                Split
+              </button>
               <button
                 onClick={() => setActivePane("editor")}
                 className={`px-2.5 py-1 rounded ${activePane === "editor" ? "bg-[#040404] text-white" : "text-[#737982]"}`}
               >
-                Code Editor
+                Editor
               </button>
               <button
                 onClick={() => setActivePane("preview")}
                 className={`px-2.5 py-1 rounded ${activePane === "preview" ? "bg-[#040404] text-white" : "text-[#737982]"}`}
               >
-                Live Preview
+                Preview
               </button>
             </div>
           </div>
@@ -172,17 +211,17 @@ export default function StudioPage() {
         {/* Studio Body */}
         <div className="flex-1 flex overflow-hidden">
           {/* File Tree Explorer (Left sidebar) */}
-          <div className="w-60 border-r border-[#E8EAED] bg-[#F8F9FB] p-3 overflow-y-auto space-y-3 text-xs">
+          <div className="w-56 border-r border-[#E8EAED] bg-[#F8F9FB] p-3 overflow-y-auto space-y-3 text-xs">
             <p className="text-[10px] font-bold uppercase tracking-wider text-[#9AA0A8] px-2">
               Project Explorer
             </p>
             <div className="space-y-0.5">
-              {Object.keys(SAMPLE_FILES).map((file) => {
+              {fileList.map((file) => {
                 const isSelected = selectedFile === file
                 return (
                   <button
                     key={file}
-                    onClick={() => handleSelectFile(file)}
+                    onClick={() => setSelectedFile(file)}
                     className={`w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
                       isSelected
                         ? "bg-[#FFFFFF] font-semibold text-[#17191C] shadow-xs border border-[#E8EAED]"
@@ -197,55 +236,187 @@ export default function StudioPage() {
             </div>
           </div>
 
-          {/* Main Pane: Editor or Live Preview */}
-          <div className="flex-1 overflow-hidden bg-[#FFFFFF]">
-            {activePane === "editor" ? (
-              <Editor
-                height="100%"
-                language={selectedFile.endsWith(".json") ? "json" : "typescript"}
-                theme="vs-light"
-                value={code}
-                onChange={(v) => setCode(v || "")}
-                options={{
-                  fontSize: 12.5,
-                  minimap: { enabled: false },
-                  scrollBeyondLastLine: false,
-                  automaticLayout: true,
-                  lineNumbers: "on",
-                  fontFamily: "Geist Mono, JetBrains Mono, monospace",
-                }}
-              />
-            ) : (
-              <div className="h-full w-full bg-[#F2F3F5] flex items-center justify-center p-4">
+          {/* Main Pane: Editor and/or Live Preview */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Monaco Editor Pane */}
+            {(activePane === "editor" || activePane === "split") && (
+              <div className={`overflow-hidden bg-[#FFFFFF] ${activePane === "split" ? "w-1/2 border-r border-[#E8EAED]" : "w-full"}`}>
+                <Editor
+                  height="100%"
+                  language={selectedFile.endsWith(".json") ? "json" : "typescript"}
+                  theme="vs-light"
+                  value={code}
+                  onChange={(v) => setCode(v || "")}
+                  options={{
+                    fontSize: 12,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    automaticLayout: true,
+                    lineNumbers: "on",
+                    fontFamily: "var(--font-geist-mono), monospace",
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Live Preview Pane */}
+            {(activePane === "preview" || activePane === "split") && (
+              <div className={`overflow-hidden bg-[#F2F3F5] flex flex-col items-center justify-center p-3 ${activePane === "split" ? "w-1/2" : "w-full"}`}>
                 <div
-                  className={`h-full bg-white rounded-lg shadow-md border border-[#E8EAED] overflow-hidden flex flex-col transition-all duration-300 ${
+                  className={`h-full bg-white rounded-xl shadow-md border border-[#E8EAED] overflow-hidden flex flex-col transition-all duration-300 ${
                     viewport === "mobile"
                       ? "w-[375px]"
                       : viewport === "tablet"
-                      ? "w-[768px]"
+                      ? "w-[560px]"
                       : "w-full"
                   }`}
                 >
-                  <div className="h-8 border-b border-[#E8EAED] bg-[#F8F9FB] px-3 flex items-center gap-2 text-[11px] text-[#737982]">
-                    <span className="h-2 w-2 rounded-full bg-[#1F7A4D]" />
-                    <span className="font-mono">http://localhost:3001/checkout</span>
-                  </div>
-                  <div className="flex-1 p-8 text-center space-y-4 flex flex-col items-center justify-center">
-                    <div className="h-12 w-12 rounded-xl bg-[#EDF7F1] text-[#1F7A4D] flex items-center justify-center mx-auto">
-                      <CheckCircle2 className="h-6 w-6" />
+                  {/* Browser Address Bar */}
+                  <div className="h-8 border-b border-[#E8EAED] bg-[#F8F9FB] px-3 flex items-center justify-between text-[11px] text-[#737982]">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-[#1F7A4D]" />
+                      <span className="font-mono">http://localhost:3001/checkout</span>
                     </div>
-                    <h3 className="text-base font-bold text-[#17191C]">
-                      Fintech Checkout Session Ready
-                    </h3>
-                    <p className="text-xs text-[#737982] max-w-sm">
-                      Idempotency validation active. Live preview running from cloud sandbox container.
-                    </p>
+                    <button
+                      onClick={() => setSimulatedStatus("idle")}
+                      className="p-1 hover:text-[#17191C]"
+                      title="Reload sandbox"
+                    >
+                      <RotateCw className="h-3 w-3" />
+                    </button>
+                  </div>
+
+                  {/* Sandboxed Interactive UI */}
+                  <div className="flex-1 p-6 flex flex-col justify-center items-center text-center space-y-4">
+                    <div className="w-full max-w-sm rounded-xl border border-[#E8EAED] bg-[#FFFFFF] p-5 shadow-sm space-y-4 text-left">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <CreditCard className="h-4 w-4 text-[#D5222D]" />
+                          <span className="text-xs font-bold text-[#17191C]">Enterprise Tier</span>
+                        </div>
+                        <span className="text-sm font-bold font-mono text-[#17191C]">${checkoutAmount}/mo</span>
+                      </div>
+
+                      <div className="rounded-lg bg-[#F8F9FB] p-2.5 text-[11px] text-[#737982] space-y-1 font-mono">
+                        <p className="flex items-center gap-1.5 text-[#1F7A4D]">
+                          <Lock className="h-3 w-3" />
+                          <span>Idempotency-Key: idemp_chk_9038</span>
+                        </p>
+                        <p className="text-[10px]">TTL Lock: 120s • Auto-retry: enabled</p>
+                      </div>
+
+                      <button
+                        onClick={handleSimulateCheckout}
+                        disabled={simulatedStatus === "loading"}
+                        className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-[#040404] py-2.5 text-xs font-semibold text-white hover:bg-black transition-colors"
+                      >
+                        {simulatedStatus === "loading" ? (
+                          <span>Authorizing Transaction...</span>
+                        ) : simulatedStatus === "success" ? (
+                          <span className="flex items-center gap-1 text-[#5FC08C]">
+                            <Check className="h-3.5 w-3.5" /> Payment Confirmed!
+                          </span>
+                        ) : (
+                          <span>Confirm Subscription (${checkoutAmount})</span>
+                        )}
+                      </button>
+
+                      {simulatedStatus === "success" && (
+                        <div className="rounded-md border border-[#1F7A4D]/20 bg-[#EDF7F1] p-2 text-[11px] text-[#1F7A4D]">
+                          Transaction record <strong>{lastTxId}</strong> cached with atomic idempotency validation.
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
             )}
           </div>
         </div>
+
+        {/* Bottom DevTools Drawer */}
+        {showDevTools && (
+          <div className="h-48 border-t border-[#E8EAED] bg-[#040404] text-white flex flex-col">
+            <div className="flex items-center justify-between border-b border-[#202020] px-4 py-1.5 text-xs">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setDevToolsTab("console")}
+                  className={`font-semibold transition-colors ${
+                    devToolsTab === "console" ? "text-white border-b-2 border-[#D5222D] pb-0.5" : "text-[#737982] hover:text-white"
+                  }`}
+                >
+                  Console Logs
+                </button>
+                <button
+                  onClick={() => setDevToolsTab("network")}
+                  className={`font-semibold transition-colors ${
+                    devToolsTab === "network" ? "text-white border-b-2 border-[#D5222D] pb-0.5" : "text-[#737982] hover:text-white"
+                  }`}
+                >
+                  Network Inspector ({networkRequests.length})
+                </button>
+                <button
+                  onClick={() => setDevToolsTab("ast")}
+                  className={`font-semibold transition-colors ${
+                    devToolsTab === "ast" ? "text-white border-b-2 border-[#D5222D] pb-0.5" : "text-[#737982] hover:text-white"
+                  }`}
+                >
+                  AST & Symbols
+                </button>
+              </div>
+
+              <span className="text-[10px] font-mono text-[#6E7891]">Sandbox PID: 8192</span>
+            </div>
+
+            <div className="flex-1 p-3 overflow-y-auto font-mono text-[11.5px] space-y-1">
+              {devToolsTab === "console" && (
+                <>
+                  {logs.map((log) => (
+                    <div key={log.id} className="flex items-start gap-2 text-zinc-300">
+                      <span className="text-[#6E7891] shrink-0">[{log.time}]</span>
+                      <span
+                        className={`font-bold shrink-0 ${
+                          log.type === "http" ? "text-[#5FC08C]" : log.type === "build" ? "text-cyan-400" : "text-amber-400"
+                        }`}
+                      >
+                        [{log.type.toUpperCase()}]
+                      </span>
+                      <span>{log.text}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {devToolsTab === "network" && (
+                <div className="space-y-1">
+                  {networkRequests.map((req) => (
+                    <div key={req.id} className="flex items-center justify-between text-zinc-300 py-0.5 border-b border-zinc-800/40">
+                      <div className="flex items-center gap-3">
+                        <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] font-bold text-[#5FC08C]">
+                          {req.method}
+                        </span>
+                        <span className="text-zinc-200">{req.path}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-[#9AA0A8]">
+                        <span className="text-[#5FC08C] font-semibold">{req.status}</span>
+                        <span>{req.duration}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {devToolsTab === "ast" && (
+                <div className="space-y-2 text-xs text-zinc-300">
+                  <p className="text-zinc-400">File: <span className="text-white">{selectedFile}</span></p>
+                  <p className="text-zinc-400">Exported Symbols: <span className="text-cyan-400 font-mono">CheckoutButton, ApiClient, POST</span></p>
+                  <p className="text-zinc-400">Dependencies: <span className="text-emerald-400 font-mono">motion/react, react, prisma, next/server</span></p>
+                  <p className="text-zinc-400">Cyclomatic Complexity: <span className="text-amber-400 font-mono">3 (Safe)</span></p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

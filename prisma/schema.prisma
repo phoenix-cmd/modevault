@@ -168,6 +168,7 @@ model Execution {
   events       AgentEvent[]
   artifacts    ExecutionArtifact[]
   gitOperations GitOperation[]
+  comments     ReviewComment[]
 }
 
 model ExecutionTask {
@@ -229,6 +230,33 @@ model GitOperation {
 
   project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   execution Execution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
+}
+
+model ReviewComment {
+  id          String   @id @default(cuid())
+  executionId String
+  filePath    String
+  lineNumber  Int
+  authorName  String   @default("Lead Architect")
+  comment     String
+  status      String   @default("open") // "open" | "resolved"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  execution Execution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+}
+
+model WorkflowDefinition {
+  id          String   @id @default(cuid())
+  workspaceId String?
+  name        String
+  description String?
+  category    String   @default("development") // "development" | "security" | "review" | "devops"
+  nodesJson   String   // JSON of React Flow nodes
+  edgesJson   String   // JSON of React Flow edges
+  isTemplate  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // ─── Auth (NextAuth compatible) ──────────────────────────────────────────────
