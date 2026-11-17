@@ -12,32 +12,40 @@
 
   --mv-bg: #f8f9fb;
   --mv-surface: #ffffff;
-  --mv-surface-2: #f1f3f5;
-  --mv-surface-3: #e8eaee;
+  --mv-surface-2: #f2f3f5;
+  --mv-surface-3: #e8eaed;
 
-  --mv-border: #e5e7ec;
-  --mv-border-strong: #d6dae1;
+  --mv-border: #e8eaed;
+  --mv-border-strong: #d2d6dc;
 
   --mv-text: #17191c;
   --mv-text-2: #737982;
   --mv-text-3: #9aa0a8;
 
-  --mv-accent: #4a4fbf;
-  --mv-accent-hover: #3e43a8;
-  --mv-accent-soft: #eef0fb;
-  --mv-accent-border: #d9ddf6;
+  /* Editorial & Brand Palette */
+  --mv-charcoal: #040404;
+  --mv-neutral-dark: #403a3c;
+  --mv-soft-grey: #c2c1c9;
+  --mv-secondary-grey: #5c5c5c;
+  --mv-muted-slate: #6e7891;
+
+  /* Selective Signature Accent: Signal Red (#D5222D) */
+  --mv-accent: #d5222d;
+  --mv-accent-hover: #b81c25;
+  --mv-accent-soft: rgba(213, 34, 45, 0.08);
+  --mv-accent-border: rgba(213, 34, 45, 0.22);
 
   --mv-success: #1f7a4d;
   --mv-success-soft: #edf7f1;
   --mv-warning: #a3630a;
   --mv-warning-soft: #fdf6e8;
-  --mv-danger: #b42318;
-  --mv-danger-soft: #fdf0ef;
+  --mv-danger: #d5222d;
+  --mv-danger-soft: rgba(213, 34, 45, 0.08);
   --mv-info: #175cd3;
   --mv-info-soft: #eef4ff;
 
-  --mv-ring: rgba(74, 79, 191, 0.18);
-  --mv-glass: rgba(255, 255, 255, 0.84);
+  --mv-ring: rgba(213, 34, 45, 0.18);
+  --mv-glass: rgba(255, 255, 255, 0.88);
 
   --mv-chart-1: #5b61d6;
   --mv-chart-2: #2f8f83;

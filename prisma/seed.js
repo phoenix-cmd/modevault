@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- standalone Node seed script */
 // MODELVAULT — Database Seed Script
-// Seeds providers and creates a demo user with sample subscriptions
+// Seeds organizations, workspaces, projects, agents, subscriptions, and executions
 
 const { PrismaClient } = require("@prisma/client")
 
@@ -16,14 +16,360 @@ async function main() {
     create: {
       id: "user_demo_001",
       email: "demo@modelvault.dev",
-      name: "Demo User",
+      name: "Alex Kumar",
       currency: "INR",
       timezone: "Asia/Kolkata",
     },
   })
   console.log("✓ Demo user created")
 
-  // ─── Create providers ──────────────────────────────────────────────
+  // ─── Create organization & workspace ───────────────────────────────
+  const org = await prisma.organization.upsert({
+    where: { slug: "acme" },
+    update: {},
+    create: {
+      id: "org_acme_001",
+      name: "Acme Engineering",
+      slug: "acme",
+      plan: "enterprise",
+    },
+  })
+
+  await prisma.membership.upsert({
+    where: {
+      organizationId_userId: {
+        organizationId: org.id,
+        userId: user.id,
+      },
+    },
+    update: {},
+    create: {
+      organizationId: org.id,
+      userId: user.id,
+      role: "owner",
+    },
+  })
+
+  const workspace = await prisma.workspace.upsert({
+    where: { id: "ws_core_001" },
+    update: {},
+    create: {
+      id: "ws_core_001",
+      organizationId: org.id,
+      name: "Core Platform",
+      slug: "core-platform",
+      isDefault: true,
+    },
+  })
+  console.log("✓ Organization & Workspace initialized")
+
+  // ─── Create Agent Registry ─────────────────────────────────────────
+  const agents = [
+    {
+      id: "agent_claude_code",
+      name: "Claude Code 3.7",
+      provider: "Anthropic",
+      runtimeType: "claude_code",
+      model: "claude-3-7-sonnet",
+      role: "lead_architect",
+      capabilitiesJson: JSON.stringify(["file_edit", "shell_exec", "diff_inspect", "git_ops"]),
+      isDefault: true,
+    },
+    {
+      id: "agent_codex",
+      name: "Codex 5.2",
+      provider: "OpenAI",
+      runtimeType: "codex",
+      model: "gpt-4o",
+      role: "backend_engineer",
+      capabilitiesJson: JSON.stringify(["file_edit", "shell_exec", "test_runner"]),
+      isDefault: true,
+    },
+    {
+      id: "agent_gemini_cli",
+      name: "Gemini CLI 2.5",
+      provider: "Google",
+      runtimeType: "gemini_cli",
+      model: "gemini-2.5-pro",
+      role: "frontend_engineer",
+      capabilitiesJson: JSON.stringify(["file_edit", "preview_server", "ui_generate"]),
+      isDefault: false,
+    },
+    {
+      id: "agent_opencode",
+      name: "OpenCode Reviewer",
+      provider: "OpenCode",
+      runtimeType: "opencode",
+      model: "claude-3-5-sonnet",
+      role: "qa_reviewer",
+      capabilitiesJson: JSON.stringify(["diff_inspect", "code_review", "linter"]),
+      isDefault: false,
+    },
+    {
+      id: "agent_cursor_cloud",
+      name: "Cursor Cloud Agent",
+      provider: "Cursor",
+      runtimeType: "cursor_cloud",
+      model: "claude-3-5-sonnet",
+      role: "fullstack_developer",
+      capabilitiesJson: JSON.stringify(["file_edit", "diff_inspect", "shell_exec"]),
+      isDefault: false,
+    },
+  ]
+
+  for (const ag of agents) {
+    await prisma.agentDefinition.upsert({
+      where: { id: ag.id },
+      update: ag,
+      create: ag,
+    })
+  }
+  console.log("✓ Agent Registry seeded")
+
+  // ─── Create Demo Projects ──────────────────────────────────────────
+  const project1 = await prisma.project.upsert({
+    where: { id: "proj_fintech_001" },
+    update: {},
+    create: {
+      id: "proj_fintech_001",
+      workspaceId: workspace.id,
+      name: "Fintech Checkout Engine",
+      slug: "fintech-checkout",
+      description: "High-throughput payment gateway client with real-time webhook verifications",
+      framework: "nextjs",
+      language: "typescript",
+      repositoryUrl: "https://github.com/acme-corp/fintech-checkout",
+      defaultBranch: "main",
+      status: "ready",
+    },
+  })
+
+  await prisma.projectSource.upsert({
+    where: { id: "source_fintech_001" },
+    update: {},
+    create: {
+      id: "source_fintech_001",
+      projectId: project1.id,
+      type: "git_clone",
+      branch: "main",
+      manifestJson: JSON.stringify({
+        name: "fintech-checkout",
+        framework: "Next.js 16",
+        entry: "src/app/page.tsx",
+        dependencies: ["stripe", "prisma", "zod", "tailwind"],
+        fileCount: 42,
+      }),
+    },
+  })
+
+  await prisma.projectEnvironment.upsert({
+    where: { id: "env_fintech_001" },
+    update: {},
+    create: {
+      id: "env_fintech_001",
+      projectId: project1.id,
+      runtime: "nodejs-20",
+      buildCommand: "npm run build",
+      startCommand: "npm run start",
+      runPort: 3001,
+      status: "running",
+    },
+  })
+
+  const project2 = await prisma.project.upsert({
+    where: { id: "proj_ai_analytics_002" },
+    update: {},
+    create: {
+      id: "proj_ai_analytics_002",
+      workspaceId: workspace.id,
+      name: "Multi-Model Telemetry Hub",
+      slug: "telemetry-hub",
+      description: "Distributed token ingestion pipeline with Kafka consumers and ClickHouse aggregation",
+      framework: "python",
+      language: "python",
+      repositoryUrl: "https://github.com/acme-corp/telemetry-hub",
+      defaultBranch: "main",
+      status: "ready",
+    },
+  })
+  console.log("✓ Projects & Environments initialized")
+
+  // ─── Create Sample Execution with Tasks & Diff Artifact ────────────
+  const execution = await prisma.execution.upsert({
+    where: { id: "exec_trade_001" },
+    update: {},
+    create: {
+      id: "exec_trade_001",
+      projectId: project1.id,
+      workspaceId: workspace.id,
+      userId: user.id,
+      title: "Add resilient idempotency key handling to Stripe checkout session API",
+      prompt: "Implement atomic idempotency key validation on `/api/checkout` to prevent duplicate billing charges during network timeouts. Include unit tests and database lock.",
+      status: "awaiting_approval",
+      targetBranch: "feature/checkout-idempotency",
+      totalTokens: 42800,
+      inputTokens: 31200,
+      outputTokens: 11600,
+      estimatedCost: 0.185,
+      durationMs: 84000,
+      planJson: JSON.stringify({
+        goal: "Atomic idempotency key validation for checkout",
+        stages: [
+          { name: "Architecture & Schema", agent: "Claude Code 3.7", status: "completed" },
+          { name: "API Route Implementation", agent: "Codex 5.2", status: "completed" },
+          { name: "Unit & Edge-Case Tests", agent: "Gemini CLI 2.5", status: "completed" },
+          { name: "Security & QA Diff Review", agent: "OpenCode Reviewer", status: "awaiting_approval" },
+        ],
+      }),
+    },
+  })
+
+  // Execution Tasks
+  const task1 = await prisma.executionTask.upsert({
+    where: { id: "task_exec_001" },
+    update: {},
+    create: {
+      id: "task_exec_001",
+      executionId: execution.id,
+      title: "Design Idempotency Schema & Lock Table",
+      description: "Add IdempotencyRecord model with TTL index and in-flight status flag",
+      agentRole: "Lead Architect",
+      agentName: "Claude Code 3.7",
+      status: "completed",
+      orderIndex: 0,
+    },
+  })
+
+  const task2 = await prisma.executionTask.upsert({
+    where: { id: "task_exec_002" },
+    update: {},
+    create: {
+      id: "task_exec_002",
+      executionId: execution.id,
+      title: "Implement checkout POST middleware with deduplication lock",
+      description: "Check if Idempotency-Key header is present; return cached response if request already completed",
+      agentRole: "Backend Engineer",
+      agentName: "Codex 5.2",
+      status: "completed",
+      orderIndex: 1,
+    },
+  })
+
+  const task3 = await prisma.executionTask.upsert({
+    where: { id: "task_exec_003" },
+    update: {},
+    create: {
+      id: "task_exec_003",
+      executionId: execution.id,
+      title: "Diff Inspection and Automated Security Sign-off",
+      description: "Verify timing attack resistance and database transaction rollbacks",
+      agentRole: "QA Reviewer",
+      agentName: "OpenCode Reviewer",
+      status: "running",
+      orderIndex: 2,
+    },
+  })
+
+  // Sample Agent Events
+  const events = [
+    {
+      executionId: execution.id,
+      taskId: task1.id,
+      seq: 1,
+      eventType: "tool_call",
+      level: "info",
+      payloadJson: JSON.stringify({
+        tool: "read_file",
+        path: "src/app/api/checkout/route.ts",
+        status: "success",
+        durationMs: 120,
+      }),
+    },
+    {
+      executionId: execution.id,
+      taskId: task2.id,
+      seq: 2,
+      eventType: "terminal",
+      level: "info",
+      payloadJson: JSON.stringify({
+        command: "npm test -- tests/idempotency.test.ts",
+        output: "PASS tests/idempotency.test.ts\n  ✓ deduplicates rapid double-click requests (48 ms)\n  ✓ rejects expired keys after 24h TTL (12 ms)",
+        exitCode: 0,
+      }),
+    },
+    {
+      executionId: execution.id,
+      taskId: task3.id,
+      seq: 3,
+      eventType: "diff_ready",
+      level: "action",
+      payloadJson: JSON.stringify({
+        summary: "Modified 2 files (+48 lines, -6 lines)",
+        branch: "feature/checkout-idempotency",
+      }),
+    },
+  ]
+
+  for (let i = 0; i < events.length; i++) {
+    await prisma.agentEvent.create({
+      data: {
+        id: `event_exec_${i + 1}`,
+        ...events[i],
+      },
+    })
+  }
+
+  // Realistic Git Diff Artifact
+  await prisma.executionArtifact.upsert({
+    where: { id: "artifact_diff_001" },
+    update: {},
+    create: {
+      id: "artifact_diff_001",
+      executionId: execution.id,
+      type: "git_diff",
+      path: "src/app/api/checkout/route.ts",
+      summary: "Add Idempotency-Key validation header and atomic database transaction wrapper",
+      content: `--- a/src/app/api/checkout/route.ts
++++ b/src/app/api/checkout/route.ts
+@@ -14,6 +14,35 @@ export async function POST(req: NextRequest) {
+   try {
++    const idempotencyKey = req.headers.get("Idempotency-Key");
++    if (!idempotencyKey) {
++      return NextResponse.json({ error: "Missing Idempotency-Key header" }, { status: 400 });
++    }
++
++    // Check existing execution lock
++    const existingLock = await prisma.idempotencyRecord.findUnique({
++      where: { key: idempotencyKey }
++    });
++    if (existingLock && existingLock.status === "completed") {
++      return NextResponse.json(JSON.parse(existingLock.responseBody), { status: 200 });
++    }
++
+     const body = await req.json();
+     const session = await stripe.checkout.sessions.create({
+       customer_email: body.email,
+       line_items: body.items,
+       mode: "payment",
++      metadata: { idempotencyKey },
+       success_url: \`\${origin}/success?session_id={CHECKOUT_SESSION_ID}\`,
+       cancel_url: \`\${origin}/cancel\`,
+     });
++
++    await prisma.idempotencyRecord.create({
++      data: { key: idempotencyKey, status: "completed", responseBody: JSON.stringify({ sessionId: session.id }) }
++    });
++
+     return NextResponse.json({ sessionId: session.id });
+   } catch (err: any) {
+     return NextResponse.json({ error: err.message }, { status: 500 });
+   }
+ }`,
+    },
+  })
+  console.log("✓ Sample Multi-Agent Execution & Diff Artifact created")
+
+  // ─── Existing Providers, Subscriptions, API Accounts & Billing ──────
   const providers = [
     { slug: "openai", name: "OpenAI", brandColor: "#10a37f", website: "https://openai.com", hasApi: true, hasConsumer: true },
     { slug: "anthropic", name: "Anthropic", brandColor: "#d4a574", website: "https://anthropic.com", hasApi: true, hasConsumer: true },
@@ -45,13 +391,7 @@ async function main() {
   }
   console.log("✓ Providers seeded")
 
-  // ─── Create sample subscriptions ───────────────────────────────────
-  const now = new Date()
-  const nextMonth = new Date(now)
-  nextMonth.setMonth(nextMonth.getMonth() + 1)
-  const nextWeek = new Date(now)
-  nextWeek.setDate(nextWeek.getDate() + 7)
-
+  // Subscriptions
   const subscriptions = [
     {
       id: "sub_001",
@@ -88,39 +428,7 @@ async function main() {
       quotaResetDate: new Date("2026-12-01"),
       quotaResetPeriod: "monthly",
       dataSource: "manual",
-      notes: "Usage tracked as 5x multiplier, exact message count unavailable",
-    },
-    {
-      id: "sub_003",
-      userId: user.id,
-      providerId: "prov_google",
-      customPlanName: "Gemini Advanced",
-      type: "consumer",
-      status: "active",
-      billingCycle: "monthly",
-      price: 1700,
-      currency: "INR",
-      startDate: new Date("2024-09-01"),
-      renewalDate: new Date("2026-12-01"),
-      quotaMessages: null,
-      usedMessages: 0,
-      dataSource: "manual",
-    },
-    {
-      id: "sub_004",
-      userId: user.id,
-      providerId: "prov_github-copilot",
-      customPlanName: "Copilot Pro",
-      type: "consumer",
-      status: "active",
-      billingCycle: "monthly",
-      price: 850,
-      currency: "INR",
-      startDate: new Date("2024-01-10"),
-      renewalDate: new Date("2026-12-10"),
-      quotaRequests: null,
-      usedRequests: 0,
-      dataSource: "manual",
+      notes: "5x usage allowance over free tier",
     },
     {
       id: "sub_005",
@@ -140,38 +448,6 @@ async function main() {
       quotaResetPeriod: "monthly",
       dataSource: "manual",
     },
-    {
-      id: "sub_006",
-      userId: user.id,
-      providerId: "prov_perplexity",
-      customPlanName: "Perplexity Pro",
-      type: "consumer",
-      status: "active",
-      billingCycle: "yearly",
-      price: 17000,
-      currency: "INR",
-      startDate: new Date("2025-06-15"),
-      renewalDate: new Date("2026-06-15"),
-      quotaRequests: 300,
-      usedRequests: 89,
-      quotaResetDate: new Date("2026-12-01"),
-      quotaResetPeriod: "daily",
-      dataSource: "manual",
-    },
-    {
-      id: "sub_007",
-      userId: user.id,
-      providerId: "prov_windsurf",
-      customPlanName: "Windsurf Pro",
-      type: "consumer",
-      status: "active",
-      billingCycle: "monthly",
-      price: 1250,
-      currency: "INR",
-      startDate: new Date("2025-03-01"),
-      renewalDate: new Date("2026-12-01"),
-      dataSource: "manual",
-    },
   ]
 
   for (const sub of subscriptions) {
@@ -181,58 +457,34 @@ async function main() {
       create: sub,
     })
   }
-  console.log("✓ Sample subscriptions created")
 
-  // ─── Create API accounts ───────────────────────────────────────────
+  // API accounts
   const apiAccounts = [
     {
       id: "api_001",
       userId: user.id,
       providerId: "prov_openai",
-      accountName: "OpenAI API - Main",
+      accountName: "OpenAI API - Production",
       apiKeyLastFour: "sk7x",
       prepaidBalance: 42.50,
       totalSpent: 157.50,
       currency: "USD",
       rateLimit: 500,
       rateLimitTokens: 30000,
-      integrationStatus: "manual",
+      integrationStatus: "connected",
     },
     {
       id: "api_002",
       userId: user.id,
       providerId: "prov_anthropic",
-      accountName: "Anthropic API",
+      accountName: "Anthropic API - Agent Runner",
       apiKeyLastFour: "an3k",
       prepaidBalance: 28.00,
       totalSpent: 72.00,
       currency: "USD",
       rateLimit: 1000,
       rateLimitTokens: 40000,
-      integrationStatus: "manual",
-    },
-    {
-      id: "api_003",
-      userId: user.id,
-      providerId: "prov_openrouter",
-      accountName: "OpenRouter",
-      apiKeyLastFour: "or9z",
-      prepaidBalance: 15.30,
-      totalSpent: 34.70,
-      currency: "USD",
-      integrationStatus: "manual",
-    },
-    {
-      id: "api_004",
-      userId: user.id,
-      providerId: "prov_google",
-      accountName: "Gemini API",
-      apiKeyLastFour: "gm2a",
-      prepaidBalance: 0,
-      totalSpent: 8.40,
-      currency: "USD",
-      rateLimit: 15,
-      integrationStatus: "manual",
+      integrationStatus: "connected",
     },
   ]
 
@@ -243,147 +495,8 @@ async function main() {
       create: api,
     })
   }
-  console.log("✓ API accounts created")
 
-  // ─── Create API usage records ──────────────────────────────────────
-  const models = [
-    { accountId: "api_001", model: "gpt-4o", costPer1k: 0.005 },
-    { accountId: "api_001", model: "gpt-4o-mini", costPer1k: 0.00015 },
-    { accountId: "api_001", model: "o1-preview", costPer1k: 0.015 },
-    { accountId: "api_002", model: "claude-3.5-sonnet", costPer1k: 0.003 },
-    { accountId: "api_002", model: "claude-3-haiku", costPer1k: 0.00025 },
-    { accountId: "api_003", model: "meta-llama/llama-3.1-70b", costPer1k: 0.0008 },
-    { accountId: "api_003", model: "anthropic/claude-3.5-sonnet", costPer1k: 0.003 },
-    { accountId: "api_004", model: "gemini-1.5-pro", costPer1k: 0.00125 },
-  ]
-
-  // Generate 30 days of usage data
-  for (let daysAgo = 29; daysAgo >= 0; daysAgo--) {
-    const date = new Date()
-    date.setDate(date.getDate() - daysAgo)
-    date.setHours(0, 0, 0, 0)
-
-    for (const m of models) {
-      const inputTokens = Math.floor(Math.random() * 50000) + 1000
-      const outputTokens = Math.floor(Math.random() * 20000) + 500
-      const cachedTokens = Math.floor(Math.random() * 5000)
-      const totalTokens = inputTokens + outputTokens
-      const cost = parseFloat(((totalTokens / 1000) * m.costPer1k).toFixed(4))
-      const requestCount = Math.floor(Math.random() * 100) + 5
-
-      await prisma.apiUsageRecord.create({
-        data: {
-          apiAccountId: m.accountId,
-          date,
-          model: m.model,
-          inputTokens,
-          outputTokens,
-          cachedTokens,
-          totalTokens,
-          cost,
-          currency: "USD",
-          requestCount,
-          dataSource: "manual",
-        },
-      })
-    }
-  }
-  console.log("✓ API usage records created (30 days)")
-
-  // ─── Create notifications ─────────────────────────────────────────
-  const notifications = [
-    {
-      userId: user.id,
-      type: "quota_warning",
-      title: "ChatGPT Plus — 65% quota used",
-      message: "You've used 52 of 80 messages this period. Quota resets on Dec 1.",
-      severity: "info",
-      isRead: false,
-    },
-    {
-      userId: user.id,
-      type: "quota_warning",
-      title: "Cursor Pro — 62% requests used",
-      message: "312 of 500 fast premium requests used this month.",
-      severity: "warning",
-      isRead: false,
-    },
-    {
-      userId: user.id,
-      type: "renewal_reminder",
-      title: "7 subscriptions renewing in December",
-      message: "Total estimated renewal cost: ₹10,600",
-      severity: "info",
-      isRead: true,
-    },
-    {
-      userId: user.id,
-      type: "credit_low",
-      title: "OpenRouter credits below $20",
-      message: "Remaining balance: $15.30. Consider topping up.",
-      severity: "warning",
-      isRead: false,
-    },
-  ]
-
-  for (const n of notifications) {
-    await prisma.notification.create({ data: n })
-  }
-  console.log("✓ Notifications created")
-
-  // ─── Create billing records ────────────────────────────────────────
-  for (let monthsAgo = 5; monthsAgo >= 0; monthsAgo--) {
-    const billingDate = new Date()
-    billingDate.setMonth(billingDate.getMonth() - monthsAgo)
-    billingDate.setDate(1)
-
-    // Subscription payments
-    for (const sub of subscriptions) {
-      if (sub.billingCycle === "yearly" && monthsAgo !== 0) continue
-      await prisma.billingRecord.create({
-        data: {
-          userId: user.id,
-          subscriptionId: sub.id,
-          type: "subscription_payment",
-          amount: sub.billingCycle === "yearly" ? sub.price : sub.price,
-          currency: sub.currency,
-          billingDate,
-          description: `${sub.customPlanName} — ${sub.billingCycle} payment`,
-        },
-      })
-    }
-
-    // API topups
-    if (monthsAgo % 2 === 0) {
-      await prisma.billingRecord.create({
-        data: {
-          userId: user.id,
-          type: "api_topup",
-          amount: 4200,
-          currency: "INR",
-          billingDate,
-          description: "OpenAI API credit top-up ($50)",
-        },
-      })
-    }
-  }
-  console.log("✓ Billing records created")
-
-  // ─── Exchange rates ────────────────────────────────────────────────
-  await prisma.exchangeRate.upsert({
-    where: { fromCurrency_toCurrency: { fromCurrency: "USD", toCurrency: "INR" } },
-    update: { rate: 84.50, source: "Manual estimate (Nov 2026)" },
-    create: { fromCurrency: "USD", toCurrency: "INR", rate: 84.50, source: "Manual estimate (Nov 2026)" },
-  })
-  await prisma.exchangeRate.upsert({
-    where: { fromCurrency_toCurrency: { fromCurrency: "INR", toCurrency: "USD" } },
-    update: { rate: 0.01183, source: "Manual estimate (Nov 2026)" },
-    create: { fromCurrency: "INR", toCurrency: "USD", rate: 0.01183, source: "Manual estimate (Nov 2026)" },
-  })
-  console.log("✓ Exchange rates set")
-
-  console.log("\n✅ MODELVAULT database seeded successfully!")
-  console.log("   Demo login: demo@modelvault.dev")
+  console.log("\n✅ MODELVAULT multi-agent platform database seeded successfully!")
 }
 
 main()

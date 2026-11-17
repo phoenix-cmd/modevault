@@ -1,5 +1,5 @@
 // MODELVAULT — Database Schema
-// PostgreSQL-backed relational model for AI subscription & usage tracking
+// Unified relational architecture for AI subscriptions, multi-agent orchestration, and execution plane.
 
 generator client {
   provider = "prisma-client-js"
@@ -10,7 +10,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── Users ───────────────────────────────────────────────────────────────────
+// ─── Control Plane: Identity & Organizations ─────────────────────────────────
 
 model User {
   id            String    @id @default(cuid())
@@ -24,13 +24,211 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts      Account[]
-  sessions      Session[]
-  subscriptions Subscription[]
-  apiAccounts   ApiAccount[]
-  notifications Notification[]
-  syncLogs      SyncLog[]
+  accounts       Account[]
+  sessions       Session[]
+  memberships    Membership[]
+  subscriptions  Subscription[]
+  apiAccounts    ApiAccount[]
+  notifications  Notification[]
+  syncLogs       SyncLog[]
   billingRecords BillingRecord[]
+  executions     Execution[]
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  logoUrl     String?
+  plan        String   @default("enterprise")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  memberships Membership[]
+  workspaces  Workspace[]
+}
+
+model Membership {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  role           String   @default("admin") // "owner" | "admin" | "member" | "viewer"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+}
+
+model Workspace {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  slug           String
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projects     Project[]
+  executions   Execution[]
+}
+
+// ─── Projects & Repositories ────────────────────────────────────────────────
+
+model Project {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  name           String
+  slug           String
+  description    String?
+  framework      String?  // "nextjs" | "react" | "node" | "python" | "custom"
+  language       String?  // "typescript" | "javascript" | "python"
+  repositoryUrl  String?
+  defaultBranch  String   @default("main")
+  status         String   @default("ready") // "ready" | "syncing" | "archived"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  workspace    Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sources      ProjectSource[]
+  environments ProjectEnvironment[]
+  executions   Execution[]
+  gitOperations GitOperation[]
+}
+
+model ProjectSource {
+  id           String   @id @default(cuid())
+  projectId    String
+  type         String   // "zip_upload" | "git_clone" | "github"
+  sourcePath   String?  // internal storage path
+  fileName     String?
+  fileSize     Int?
+  branch       String?
+  manifestJson String?  // JSON string of detected files, dependencies, scripts
+  createdAt    DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model ProjectEnvironment {
+  id           String   @id @default(cuid())
+  projectId    String
+  runtime      String   @default("nodejs-20")
+  buildCommand String?
+  startCommand String?
+  runPort      Int      @default(3000)
+  envVarsJson  String?  // Encrypted or redacted JSON string
+  status       String   @default("stopped") // "stopped" | "provisioning" | "running" | "failed"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// ─── Execution Plane & Multi-Agent Orchestration ─────────────────────────────
+
+model AgentDefinition {
+  id               String   @id @default(cuid())
+  name             String
+  provider         String   // "Anthropic" | "OpenAI" | "Google" | "OpenCode" | "Cursor"
+  runtimeType      String   // "claude_code" | "codex" | "opencode" | "gemini_cli" | "aider"
+  model            String   // "claude-3-7-sonnet" | "gpt-4o" | "gemini-2.5-pro"
+  role             String   // "lead_architect" | "frontend_engineer" | "backend_engineer" | "qa_reviewer"
+  capabilitiesJson String?  // JSON array of capabilities ["file_edit", "shell_exec", "diff_inspect"]
+  isDefault        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+}
+
+model Execution {
+  id             String    @id @default(cuid())
+  projectId      String
+  workspaceId    String
+  userId         String?
+  title          String
+  prompt         String
+  status         String    @default("pending") // "pending" | "running" | "awaiting_approval" | "completed" | "failed" | "cancelled"
+  targetBranch   String    @default("feature/ai-update")
+  planJson       String?   // JSON representation of orchestrated tasks DAG
+  totalTokens    Int       @default(0)
+  inputTokens    Int       @default(0)
+  outputTokens   Int       @default(0)
+  estimatedCost  Float     @default(0)
+  durationMs     Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  completedAt    DateTime?
+
+  project      Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workspace    Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user         User?               @relation(fields: [userId], references: [id])
+  tasks        ExecutionTask[]
+  events       AgentEvent[]
+  artifacts    ExecutionArtifact[]
+  gitOperations GitOperation[]
+}
+
+model ExecutionTask {
+  id               String    @id @default(cuid())
+  executionId      String
+  title            String
+  description      String?
+  agentRole        String    // "Architect" | "Frontend" | "Backend" | "Reviewer"
+  agentName        String    // "Claude Code 3.7" | "Codex 5.2" | "Gemini CLI"
+  status           String    @default("pending") // "pending" | "running" | "completed" | "failed"
+  orderIndex       Int       @default(0)
+  dependenciesJson String?   // JSON array of task IDs that must complete first
+  startedAt        DateTime?
+  completedAt      DateTime?
+
+  execution Execution    @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  events    AgentEvent[]
+}
+
+model AgentEvent {
+  id          String   @id @default(cuid())
+  executionId String
+  taskId      String?
+  seq         Int      @default(0)
+  eventType   String   // "tool_call" | "file_change" | "terminal" | "plan_update" | "diff_ready" | "approval_request"
+  level       String   @default("info") // "info" | "warning" | "error" | "action"
+  payloadJson String   // Structured JSON event data
+  createdAt   DateTime @default(now())
+
+  execution Execution      @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  task      ExecutionTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+}
+
+model ExecutionArtifact {
+  id          String   @id @default(cuid())
+  executionId String
+  type        String   // "git_diff" | "file_tree" | "terminal_log" | "preview_url"
+  path        String?  // relative file path for code diffs
+  summary     String?
+  content     String   // diff patch or text content
+  createdAt   DateTime @default(now())
+
+  execution Execution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+}
+
+model GitOperation {
+  id             String    @id @default(cuid())
+  projectId      String
+  executionId    String?
+  branchName     String
+  baseBranch     String    @default("main")
+  commitSha      String?
+  commitMessage  String?
+  status         String    @default("staged") // "staged" | "committed" | "pr_created" | "merged" | "reverted"
+  prUrl          String?
+  pullRequestNum Int?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  execution Execution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
 }
 
 // ─── Auth (NextAuth compatible) ──────────────────────────────────────────────
@@ -70,7 +268,7 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// ─── Providers ───────────────────────────────────────────────────────────────
+// ─── AI Providers & Subscription Quotas ─────────────────────────────────────
 
 model Provider {
   id          String   @id @default(cuid())
@@ -89,8 +287,6 @@ model Provider {
   apiAccounts   ApiAccount[]
   plans         Plan[]
 }
-
-// ─── Plans ───────────────────────────────────────────────────────────────────
 
 model Plan {
   id             String   @id @default(cuid())
@@ -112,8 +308,6 @@ model Plan {
   provider      Provider       @relation(fields: [providerId], references: [id])
   subscriptions Subscription[]
 }
-
-// ─── Subscriptions ───────────────────────────────────────────────────────────
 
 model Subscription {
   id               String   @id @default(cuid())
@@ -145,130 +339,116 @@ model Subscription {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider Provider @relation(fields: [providerId], references: [id])
-  plan     Plan?    @relation(fields: [planId], references: [id])
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     Provider        @relation(fields: [providerId], references: [id])
+  plan         Plan?           @relation(fields: [planId], references: [id])
   usageRecords UsageRecord[]
   billingRecords BillingRecord[]
 }
-
-// ─── API Accounts ────────────────────────────────────────────────────────────
 
 model ApiAccount {
   id               String   @id @default(cuid())
   userId           String
   providerId       String
   accountName      String?
-  apiKeyEncrypted  String?  // Encrypted API key for sync
-  apiKeyLastFour   String?  // Last 4 chars for display
+  apiKeyEncrypted  String?
+  apiKeyLastFour   String?
   prepaidBalance   Float?   @default(0)
   totalSpent       Float?   @default(0)
   currency         String   @default("USD")
-  rateLimit        Int?     // requests per minute
-  rateLimitTokens  Int?     // tokens per minute
+  rateLimit        Int?
+  rateLimitTokens  Int?
   integrationStatus String  @default("manual") // "connected" | "manual" | "error" | "expired"
   lastSyncAt       DateTime?
-  lastSyncStatus   String?  // "success" | "error" | "partial"
+  lastSyncStatus   String?
   lastSyncError    String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider Provider @relation(fields: [providerId], references: [id])
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider        Provider         @relation(fields: [providerId], references: [id])
   apiUsageRecords ApiUsageRecord[]
 }
 
-// ─── Usage Records (Consumer Subscriptions) ──────────────────────────────────
-
 model UsageRecord {
-  id              String   @id @default(cuid())
-  subscriptionId  String
-  date            DateTime
-  messagesUsed    Int?
-  tokensUsed      Int?
-  requestsUsed    Int?
-  creditsUsed     Float?
-  dataSource      String   @default("manual") // "manual" | "api_sync" | "estimated"
-  createdAt       DateTime @default(now())
+  id             String   @id @default(cuid())
+  subscriptionId String
+  date           DateTime
+  messagesUsed   Int?
+  tokensUsed     Int?
+  requestsUsed   Int?
+  creditsUsed    Float?
+  dataSource     String   @default("manual")
+  createdAt      DateTime @default(now())
 
   subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 }
 
-// ─── API Usage Records ───────────────────────────────────────────────────────
-
 model ApiUsageRecord {
-  id              String   @id @default(cuid())
-  apiAccountId    String
-  date            DateTime
-  model           String?
-  inputTokens     Int?     @default(0)
-  outputTokens    Int?     @default(0)
-  cachedTokens    Int?     @default(0)
-  totalTokens     Int?     @default(0)
-  cost            Float?   @default(0)
-  currency        String   @default("USD")
-  requestCount    Int?     @default(0)
-  dataSource      String   @default("manual") // "manual" | "api_sync" | "csv_import"
-  metadata        String?  // JSON for extra fields
-  createdAt       DateTime @default(now())
+  id           String   @id @default(cuid())
+  apiAccountId String
+  date         DateTime
+  model        String?
+  inputTokens  Int?     @default(0)
+  outputTokens Int?     @default(0)
+  cachedTokens Int?     @default(0)
+  totalTokens  Int?     @default(0)
+  cost         Float?   @default(0)
+  currency     String   @default("USD")
+  requestCount Int?     @default(0)
+  dataSource   String   @default("manual")
+  metadata     String?
+  createdAt    DateTime @default(now())
 
   apiAccount ApiAccount @relation(fields: [apiAccountId], references: [id], onDelete: Cascade)
 }
 
-// ─── Billing Records ─────────────────────────────────────────────────────────
-
 model BillingRecord {
-  id              String   @id @default(cuid())
-  userId          String
-  subscriptionId  String?
-  type            String   // "subscription_payment" | "api_topup" | "refund" | "trial"
-  amount          Float
-  currency        String   @default("INR")
-  billingDate     DateTime
-  description     String?
-  invoiceUrl      String?
-  createdAt       DateTime @default(now())
+  id             String   @id @default(cuid())
+  userId         String
+  subscriptionId String?
+  type           String   // "subscription_payment" | "api_topup" | "refund" | "trial"
+  amount         Float
+  currency       String   @default("INR")
+  billingDate    DateTime
+  description    String?
+  invoiceUrl     String?
+  createdAt      DateTime @default(now())
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   subscription Subscription? @relation(fields: [subscriptionId], references: [id])
 }
 
-// ─── Notifications ───────────────────────────────────────────────────────────
-
 model Notification {
   id        String   @id @default(cuid())
   userId    String
-  type      String   // "quota_warning" | "renewal_reminder" | "credit_low" | "trial_expiring" | "sync_error" | "general"
+  type      String   // "quota_warning" | "renewal_reminder" | "credit_low" | "trial_expiring" | "sync_error" | "execution_complete" | "approval_required"
   title     String
   message   String
   severity  String   @default("info") // "info" | "warning" | "critical"
   isRead    Boolean  @default(false)
   actionUrl String?
-  metadata  String?  // JSON
+  metadata  String?
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// ─── Sync Logs ───────────────────────────────────────────────────────────────
-
 model SyncLog {
-  id         String   @id @default(cuid())
-  userId     String
-  provider   String
-  status     String   // "success" | "error" | "partial"
-  message    String?
-  details    String?  // JSON
-  duration   Int?     // ms
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  userId    String
+  provider  String
+  status    String
+  message   String?
+  details   String?
+  duration  Int?
+  createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// ─── Exchange Rates ──────────────────────────────────────────────────────────
-
 model ExchangeRate {
-  id         String   @id @default(cuid())
+  id           String   @id @default(cuid())
   fromCurrency String
   toCurrency   String
   rate         Float
