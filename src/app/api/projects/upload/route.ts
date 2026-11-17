@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import JSZip from "jszip"
 import { prisma } from "@/lib/db"
+import {
+  ensureProjectWorkspace,
+  initializeGitRepository,
+  writeWorkspaceFile,
+} from "@/lib/project-workspace"
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,7 +24,10 @@ export async function POST(req: NextRequest) {
     const fileList: string[] = []
     let detectedFramework = "custom"
     let detectedLanguage = "javascript"
-    let packageJsonContent: any = null
+    let packageJsonContent: {
+      dependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+    } | null = null
 
     // Traverse ZIP file tree
     zip.forEach((relativePath, zipEntry) => {
@@ -34,7 +42,7 @@ export async function POST(req: NextRequest) {
       try {
         const text = await pkgFile.async("string")
         packageJsonContent = JSON.parse(text)
-        const deps = { ...packageJsonContent.dependencies, ...packageJsonContent.devDependencies }
+        const deps = { ...packageJsonContent!.dependencies, ...packageJsonContent!.devDependencies }
 
         if (deps["next"]) detectedFramework = "nextjs"
         else if (deps["react"]) detectedFramework = "react"
@@ -101,6 +109,30 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    // Persist the archive to a controlled local workspace and initialize Git.
+    const workspacePath = await ensureProjectWorkspace(project.id)
+    const safeEntries = fileList.filter((relativePath) => {
+      const normalized = relativePath.replace(/\\\\/g, "/")
+      return !normalized.startsWith("/") && !normalized.split("/").includes("..")
+    })
+    for (const relativePath of safeEntries) {
+      const zipEntry = zip.file(relativePath)
+      if (!zipEntry || zipEntry.dir) continue
+      const content = await zipEntry.async("string").catch(async () => {
+        const buffer = await zipEntry.async("nodebuffer")
+        return buffer.toString("base64")
+      })
+      await writeWorkspaceFile(workspacePath, relativePath, content)
+    }
+    await initializeGitRepository(workspacePath)
+
+    if (project.sources?.[0]?.id) {
+      await prisma.projectSource.update({
+        where: { id: project.sources[0].id },
+        data: { sourcePath: workspacePath },
+      })
+    }
+
     return NextResponse.json({
       data: {
         project,
@@ -114,8 +146,9 @@ export async function POST(req: NextRequest) {
         },
       },
     })
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const error = err as { message?: string }
     console.error("ZIP upload error:", err)
-    return NextResponse.json({ error: err.message || "Failed to process ZIP archive" }, { status: 500 })
+    return NextResponse.json({ error: error.message || "Failed to process ZIP archive" }, { status: 500 })
   }
 }

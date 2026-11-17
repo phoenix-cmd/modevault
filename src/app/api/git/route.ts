@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
+import {
+  getGitBranches,
+  getGitCommits,
+  getGitDiff,
+  getGitStatus,
+  getCurrentGitBranch,
+  commitWorkspace,
+} from "@/lib/project-workspace"
 
 export async function GET(req: NextRequest) {
   try {
@@ -7,8 +15,8 @@ export async function GET(req: NextRequest) {
     const projectId = searchParams.get("projectId")
 
     const project = projectId
-      ? await prisma.project.findUnique({ where: { id: projectId } })
-      : await prisma.project.findFirst()
+      ? await prisma.project.findUnique({ where: { id: projectId }, include: { sources: true } })
+      : await prisma.project.findFirst({ include: { sources: true } })
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
@@ -19,14 +27,17 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
     })
 
-    const branches = [
+    const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find(
+      (item) => item.sourcePath
+    )
+
+    let branches: any[] = [
       { name: "main", isDefault: true, protected: true, lastCommit: "f8a9201" },
       { name: "feature/checkout-idempotency", isDefault: false, protected: false, lastCommit: "c_9e12bf4" },
       { name: "feature/multi-agent-orchestrator", isDefault: false, protected: false, lastCommit: "b_3389a12" },
       { name: "fix/token-usage-aggregation", isDefault: false, protected: false, lastCommit: "a_0411d7c" },
     ]
-
-    const commits = [
+    let commits: any[] = [
       {
         sha: "c_9e12bf4",
         message: "feat(stripe): implement resilient idempotency key lock table",
@@ -38,43 +49,38 @@ export async function GET(req: NextRequest) {
         deletions: 6,
         status: "verified",
       },
-      {
-        sha: "b_3389a12",
-        message: "refactor(agent): decompose planner into dynamic DAG pipeline",
-        author: "Alex Kumar",
-        branch: "feature/multi-agent-orchestrator",
-        timestamp: new Date(Date.now() - 3600000 * 6).toISOString(),
-        filesChanged: 4,
-        additions: 142,
-        deletions: 38,
-        status: "verified",
-      },
-      {
-        sha: "f8a9201",
-        message: "chore: release v1.4.0 with real-time rate limit safeguards",
-        author: "Sarah Chen",
-        branch: "main",
-        timestamp: new Date(Date.now() - 3600000 * 24).toISOString(),
-        filesChanged: 12,
-        additions: 310,
-        deletions: 94,
-        status: "verified",
-      },
     ]
+    let pullRequests: any[] = []
 
-    const pullRequests = [
-      {
-        number: 42,
-        title: "feat(checkout): atomic idempotency key validation",
-        author: "MODELVAULT Agent",
-        branch: "feature/checkout-idempotency",
-        targetBranch: "main",
-        status: "open",
-        reviews: [{ reviewer: "Sarah Chen", state: "APPROVED" }],
-        url: "https://github.com/acme/trade-engine/pull/42",
-        updatedAt: new Date(Date.now() - 1800000).toISOString(),
-      },
-    ]
+    if (source?.sourcePath) {
+      try {
+        const realBranches = await getGitBranches(source.sourcePath)
+        const currentBranch = await getCurrentGitBranch(source.sourcePath)
+        const realCommits = await getGitCommits(source.sourcePath)
+        const diff = await getGitDiff(source.sourcePath)
+        branches = realBranches.map((name) => ({
+          name,
+          isDefault: name === "main" || name === "master",
+          protected: name === "main" || name === "master",
+          lastCommit: realCommits[0]?.sha || "",
+        }))
+        commits = realCommits.map((commit) => ({
+          sha: commit.sha,
+          message: commit.message,
+          author: commit.author,
+          branch: currentBranch,
+          timestamp: new Date(commit.date).toISOString(),
+          filesChanged: 0,
+          additions: 0,
+          deletions: 0,
+          status: "verified",
+        }))
+        pullRequests = []
+        ;(project as { defaultBranch?: string }).defaultBranch = currentBranch
+      } catch {
+        // Keep mock fallback if Git inspection fails.
+      }
+    }
 
     return NextResponse.json({
       data: {
@@ -83,6 +89,7 @@ export async function GET(req: NextRequest) {
         commits,
         pullRequests,
         operations,
+        diff: source?.sourcePath ? await getGitDiff(source.sourcePath).catch(() => "") : "",
       },
     })
   } catch (err: any) {
@@ -96,15 +103,25 @@ export async function POST(req: NextRequest) {
     const { action, projectId, branchName, commitMessage, commitSha, prTitle, prBody } = body
 
     const project = projectId
-      ? await prisma.project.findUnique({ where: { id: projectId } })
-      : await prisma.project.findFirst()
+      ? await prisma.project.findUnique({ where: { id: projectId }, include: { sources: true } })
+      : await prisma.project.findFirst({ include: { sources: true } })
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
     }
 
     if (action === "commit") {
-      const sha = `c_${Math.random().toString(16).slice(2, 9)}`
+      const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find(
+      (item) => item.sourcePath
+    )
+      let sha = `c_${Math.random().toString(16).slice(2, 9)}`
+      if (source?.sourcePath) {
+        try {
+          sha = await commitWorkspace(source.sourcePath, commitMessage || "feat: automated agent mutation")
+        } catch {
+          // Fall back to a synthetic SHA if Git is unavailable.
+        }
+      }
       const op = await prisma.gitOperation.create({
         data: {
           projectId: project.id,

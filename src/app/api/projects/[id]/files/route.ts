@@ -1,5 +1,32 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
+import {
+  listWorkspaceTree,
+  readWorkspaceFile,
+  writeWorkspaceFile,
+} from "@/lib/project-workspace"
+import type { WorkspaceTreeNode } from "@/lib/project-workspace"
+
+function inferLanguage(filePath: string): string {
+  const extension = filePath.split(".").pop()?.toLowerCase()
+  if (extension === "ts" || extension === "tsx") return "typescript"
+  if (extension === "js" || extension === "jsx") return "javascript"
+  if (extension === "json") return "json"
+  if (extension === "py") return "python"
+  if (extension === "css") return "css"
+  if (extension === "html") return "html"
+  if (extension === "md") return "markdown"
+  return "plaintext"
+}
+
+function flattenWorkspacePaths(nodes: WorkspaceTreeNode[]): string[] {
+  const paths: string[] = []
+  for (const node of nodes) {
+    if (node.type === "file") paths.push(node.path)
+    if (node.children) paths.push(...flattenWorkspacePaths(node.children))
+  }
+  return paths
+}
 
 // Sample virtual project file tree and content for sandboxed code inspection
 const MOCK_PROJECT_FILES: Record<string, { path: string; language: string; content: string; astSummary?: any }> = {
@@ -219,7 +246,44 @@ export async function GET(
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
     }
 
-    // If specific file requested, return its content and AST
+    const source = project.sources?.find(
+      (item: unknown) => (item as { sourcePath?: string }).sourcePath
+    ) as { sourcePath?: string } | undefined
+
+    // Real workspace extracted from an uploaded archive.
+    if (source?.sourcePath) {
+      if (filePath) {
+        try {
+          const content = await readWorkspaceFile(source.sourcePath, filePath)
+          const language = inferLanguage(filePath)
+          return NextResponse.json({
+            data: {
+              path: filePath,
+              language,
+              content,
+            },
+          })
+        } catch (err: unknown) {
+          const error = err as { message?: string }
+          return NextResponse.json({ error: error.message || "File not found" }, { status: 404 })
+        }
+      }
+
+      const tree = await listWorkspaceTree(source.sourcePath)
+      const allFiles = flattenWorkspacePaths(tree)
+      return NextResponse.json({
+        data: {
+          projectId: project.id,
+          projectName: project.name,
+          branch: project.defaultBranch,
+          tree,
+          allFiles,
+          workspacePath: source.sourcePath,
+        },
+      })
+    }
+
+    // Fallback for projects without an extracted workspace.
     if (filePath) {
       const file = MOCK_PROJECT_FILES[filePath]
       if (!file) {
@@ -228,7 +292,6 @@ export async function GET(
       return NextResponse.json({ data: file })
     }
 
-    // Otherwise return tree structure
     const tree = [
       {
         name: "src",
@@ -290,5 +353,42 @@ export async function GET(
     })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
+  }
+}
+
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const body = await req.json()
+    const file = body?.file as string
+    const content = body?.content as string
+
+    if (!file || typeof content !== "string") {
+      return NextResponse.json({ error: "file and content are required" }, { status: 400 })
+    }
+
+    const project = await prisma.project.findUnique({
+      where: { id },
+      include: { sources: true },
+    })
+    if (!project) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 })
+    }
+
+    const source = project.sources?.find(
+      (item: unknown) => (item as { sourcePath?: string }).sourcePath
+    ) as { sourcePath?: string } | undefined
+    if (!source?.sourcePath) {
+      return NextResponse.json({ error: "No extracted workspace for this project" }, { status: 400 })
+    }
+
+    await writeWorkspaceFile(source.sourcePath, file, content)
+    return NextResponse.json({ data: { saved: true, file } })
+  } catch (err: unknown) {
+    const error = err as { message?: string }
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
