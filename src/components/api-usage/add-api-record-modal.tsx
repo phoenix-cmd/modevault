@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { X, Terminal, UploadCloud } from "lucide-react"
 
 interface AddApiRecordModalProps {
@@ -18,8 +18,6 @@ export function AddApiRecordModal({
   onClose,
   onSuccess,
 }: AddApiRecordModalProps) {
-  if (!isOpen) return null
-
   const [accountId, setAccountId] = useState(
     selectedAccountId || apiAccounts[0]?.id || ""
   )
@@ -30,14 +28,14 @@ export function AddApiRecordModal({
   const [cost, setCost] = useState(0.065)
   const [requests, setRequests] = useState(25)
   const [date, setDate] = useState("")
-
-  useState(() => {
-    if (typeof window !== "undefined") {
-      setDate(new Date().toISOString().split("T")[0])
-    }
-  })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setDate(new Date().toISOString().split("T")[0])
+  }, [isOpen])
+
+  if (!isOpen) return null
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
