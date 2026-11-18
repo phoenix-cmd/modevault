@@ -280,7 +280,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
   return (
     <>
       {/* Desktop fixed sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 border-r border-[#E8EAED] bg-[#FFFFFF] md:block">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 border-r border-[#E8EAED] bg-[#FFFFFF] lg:block">
         <NavContent />
       </aside>
 
@@ -293,7 +293,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="fixed inset-0 z-50 bg-[#040404]/40 backdrop-blur-xs md:hidden"
+              className="fixed inset-0 z-50 bg-[#040404]/40 backdrop-blur-xs lg:hidden"
               onClick={onClose}
               aria-hidden="true"
             />
@@ -302,7 +302,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "spring", damping: 28, stiffness: 300 }}
-              className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-[#FFFFFF] shadow-2xl md:hidden"
+              className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-[#FFFFFF] shadow-2xl lg:hidden"
             >
               <div className="absolute right-3 top-3.5 z-10">
                 <button
