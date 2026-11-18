@@ -33,6 +33,7 @@ model User {
   syncLogs       SyncLog[]
   billingRecords BillingRecord[]
   executions     Execution[]
+  integrations   IntegrationCredential[]
 }
 
 model Organization {
@@ -484,4 +485,44 @@ model ExchangeRate {
   fetchedAt    DateTime @default(now())
 
   @@unique([fromCurrency, toCurrency])
+}
+
+// --- Integrations & Model Catalog -------------------------------------------
+
+model IntegrationCredential {
+  id            String    @id @default(cuid())
+  userId        String
+  providerSlug  String
+  status        String    @default("connected") // connected | manual | not_connected
+  featuresJson  String?
+  notes         String?
+  encryptedKey  String?
+  keyPreview    String?
+  lastSyncAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, providerSlug])
+  @@index([userId])
+}
+
+model AiModel {
+  id                String   @id @default(cuid())
+  slug              String   @unique
+  name              String
+  providerSlug      String
+  providerName      String
+  contextTokens     Int
+  inputPricePerM    Float
+  outputPricePerM   Float
+  cachedPricePerM   Float
+  speedTokensPerSec Int
+  latencyMs         Int
+  bestFor           String
+  status            String   @default("Production Ready")
+  sampleResponse    String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }

@@ -411,6 +411,109 @@ async function main() {
   }
   console.log("✓ Providers seeded")
 
+  // AI model catalog
+  const models = [
+    {
+      slug: "claude-3-7-sonnet",
+      name: "Claude 3.7 Sonnet",
+      providerSlug: "anthropic",
+      providerName: "Anthropic",
+      contextTokens: 200000,
+      inputPricePerM: 3.0,
+      outputPricePerM: 15.0,
+      cachedPricePerM: 0.3,
+      speedTokensPerSec: 52,
+      latencyMs: 820,
+      bestFor: "Complex software architecture, hybrid thinking, refactoring & AST analysis",
+      status: "Production Ready",
+      sampleResponse: "// Claude 3.7 Sonnet: Atomic Idempotency Middleware\nexport async function withIdempotency(req, handler) {\n  const key = req.headers.get(\"Idempotency-Key\")\n  if (!key) throw new Error(\"Missing key\")\n  return handler(req)\n}",
+    },
+    {
+      slug: "gpt-4o",
+      name: "GPT-4o",
+      providerSlug: "openai",
+      providerName: "OpenAI",
+      contextTokens: 128000,
+      inputPricePerM: 2.5,
+      outputPricePerM: 10.0,
+      cachedPricePerM: 1.25,
+      speedTokensPerSec: 88,
+      latencyMs: 510,
+      bestFor: "Full-stack code generation, multimodal reasoning, tool calling",
+      status: "Production Ready",
+      sampleResponse: "// GPT-4o: Streaming route handler\nexport async function POST(req) {\n  const body = await req.json()\n  return Response.json({ ok: true, body })\n}",
+    },
+    {
+      slug: "gemini-2-5-pro",
+      name: "Gemini 2.5 Pro",
+      providerSlug: "google",
+      providerName: "Google",
+      contextTokens: 1000000,
+      inputPricePerM: 1.25,
+      outputPricePerM: 10.0,
+      cachedPricePerM: 0.315,
+      speedTokensPerSec: 64,
+      latencyMs: 690,
+      bestFor: "Million-token repository analysis and long-context synthesis",
+      status: "Production Ready",
+      sampleResponse: "// Gemini 2.5 Pro: repository-wide refactor map\nconst files = await repo.list()\nconst plan = files.map((f) => ({ file: f, action: \"inspect\" }))",
+    },
+    {
+      slug: "codex-5-2",
+      name: "Codex 5.2",
+      providerSlug: "openai",
+      providerName: "OpenAI",
+      contextTokens: 400000,
+      inputPricePerM: 2.0,
+      outputPricePerM: 8.0,
+      cachedPricePerM: 0.5,
+      speedTokensPerSec: 74,
+      latencyMs: 610,
+      bestFor: "Autonomous implementation and test-driven code repair",
+      status: "Production Ready",
+      sampleResponse: "// Codex 5.2: patch generator\nexport function applyPatch(source, patch) {\n  return patch.reduce((acc, hunk) => hunk.apply(acc), source)\n}",
+    },
+    {
+      slug: "claude-haiku-4",
+      name: "Claude Haiku 4",
+      providerSlug: "anthropic",
+      providerName: "Anthropic",
+      contextTokens: 200000,
+      inputPricePerM: 0.8,
+      outputPricePerM: 4.0,
+      cachedPricePerM: 0.08,
+      speedTokensPerSec: 120,
+      latencyMs: 310,
+      bestFor: "High-volume classification, routing, and fast code review",
+      status: "Production Ready",
+      sampleResponse: "// Claude Haiku 4: fast intent router\nexport const routeIntent = (text) => text.includes(\"deploy\") ? \"ops\" : \"dev\"",
+    },
+    {
+      slug: "deepseek-v3-2",
+      name: "DeepSeek V3.2",
+      providerSlug: "openrouter",
+      providerName: "OpenRouter",
+      contextTokens: 163840,
+      inputPricePerM: 0.27,
+      outputPricePerM: 1.1,
+      cachedPricePerM: 0.07,
+      speedTokensPerSec: 95,
+      latencyMs: 540,
+      bestFor: "Cost-sensitive batch generation and open-weight experimentation",
+      status: "Production Ready",
+      sampleResponse: "// DeepSeek V3.2: batch summarizer\nfor (const row of rows) {\n  summaries.push(await summarize(row))\n}",
+    },
+  ]
+
+  for (const m of models) {
+    await prisma.aiModel.upsert({
+      where: { slug: m.slug },
+      update: m,
+      create: { id: `model_${m.slug}`, ...m },
+    })
+  }
+  console.log("✓ AI model catalog seeded")
+
   // Subscriptions
   const subscriptions = [
     {
@@ -468,6 +571,97 @@ async function main() {
       quotaResetPeriod: "monthly",
       dataSource: "manual",
     },
+    {
+      id: "sub_003",
+      userId: user.id,
+      providerId: "prov_google",
+      customPlanName: "Google AI Pro",
+      type: "consumer",
+      status: "active",
+      billingCycle: "monthly",
+      price: 1950,
+      currency: "INR",
+      startDate: new Date("2024-08-10"),
+      renewalDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+      quotaMessages: 1000,
+      usedMessages: 940,
+      quotaTokens: 2000000,
+      usedTokens: 1480000,
+      quotaResetDate: new Date("2026-12-01"),
+      quotaResetPeriod: "monthly",
+      dataSource: "manual",
+      notes: "Gemini Advanced + 2TB storage bundle",
+    },
+    {
+      id: "sub_004",
+      userId: user.id,
+      providerId: "prov_github-copilot",
+      customPlanName: "GitHub Copilot Business",
+      type: "consumer",
+      status: "active",
+      billingCycle: "yearly",
+      price: 22800,
+      currency: "INR",
+      startDate: new Date("2025-01-15"),
+      renewalDate: new Date("2026-12-20"),
+      quotaRequests: 300,
+      usedRequests: 60,
+      quotaResetPeriod: "monthly",
+      dataSource: "manual",
+    },
+    {
+      id: "sub_006",
+      userId: user.id,
+      providerId: "prov_perplexity",
+      customPlanName: "Perplexity Pro",
+      type: "consumer",
+      status: "active",
+      billingCycle: "monthly",
+      price: 1700,
+      currency: "INR",
+      startDate: new Date("2024-09-05"),
+      renewalDate: new Date("2026-12-05"),
+      quotaRequests: 600,
+      usedRequests: 310,
+      quotaResetPeriod: "monthly",
+      dataSource: "manual",
+    },
+    {
+      id: "sub_007",
+      userId: user.id,
+      providerId: "prov_openrouter",
+      customPlanName: "OpenRouter Credits",
+      type: "api",
+      status: "active",
+      billingCycle: "monthly",
+      price: 2500,
+      currency: "INR",
+      startDate: new Date("2025-02-01"),
+      renewalDate: new Date("2026-12-01"),
+      quotaCredits: 50,
+      usedCredits: 8,
+      quotaResetPeriod: "billing_cycle",
+      dataSource: "manual",
+    },
+    {
+      id: "sub_008",
+      userId: user.id,
+      providerId: "prov_windsurf",
+      customPlanName: "Windsurf Pro",
+      type: "consumer",
+      status: "active",
+      billingCycle: "monthly",
+      price: 1275,
+      currency: "INR",
+      startDate: new Date("2024-10-01"),
+      renewalDate: new Date("2026-12-01"),
+      quotaCredits: 500,
+      usedCredits: 0,
+      quotaResetPeriod: "monthly",
+      dataSource: "manual",
+      createdAt: new Date("2025-01-01"),
+      notes: "Duplicate IDE license — kept for evaluation",
+    },
   ]
 
   for (const sub of subscriptions) {
@@ -506,6 +700,32 @@ async function main() {
       rateLimitTokens: 40000,
       integrationStatus: "connected",
     },
+    {
+      id: "api_003",
+      userId: user.id,
+      providerId: "prov_google",
+      accountName: "Google AI Studio",
+      apiKeyLastFour: "go9p",
+      prepaidBalance: 12.40,
+      totalSpent: 36.20,
+      currency: "USD",
+      rateLimit: 600,
+      rateLimitTokens: 25000,
+      integrationStatus: "connected",
+    },
+    {
+      id: "api_004",
+      userId: user.id,
+      providerId: "prov_openrouter",
+      accountName: "OpenRouter Sandbox",
+      apiKeyLastFour: "or2q",
+      prepaidBalance: 0,
+      totalSpent: 0,
+      currency: "USD",
+      rateLimit: 200,
+      integrationStatus: "manual",
+      createdAt: new Date("2025-01-05"),
+    },
   ]
 
   for (const api of apiAccounts) {
@@ -515,6 +735,145 @@ async function main() {
       create: api,
     })
   }
+
+  // Billing history — 6 months of subscription payments and API top-ups.
+  const billingSubs = [
+    { id: "sub_001", amount: 1700, label: "ChatGPT Plus" },
+    { id: "sub_002", amount: 1700, label: "Claude Pro" },
+    { id: "sub_003", amount: 1950, label: "Google AI Pro" },
+    { id: "sub_004", amount: 1900, label: "GitHub Copilot Business (annual / 12)" },
+    { id: "sub_005", amount: 1700, label: "Cursor Pro" },
+    { id: "sub_006", amount: 1700, label: "Perplexity Pro" },
+    { id: "sub_007", amount: 2500, label: "OpenRouter Credits" },
+  ]
+
+  let billingIndex = 0
+  for (let monthOffset = 5; monthOffset >= 0; monthOffset -= 1) {
+    const monthDate = new Date()
+    monthDate.setMonth(monthDate.getMonth() - monthOffset)
+    monthDate.setDate(5)
+    for (const sub of billingSubs) {
+      billingIndex += 1
+      await prisma.billingRecord.upsert({
+        where: { id: `bill_sub_${billingIndex}` },
+        update: {},
+        create: {
+          id: `bill_sub_${billingIndex}`,
+          userId: user.id,
+          subscriptionId: sub.id,
+          type: "subscription_payment",
+          amount: sub.amount,
+          currency: "INR",
+          billingDate: monthDate,
+          description: `${sub.label} renewal`,
+        },
+      })
+    }
+    if (monthOffset % 2 === 0) {
+      billingIndex += 1
+      await prisma.billingRecord.upsert({
+        where: { id: `bill_api_${billingIndex}` },
+        update: {},
+        create: {
+          id: `bill_api_${billingIndex}`,
+          userId: user.id,
+          type: "api_topup",
+          amount: 5000,
+          currency: "USD",
+          billingDate: monthDate,
+          description: "Prepaid API credit top-up",
+        },
+      })
+    }
+  }
+  console.log("✓ Billing history seeded")
+
+  // API usage — daily model traffic for the last 30 days across connected accounts.
+  const usageAccounts = [
+    { id: "api_001", model: "gpt-4o", share: 50, inputPrice: 2.5, outputPrice: 10 },
+    { id: "api_002", model: "claude-3-7-sonnet", share: 30, inputPrice: 3, outputPrice: 15 },
+    { id: "api_003", model: "gemini-2-5-pro", share: 20, inputPrice: 1.25, outputPrice: 10 },
+  ]
+
+  let usageIndex = 0
+  for (const account of usageAccounts) {
+    for (let i = 0; i < account.share; i += 1) {
+      usageIndex += 1
+      const daysAgo = i % 30
+      const usageDate = new Date()
+      usageDate.setDate(usageDate.getDate() - daysAgo)
+      const inputTokens = 18000 + ((usageIndex * 317) % 42000)
+      const outputTokens = 4000 + ((usageIndex * 193) % 12000)
+      const cachedTokens = Math.round(inputTokens * 0.25)
+      const cost =
+        ((inputTokens - cachedTokens) / 1_000_000) * account.inputPrice +
+        (cachedTokens / 1_000_000) * account.inputPrice * 0.1 +
+        (outputTokens / 1_000_000) * account.outputPrice
+      await prisma.apiUsageRecord.upsert({
+        where: { id: `usage_api_${usageIndex}` },
+        update: {},
+        create: {
+          id: `usage_api_${usageIndex}`,
+          apiAccountId: account.id,
+          date: usageDate,
+          model: account.model,
+          inputTokens,
+          outputTokens,
+          cachedTokens,
+          totalTokens: inputTokens + outputTokens,
+          cost: Number(cost.toFixed(4)),
+          currency: "USD",
+          requestCount: 40 + ((usageIndex * 13) % 220),
+          dataSource: "manual",
+        },
+      })
+    }
+  }
+  console.log("✓ API usage history seeded")
+
+  const notifications = [
+    {
+      id: "notif_quota_google",
+      type: "quota_warning",
+      title: "Google AI Pro quota at 94%",
+      message: "940 of 1,000 tracked messages used. Resets on the next billing cycle.",
+      severity: "critical",
+      actionUrl: "/subscriptions",
+    },
+    {
+      id: "notif_renewal_google",
+      type: "renewal_reminder",
+      title: "Google AI Pro renews soon",
+      message: "Renewal is due within 3 days at ₹1,950/month.",
+      severity: "warning",
+      actionUrl: "/subscriptions",
+    },
+    {
+      id: "notif_credit_openai",
+      type: "credit_low",
+      title: "OpenAI prepaid balance running low",
+      message: "OpenAI API - Production has $42.50 remaining. Top up to avoid throttling.",
+      severity: "warning",
+      actionUrl: "/api-usage",
+    },
+    {
+      id: "notif_execution",
+      type: "execution_complete",
+      title: "Agent execution completed",
+      message: "Claude Code completed the idempotency middleware task on branch feature/checkout-idempotency.",
+      severity: "info",
+      actionUrl: "/agents",
+    },
+  ]
+
+  for (const notification of notifications) {
+    await prisma.notification.upsert({
+      where: { id: notification.id },
+      update: {},
+      create: { userId: user.id, ...notification },
+    })
+  }
+  console.log("✓ Notifications seeded")
 
   // ─── Seed Workflow Definitions ─────────────────────────────────────────
   const workflows = [
