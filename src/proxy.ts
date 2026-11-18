@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
-const PUBLIC_PATHS = ["/login", "/api/auth", "/api/health", "/_next", "/favicon.ico"]
+const PUBLIC_PATHS = ["/", "/register", "/login", "/api/auth", "/api/health", "/_next", "/favicon.ico"]
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  if (PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
+  // Root landing page, register, login, auth APIs and static assets are public
+  if (
+    pathname === "/" ||
+    PUBLIC_PATHS.some((path) => path !== "/" && pathname.startsWith(path))
+  ) {
     return NextResponse.next()
   }
 

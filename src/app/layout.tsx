@@ -9,9 +9,9 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: "MODELVAULT — AI Subscription Command Center",
+  title: "MODELVAULT — Your AI Ecosystem. One Command Center.",
   description:
-    "Track, manage, and optimize all your AI subscriptions and API usage in one precise command center.",
+    "Orchestrate intelligent coding agents, automate development pipelines, and govern AI subscriptions, API tokens, and code security from one unified platform.",
 }
 
 export const viewport: Viewport = {
