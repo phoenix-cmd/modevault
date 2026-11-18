@@ -44,14 +44,24 @@ async function main() {
     if (res.status !== 200) failures.push(`${path} ${res.status}`)
   }
 
-  const projectsRes = await request("/api/projects", {}, jar)
-  const projectId = projectsRes.json?.data?.[0]?.id
-  if (projectId) {
-    const previewStart = await request(`/api/projects/${projectId}/preview`, { method: "POST" }, jar)
-    if (previewStart.status !== 200 && previewStart.status !== 500) failures.push(`preview start ${previewStart.status}`)
-    const previewGet = await request(`/api/projects/${projectId}/preview`, {}, jar)
+  const fs = await import("node:fs")
+  const path = await import("node:path")
+  const demoZipPath = path.join(process.cwd(), "scripts", "demo.zip")
+  let previewProjectId = null
+  if (fs.existsSync(demoZipPath)) {
+    const zipBuffer = fs.readFileSync(demoZipPath)
+    const form = new FormData()
+    form.append("file", new Blob([zipBuffer], { type: "application/zip" }), "demo.zip")
+    form.append("name", "Smoke Preview Project")
+    const upload = await request("/api/projects/upload", { method: "POST", body: form }, jar)
+    if (upload.status === 200) previewProjectId = upload.json?.data?.project?.id
+  }
+  if (previewProjectId) {
+    const previewStart = await request(`/api/projects/${previewProjectId}/preview`, { method: "POST" }, jar)
+    if (previewStart.status !== 200) failures.push(`preview start ${previewStart.status} ${previewStart.json?.error || ""}`)
+    const previewGet = await request(`/api/projects/${previewProjectId}/preview`, {}, jar)
     if (previewGet.status !== 200) failures.push(`preview get ${previewGet.status}`)
-    const previewStop = await request(`/api/projects/${projectId}/preview`, { method: "DELETE" }, jar)
+    const previewStop = await request(`/api/projects/${previewProjectId}/preview`, { method: "DELETE" }, jar)
     if (previewStop.status !== 200) failures.push(`preview stop ${previewStop.status}`)
   }
 

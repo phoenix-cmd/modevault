@@ -27,7 +27,10 @@ export async function startPreview(projectId: string): Promise<{ port: number; s
   }
 
   const source = project.sources?.find((item: any) => item.sourcePath)
-  const cwd = source?.sourcePath || path.join(/* turbopackIgnore: true */ process.cwd(), "data")
+  if (!source?.sourcePath) {
+    throw new Error("No extracted workspace for preview")
+  }
+  const cwd = source.sourcePath
   const port = environment.runPort || 3000
   const command = environment.startCommand || "npm run dev"
 
