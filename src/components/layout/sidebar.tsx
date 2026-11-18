@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import {
@@ -149,6 +149,7 @@ function OrgWorkspaceSwitcher() {
 
 function NavContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
+  const router = useRouter()
   const [userName, setUserName] = useState("Alex Kumar")
   const [userEmail, setUserEmail] = useState("Staff Architect")
   const [userInitial, setUserInitial] = useState("AK")
@@ -257,6 +258,17 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
               </p>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={async () => {
+              await fetch("/api/auth/logout", { method: "POST" })
+              router.push("/login")
+              router.refresh()
+            }}
+            className="text-[10px] text-[#737982] hover:text-[#17191C]"
+          >
+            Sign out
+          </button>
           <span className="h-2 w-2 rounded-full bg-[#1F7A4D] ring-2 ring-[#EDF7F1]" title="Online" />
         </div>
       </div>
