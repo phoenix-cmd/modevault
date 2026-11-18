@@ -52,6 +52,7 @@ const navSections = [
     label: "Management",
     items: [
       { href: "/integrations", label: "Integrations", icon: Plug },
+      { href: "/organizations", label: "Organizations", icon: ShieldCheck },
       { href: "/permissions", label: "Permissions", icon: ShieldCheck },
       { href: "/notifications", label: "Notifications", icon: Zap },
       { href: "/settings", label: "Settings", icon: Settings },
