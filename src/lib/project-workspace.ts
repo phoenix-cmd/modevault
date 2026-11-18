@@ -192,6 +192,46 @@ export async function getGitStatus(rootPath: string): Promise<string> {
   return stdout
 }
 
+export interface GitStatusFile {
+  path: string
+  code: string
+  staged: boolean
+}
+
+export async function getGitStatusFiles(rootPath: string): Promise<GitStatusFile[]> {
+  const { stdout } = await git(rootPath, ["status", "--porcelain"])
+  const files: GitStatusFile[] = []
+  for (const line of stdout.split(/\r?\n/)) {
+    if (!line.trim()) continue
+    const code = line.slice(0, 2)
+    const filePath = line.slice(3).trim()
+    const staged = code[0] !== " " && code[0] !== "?"
+    files.push({ path: filePath, code, staged })
+  }
+  return files
+}
+
+export async function stageFiles(rootPath: string, files?: string[]): Promise<void> {
+  if (files && files.length > 0) {
+    await git(rootPath, ["add", "--", ...files])
+  } else {
+    await git(rootPath, ["add", "-A"])
+  }
+}
+
+export async function unstageFiles(rootPath: string, files?: string[]): Promise<void> {
+  if (files && files.length > 0) {
+    await git(rootPath, ["reset", "HEAD", "--", ...files])
+  } else {
+    await git(rootPath, ["reset", "HEAD"])
+  }
+}
+
+export async function discardFiles(rootPath: string, files: string[]): Promise<void> {
+  if (files.length === 0) return
+  await git(rootPath, ["checkout", "--", ...files])
+}
+
 export async function commitWorkspace(
   rootPath: string,
   message: string

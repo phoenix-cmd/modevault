@@ -25,10 +25,11 @@ import { GlassCard } from "@/components/ui/glass-card"
 export default function GitControlPage() {
   const [projects, setProjects] = useState<any[]>([])
   const [projectId, setProjectId] = useState<string>("")
-  const [activeTab, setActiveTab] = useState<"commits" | "pulls" | "branches" | "conflicts">("commits")
+  const [activeTab, setActiveTab] = useState<"changes" | "commits" | "pulls" | "branches" | "conflicts">("changes")
   const [branches, setBranches] = useState<any[]>([])
   const [commits, setCommits] = useState<any[]>([])
   const [pulls, setPulls] = useState<any[]>([])
+  const [changes, setChanges] = useState<any[]>([])
   const [currentBranch, setCurrentBranch] = useState("main")
   const [diff, setDiff] = useState<string>("")
   const [loading, setLoading] = useState(true)
@@ -58,6 +59,7 @@ export default function GitControlPage() {
         setBranches(json.data.branches || [])
         setCommits(json.data.commits || [])
         setPulls(json.data.pullRequests || [])
+        setChanges(json.data.changes || [])
         setCurrentBranch(json.data.currentBranch || "main")
         setDiff(json.data.diff || "")
       }
@@ -318,6 +320,16 @@ export default function GitControlPage() {
       {/* Tabs */}
       <div className="flex border-b border-[#E8EAED] text-xs font-semibold">
         <button
+          onClick={() => setActiveTab("changes")}
+          className={`py-2.5 px-4 border-b-2 transition-colors ${
+            activeTab === "changes"
+              ? "border-[#D5222D] text-[#17191C]"
+              : "border-transparent text-[#737982] hover:text-[#17191C]"
+          }`}
+        >
+          Changes ({changes.length})
+        </button>
+        <button
           onClick={() => setActiveTab("commits")}
           className={`py-2.5 px-4 border-b-2 transition-colors ${
             activeTab === "commits"
@@ -369,6 +381,83 @@ export default function GitControlPage() {
       )}
 
       {/* Content */}
+      {activeTab === "changes" && (
+        <div className="space-y-4">
+          <GlassCard className="p-4 border-[#E8EAED] bg-[#FFFFFF]">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[#9AA0A8]">Working tree changes</p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    await fetch("/api/git", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ action: "stage", projectId }),
+                    })
+                    loadGitData(projectId)
+                  }}
+                  className="rounded-md border border-[#E8EAED] px-2.5 py-1 text-[11px] font-semibold text-[#17191C] hover:bg-[#F2F3F5]"
+                >
+                  Stage all
+                </button>
+                <button
+                  onClick={async () => {
+                    await fetch("/api/git", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ action: "unstage", projectId }),
+                    })
+                    loadGitData(projectId)
+                  }}
+                  className="rounded-md border border-[#E8EAED] px-2.5 py-1 text-[11px] font-semibold text-[#17191C] hover:bg-[#F2F3F5]"
+                >
+                  Unstage all
+                </button>
+              </div>
+            </div>
+            {changes.length === 0 ? (
+              <p className="mt-3 text-[12px] text-[#737982]">No changes detected.</p>
+            ) : (
+              <div className="mt-3 space-y-1">
+                {changes.map((change: any) => (
+                  <div key={change.path} className="flex items-center justify-between rounded-md border border-[#E8EAED] px-3 py-2">
+                    <span className="font-mono text-[11px] text-[#17191C]">{change.path}</span>
+                    <span className="text-[10px] font-semibold uppercase text-[#737982]">{change.code}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </GlassCard>
+
+          <GlassCard className="p-4 border-[#E8EAED] bg-[#FFFFFF]">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-[#9AA0A8]">Commit</p>
+            <div className="flex items-center gap-2">
+              <input
+                value={prTitle}
+                onChange={(e) => setPrTitle(e.target.value)}
+                placeholder="Commit message"
+                className="field flex-1"
+              />
+              <button
+                onClick={async () => {
+                  if (!prTitle) return
+                  await fetch("/api/git", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "commit", projectId, commitMessage: prTitle }),
+                  })
+                  setPrTitle("")
+                  loadGitData(projectId)
+                }}
+                className="btn-primary"
+              >
+                Commit
+              </button>
+            </div>
+          </GlassCard>
+        </div>
+      )}
+
       {activeTab === "commits" && (
         <div className="rounded-xl border border-[#E8EAED] bg-[#FFFFFF] divide-y divide-[#E8EAED] shadow-xs overflow-hidden">
           {commits.map((c) => (

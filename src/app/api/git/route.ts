@@ -5,8 +5,12 @@ import {
   getGitCommits,
   getGitDiff,
   getGitStatus,
+  getGitStatusFiles,
   getCurrentGitBranch,
   commitWorkspace,
+  stageFiles,
+  unstageFiles,
+  discardFiles,
 } from "@/lib/project-workspace"
 
 export async function GET(req: NextRequest) {
@@ -90,6 +94,7 @@ export async function GET(req: NextRequest) {
         pullRequests,
         operations,
         diff: source?.sourcePath ? await getGitDiff(source.sourcePath).catch(() => "") : "",
+        changes: source?.sourcePath ? await getGitStatusFiles(source.sourcePath).catch(() => []) : [],
       },
     })
   } catch (err: any) {
@@ -181,6 +186,33 @@ export async function POST(req: NextRequest) {
           operation: op,
         },
       }, { status: 201 })
+    }
+
+    if (action === "stage") {
+      const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find((item) => item.sourcePath)
+      if (source?.sourcePath) {
+        await stageFiles(source.sourcePath, body.files)
+      }
+      const changes = source?.sourcePath ? await getGitStatusFiles(source.sourcePath).catch(() => []) : []
+      return NextResponse.json({ data: { message: "Changes staged", changes } })
+    }
+
+    if (action === "unstage") {
+      const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find((item) => item.sourcePath)
+      if (source?.sourcePath) {
+        await unstageFiles(source.sourcePath, body.files)
+      }
+      const changes = source?.sourcePath ? await getGitStatusFiles(source.sourcePath).catch(() => []) : []
+      return NextResponse.json({ data: { message: "Changes unstaged", changes } })
+    }
+
+    if (action === "discard") {
+      const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find((item) => item.sourcePath)
+      if (source?.sourcePath && Array.isArray(body.files)) {
+        await discardFiles(source.sourcePath, body.files)
+      }
+      const changes = source?.sourcePath ? await getGitStatusFiles(source.sourcePath).catch(() => []) : []
+      return NextResponse.json({ data: { message: "Changes discarded", changes } })
     }
 
     return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 })
