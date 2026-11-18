@@ -14,12 +14,14 @@ import { PageHeader } from "@/components/ui/page-header"
 import { ProviderIcon } from "@/components/ui/provider-icon"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { cn } from "@/lib/utils"
+import { useModalA11y } from "@/lib/use-modal-a11y"
 
 interface ProviderIntegrationState {
   slug: string
   name: string
   status: "connected" | "manual" | "not_connected"
   lastSync: string | null
+  keyPreview?: string | null
   features: {
     subscriptionQuotas: boolean
     apiTokens: boolean
@@ -115,36 +117,142 @@ export default function IntegrationsPage() {
   const [apiKeyInput, setApiKeyInput] = useState("")
   const [syncing, setSyncing] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [loadingIntegrations, setLoadingIntegrations] = useState(true)
+
+  const dialogRef = useModalA11y(Boolean(selectedProvider), () =>
+    setSelectedProvider(null)
+  )
 
   useEffect(() => {
-    if (!selectedProvider) return
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSelectedProvider(null)
+    let active = true
+    fetch("/api/integrations")
+      .then((res) => res.json())
+      .then((json) => {
+        if (!active) return
+        const records: Array<{
+          providerSlug: string
+          status: "connected" | "manual" | "not_connected"
+          features: {
+            subscriptionQuotas?: boolean
+            apiTokens?: boolean
+            invoices?: boolean
+          } | null
+          notes: string | null
+          keyPreview: string | null
+          lastSyncAt: string | null
+        }> = json?.data || []
+        if (records.length > 0) {
+          setIntegrations((prev) =>
+            prev.map((item) => {
+              const record = records.find((r) => r.providerSlug === item.slug)
+              if (!record) return item
+              return {
+                ...item,
+                status: record.status,
+                lastSync: record.lastSyncAt
+                  ? new Date(record.lastSyncAt).toLocaleString()
+                  : item.lastSync,
+                notes: record.notes || item.notes,
+                keyPreview: record.keyPreview,
+                features: {
+                  subscriptionQuotas:
+                    record.features?.subscriptionQuotas ??
+                    item.features.subscriptionQuotas,
+                  apiTokens: record.features?.apiTokens ?? item.features.apiTokens,
+                  invoices: record.features?.invoices ?? item.features.invoices,
+                },
+              }
+            })
+          )
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setLoadingIntegrations(false)
+      })
+    return () => {
+      active = false
     }
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [selectedProvider])
+  }, [])
 
-  const handleConnect = (e: React.FormEvent) => {
+  const handleConnect = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedProvider) return
     setSyncing(true)
-    setTimeout(() => {
+    setErrorMessage(null)
+    try {
+      const res = await fetch("/api/integrations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          providerSlug: selectedProvider.slug,
+          apiKey: apiKeyInput.trim() || undefined,
+          status: apiKeyInput.trim() ? "connected" : "manual",
+          features: selectedProvider.features,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || "Failed to save integration")
+
       setIntegrations((prev) =>
         prev.map((item) =>
           item.slug === selectedProvider.slug
-            ? { ...item, status: "connected", lastSync: "Just now" }
+            ? {
+                ...item,
+                status: apiKeyInput.trim() ? "connected" : "manual",
+                lastSync: json.data?.lastSyncAt
+                  ? new Date(json.data.lastSyncAt).toLocaleString()
+                  : item.lastSync,
+                keyPreview: json.data?.keyPreview ?? item.keyPreview,
+              }
             : item
         )
       )
-      setSyncing(false)
       setSelectedProvider(null)
       setApiKeyInput("")
       setToastMessage(
-        `Securely synchronized ${selectedProvider.name} API integration.`
+        apiKeyInput.trim()
+          ? `${selectedProvider.name} connected. Key encrypted at rest.`
+          : `${selectedProvider.name} saved in manual tracking mode.`
       )
       setTimeout(() => setToastMessage(null), 4000)
-    }, 1200)
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Failed to save integration")
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  const handleDisconnect = async () => {
+    if (!selectedProvider) return
+    setSyncing(true)
+    setErrorMessage(null)
+    try {
+      const res = await fetch(
+        `/api/integrations?providerSlug=${encodeURIComponent(selectedProvider.slug)}`,
+        { method: "DELETE" }
+      )
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error || "Failed to disconnect")
+      }
+      setIntegrations((prev) =>
+        prev.map((item) =>
+          item.slug === selectedProvider.slug
+            ? { ...item, status: "manual", keyPreview: null, lastSync: "Manual" }
+            : item
+        )
+      )
+      setSelectedProvider(null)
+      setApiKeyInput("")
+      setToastMessage(`${selectedProvider.name} credential removed.`)
+      setTimeout(() => setToastMessage(null), 4000)
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : "Failed to disconnect")
+    } finally {
+      setSyncing(false)
+    }
   }
 
   const capability = (label: string, supported: boolean) => (
@@ -186,6 +294,23 @@ export default function IntegrationsPage() {
             <X className="h-3.5 w-3.5" strokeWidth={2} />
           </button>
         </div>
+      )}
+
+      {errorMessage && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-danger/25 bg-danger-soft px-3.5 py-2.5 text-[12px] text-danger animate-fade-in">
+          <span>{errorMessage}</span>
+          <button
+            onClick={() => setErrorMessage(null)}
+            className="text-danger/70 hover:text-danger"
+            aria-label="Dismiss"
+          >
+            <X className="h-3.5 w-3.5" strokeWidth={2} />
+          </button>
+        </div>
+      )}
+
+      {loadingIntegrations && (
+        <p className="text-[11px] text-ink-3">Loading saved credentials…</p>
       )}
 
       <section className="panel p-4 sm:p-5">
@@ -257,6 +382,7 @@ export default function IntegrationsPage() {
       {selectedProvider && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm animate-fade-in">
           <div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="configure-provider-title"
@@ -303,8 +429,12 @@ export default function IntegrationsPage() {
                     />
                     <input
                       type="password"
-                      required
-                      placeholder="sk-…"
+                      required={!selectedProvider.keyPreview}
+                      placeholder={
+                        selectedProvider.keyPreview
+                          ? `Saved key ${selectedProvider.keyPreview} — enter a new key to replace`
+                          : "sk-…"
+                      }
                       value={apiKeyInput}
                       onChange={(e) => setApiKeyInput(e.target.value)}
                       className="field pl-8 font-mono text-[12px]"
@@ -324,21 +454,35 @@ export default function IntegrationsPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
-                <button
-                  type="button"
-                  onClick={() => setSelectedProvider(null)}
-                  className="btn-ghost"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={syncing}
-                  className="btn-primary"
-                >
-                  {syncing ? "Verifying…" : "Save and verify"}
-                </button>
+              <div className="flex items-center justify-between gap-2 border-t border-line px-5 py-3">
+                <div>
+                  {selectedProvider.keyPreview && (
+                    <button
+                      type="button"
+                      onClick={handleDisconnect}
+                      disabled={syncing}
+                      className="text-[11.5px] font-medium text-danger hover:underline disabled:opacity-50"
+                    >
+                      Disconnect credential
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedProvider(null)}
+                    className="btn-ghost"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={syncing}
+                    className="btn-primary"
+                  >
+                    {syncing ? "Saving…" : selectedProvider.keyPreview ? "Update" : "Save"}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
