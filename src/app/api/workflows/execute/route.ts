@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
+import {
+  createBranch,
+  commitWorkspace,
+  getLatestCommitDiff,
+  writeWorkspaceFile,
+} from "@/lib/project-workspace"
 
 export async function POST(req: NextRequest) {
   try {
@@ -7,8 +13,8 @@ export async function POST(req: NextRequest) {
     const { workflowId, projectId, customPrompt } = body
 
     const project = projectId
-      ? await prisma.project.findUnique({ where: { id: projectId } })
-      : await prisma.project.findFirst()
+      ? await prisma.project.findUnique({ where: { id: projectId }, include: { sources: true } })
+      : await prisma.project.findFirst({ include: { sources: true } })
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
@@ -22,8 +28,14 @@ export async function POST(req: NextRequest) {
     const title = customPrompt || `Automated Run: ${wfName}`
     const branch = `workflow/run-${Date.now().toString(36)}`
 
+    type WorkflowNode = {
+      id?: string
+      type?: string
+      data?: { label?: string; description?: string }
+    }
+
     // Parse workflow nodes if available
-    let nodes: any[] = []
+    let nodes: WorkflowNode[] = []
     if (workflow && workflow.nodesJson) {
       try {
         nodes = JSON.parse(workflow.nodesJson)
@@ -97,6 +109,57 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    // If the project has a real extracted workspace, apply and commit a real change.
+    const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find(
+      (item) => item.sourcePath
+    )
+    let realDiff = ""
+    let realCommitSha = ""
+    if (source?.sourcePath) {
+      try {
+        await createBranch(source.sourcePath, branch)
+        await writeWorkspaceFile(
+          source.sourcePath,
+          "WORKFLOW_EXECUTION.md",
+          `# Workflow execution\n\nWorkflow: ${wfName}\nExecution: ${execution.id}\nCreated: ${new Date().toISOString()}\n`
+        )
+        realCommitSha = await commitWorkspace(source.sourcePath, `feat(workflow): ${wfName}`)
+        realDiff = await getLatestCommitDiff(source.sourcePath)
+
+        await prisma.execution.update({
+          where: { id: execution.id },
+          data: {
+            totalTokens: 0,
+            inputTokens: 0,
+            outputTokens: 0,
+            estimatedCost: 0,
+            durationMs: 0,
+          },
+        })
+        await prisma.executionArtifact.create({
+          data: {
+            executionId: execution.id,
+            type: "git_diff",
+            path: "WORKFLOW_EXECUTION.md",
+            summary: `Workflow executed: ${wfName}`,
+            content: realDiff,
+          },
+        })
+        await prisma.gitOperation.create({
+          data: {
+            projectId: project.id,
+            executionId: execution.id,
+            branchName: branch,
+            commitSha: realCommitSha || null,
+            commitMessage: `feat(workflow): ${wfName}`,
+            status: realCommitSha ? "committed" : "staged",
+          },
+        })
+      } catch (err) {
+        console.error("Workflow workspace update failed:", err)
+      }
+    }
+
     // Create initial execution event
     await prisma.agentEvent.create({
       data: {
@@ -113,7 +176,8 @@ export async function POST(req: NextRequest) {
     })
 
     return NextResponse.json({ data: execution }, { status: 201 })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err: unknown) {
+    const error = err as { message?: string }
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
