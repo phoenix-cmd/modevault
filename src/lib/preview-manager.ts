@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process"
+import path from "node:path"
 import { prisma } from "@/lib/db"
 
 interface PreviewState {
@@ -26,7 +27,7 @@ export async function startPreview(projectId: string): Promise<{ port: number; s
   }
 
   const source = project.sources?.find((item) => item.sourcePath)
-  const cwd = source?.sourcePath || process.cwd()
+  const cwd = source?.sourcePath || path.join(/* turbopackIgnore: true */ process.cwd())
   const port = environment.runPort || 3000
   const command = environment.startCommand || "npm run dev"
 
