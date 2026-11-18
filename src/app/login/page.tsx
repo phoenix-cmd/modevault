@@ -70,8 +70,14 @@ export default function LoginPage() {
           <button type="submit" disabled={loading} className="btn-primary w-full">
             {loading ? "Signing in..." : "Sign in"}
           </button>
+          <a href="/api/auth/github" className="btn-secondary w-full text-center">
+            Continue with GitHub
+          </a>
           <p className="text-[11.5px] text-ink-3">
             Demo credentials: demo@modelvault.dev / password
+          </p>
+          <p className="text-[11.5px] text-ink-3">
+            New here? <a href="/register" className="text-accent hover:underline">Create an account</a>
           </p>
         </form>
       </GlassCard>
