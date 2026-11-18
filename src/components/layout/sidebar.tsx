@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useEffect, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import {
   Activity,
@@ -105,19 +106,38 @@ function Brand() {
 }
 
 function OrgWorkspaceSwitcher() {
+  const [orgName, setOrgName] = useState("Acme Engineering")
+  const [workspaceName, setWorkspaceName] = useState("Core Platform")
+
+  useEffect(() => {
+    let active = true
+    fetch("/api/organizations")
+      .then((res) => res.json())
+      .then((json) => {
+        if (!active) return
+        const org = json?.data?.[0]
+        if (org?.name) setOrgName(org.name)
+        if (org?.workspaces?.[0]?.name) setWorkspaceName(org.workspaces[0].name)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [])
+
   return (
     <div className="px-3 pt-3 pb-2">
       <div className="flex items-center justify-between rounded-lg border border-[#E8EAED] bg-[#FFFFFF] px-2.5 py-1.5 shadow-[0_1px_2px_rgba(16,24,40,0.03)] hover:border-[#D2D6DC] transition-colors cursor-pointer">
         <div className="flex items-center gap-2 min-w-0">
           <span className="h-4 w-4 rounded-[4px] bg-[#040404] text-[9px] font-bold text-white flex items-center justify-center shrink-0">
-            A
+            {orgName.charAt(0).toUpperCase()}
           </span>
           <div className="min-w-0">
             <p className="text-[11px] font-semibold text-[#17191C] truncate leading-tight">
-              Acme Engineering
+              {orgName}
             </p>
             <p className="text-[10px] text-[#737982] truncate leading-none">
-              Core Platform
+              {workspaceName}
             </p>
           </div>
         </div>
@@ -129,6 +149,35 @@ function OrgWorkspaceSwitcher() {
 
 function NavContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
+  const [userName, setUserName] = useState("Alex Kumar")
+  const [userEmail, setUserEmail] = useState("Staff Architect")
+  const [userInitial, setUserInitial] = useState("AK")
+
+  useEffect(() => {
+    let active = true
+    fetch("/api/auth/me")
+      .then((res) => res.json())
+      .then((json) => {
+        if (!active) return
+        const user = json?.data
+        if (user?.name) {
+          setUserName(user.name)
+          setUserInitial(
+            user.name
+              .split(" ")
+              .map((part: string) => part.charAt(0))
+              .join("")
+              .slice(0, 2)
+              .toUpperCase()
+          )
+        }
+        if (user?.email) setUserEmail(user.email)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [])
 
   return (
     <div className="flex h-full flex-col bg-[#FFFFFF]">
@@ -197,14 +246,14 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0">
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#040404] text-[11px] font-bold text-white shrink-0">
-              AK
+              {userInitial}
             </span>
             <div className="min-w-0">
               <p className="truncate text-[12px] font-medium text-[#17191C] leading-none">
-                Alex Kumar
+                {userName}
               </p>
               <p className="truncate text-[10px] text-[#737982] mt-0.5">
-                Staff Architect
+                {userEmail}
               </p>
             </div>
           </div>

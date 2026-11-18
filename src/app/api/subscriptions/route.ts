@@ -1,13 +1,14 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
+import { getCurrentUserOrDefault } from "@/lib/auth"
 
-const DEMO_USER_ID = "user_demo_001";
 
 // GET /api/subscriptions — List all subscriptions for user, with provider data
 export async function GET(_request: NextRequest) {
   try {
+    const user = await getCurrentUserOrDefault()
     const subscriptions = await prisma.subscription.findMany({
-      where: { userId: DEMO_USER_ID },
+      where: { userId: user.id },
       include: {
         provider: true,
         plan: true,
@@ -28,6 +29,7 @@ export async function GET(_request: NextRequest) {
 // POST /api/subscriptions — Create a new subscription
 export async function POST(request: NextRequest) {
   try {
+    const user = await getCurrentUserOrDefault()
     const body = await request.json();
 
     const { providerId, type, price, startDate, billingCycle, planId, customPlanName, currency, status, renewalDate, expiryDate, quotaMessages, quotaTokens, quotaRequests, quotaCredits, quotaResetPeriod, notes } = body;
@@ -49,7 +51,7 @@ export async function POST(request: NextRequest) {
 
     const subscription = await prisma.subscription.create({
       data: {
-        userId: DEMO_USER_ID,
+        userId: user.id,
         providerId,
         planId: planId ?? null,
         customPlanName: customPlanName ?? null,

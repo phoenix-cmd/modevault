@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db"
+import { getCurrentUserOrDefault } from "@/lib/auth"
 
-const DEMO_USER_ID = "user_demo_001"
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await getCurrentUserOrDefault()
     const { searchParams } = new URL(request.url)
     const apiAccountId = searchParams.get("apiAccountId")
     const model = searchParams.get("model")
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
 
     const where: Prisma.ApiUsageRecordWhereInput = {
       apiAccount: {
-        userId: DEMO_USER_ID,
+        userId: user.id,
       },
     }
 
@@ -50,6 +51,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getCurrentUserOrDefault()
     const body = await request.json()
     const {
       apiAccountId,

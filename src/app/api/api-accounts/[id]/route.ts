@@ -1,7 +1,7 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
+import { getCurrentUserOrDefault } from "@/lib/auth"
 
-const DEMO_USER_ID = "user_demo_001";
 
 // GET /api/api-accounts/[id] — Get single API account
 export async function GET(
@@ -9,10 +9,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUserOrDefault()
     const { id } = await params;
 
     const account = await prisma.apiAccount.findFirst({
-      where: { id, userId: DEMO_USER_ID },
+      where: { id, userId: user.id },
       include: {
         provider: true,
         apiUsageRecords: { orderBy: { date: "desc" }, take: 50 },
@@ -42,11 +43,12 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUserOrDefault()
     const { id } = await params;
     const body = await request.json();
 
     const existing = await prisma.apiAccount.findFirst({
-      where: { id, userId: DEMO_USER_ID },
+      where: { id, userId: user.id },
     });
 
     if (!existing) {
@@ -87,10 +89,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUserOrDefault()
     const { id } = await params;
 
     const existing = await prisma.apiAccount.findFirst({
-      where: { id, userId: DEMO_USER_ID },
+      where: { id, userId: user.id },
     });
 
     if (!existing) {

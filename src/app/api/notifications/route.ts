@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
+import { getCurrentUserOrDefault } from "@/lib/auth"
 
-const DEMO_USER_ID = "user_demo_001"
 
 export async function GET(_request: NextRequest) {
   try {
+    const user = await getCurrentUserOrDefault()
     const notifications = await prisma.notification.findMany({
-      where: { userId: DEMO_USER_ID },
+      where: { userId: user.id },
       orderBy: [{ isRead: "asc" }, { createdAt: "desc" }],
     })
 
     const unreadCount = await prisma.notification.count({
-      where: { userId: DEMO_USER_ID, isRead: false },
+      where: { userId: user.id, isRead: false },
     })
 
     return NextResponse.json({
@@ -31,6 +32,7 @@ export async function GET(_request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getCurrentUserOrDefault()
     const body = await request.json()
     const { type, title, message, severity, actionUrl } = body
 
@@ -43,7 +45,7 @@ export async function POST(request: NextRequest) {
 
     const notification = await prisma.notification.create({
       data: {
-        userId: DEMO_USER_ID,
+        userId: user.id,
         type: type || "general",
         title,
         message,

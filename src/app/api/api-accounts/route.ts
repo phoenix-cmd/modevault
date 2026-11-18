@@ -1,13 +1,14 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
+import { getCurrentUserOrDefault } from "@/lib/auth"
 
-const DEMO_USER_ID = "user_demo_001";
 
 // GET /api/api-accounts — List all API accounts with provider info
 export async function GET(_request: NextRequest) {
   try {
+    const user = await getCurrentUserOrDefault()
     const accounts = await prisma.apiAccount.findMany({
-      where: { userId: DEMO_USER_ID },
+      where: { userId: user.id },
       include: { provider: true },
       orderBy: { createdAt: "desc" },
     });
@@ -25,6 +26,7 @@ export async function GET(_request: NextRequest) {
 // POST /api/api-accounts — Create API account
 export async function POST(request: NextRequest) {
   try {
+    const user = await getCurrentUserOrDefault()
     const body = await request.json();
 
     const { providerId, accountName, apiKeyLastFour, prepaidBalance, currency, rateLimit, rateLimitTokens, integrationStatus } = body;
@@ -38,7 +40,7 @@ export async function POST(request: NextRequest) {
 
     const account = await prisma.apiAccount.create({
       data: {
-        userId: DEMO_USER_ID,
+        userId: user.id,
         providerId,
         accountName: accountName ?? null,
         apiKeyLastFour: apiKeyLastFour ?? null,

@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db"
+import { getCurrentUserOrDefault } from "@/lib/auth"
 
-const DEMO_USER_ID = "user_demo_001"
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await getCurrentUserOrDefault()
     const { searchParams } = new URL(request.url)
     const type = searchParams.get("type")
     const limit = parseInt(searchParams.get("limit") || "100", 10)
 
     const where: Prisma.BillingRecordWhereInput = {
-      userId: DEMO_USER_ID,
+      userId: user.id,
     }
 
     if (type) {
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getCurrentUserOrDefault()
     const body = await request.json()
     const {
       subscriptionId,
@@ -63,7 +65,7 @@ export async function POST(request: NextRequest) {
 
     const record = await prisma.billingRecord.create({
       data: {
-        userId: DEMO_USER_ID,
+        userId: user.id,
         subscriptionId: subscriptionId || null,
         type: type || "subscription_payment",
         amount: parseFloat(amount),

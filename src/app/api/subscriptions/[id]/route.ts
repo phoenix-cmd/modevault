@@ -1,7 +1,7 @@
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
+import { getCurrentUserOrDefault } from "@/lib/auth"
 
-const DEMO_USER_ID = "user_demo_001";
 
 // GET /api/subscriptions/[id] — Get single subscription with usage records
 export async function GET(
@@ -9,10 +9,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUserOrDefault()
     const { id } = await params;
 
     const subscription = await prisma.subscription.findFirst({
-      where: { id, userId: DEMO_USER_ID },
+      where: { id, userId: user.id },
       include: {
         provider: true,
         plan: true,
@@ -44,12 +45,13 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUserOrDefault()
     const { id } = await params;
     const body = await request.json();
 
     // Verify ownership
     const existing = await prisma.subscription.findFirst({
-      where: { id, userId: DEMO_USER_ID },
+      where: { id, userId: user.id },
     });
 
     if (!existing) {
@@ -99,10 +101,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUserOrDefault()
     const { id } = await params;
 
     const existing = await prisma.subscription.findFirst({
-      where: { id, userId: DEMO_USER_ID },
+      where: { id, userId: user.id },
     });
 
     if (!existing) {
@@ -136,11 +139,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUserOrDefault()
     const { id } = await params;
     const body = await request.json();
 
     const existing = await prisma.subscription.findFirst({
-      where: { id, userId: DEMO_USER_ID },
+      where: { id, userId: user.id },
     });
 
     if (!existing) {

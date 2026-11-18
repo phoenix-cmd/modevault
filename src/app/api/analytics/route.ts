@@ -1,26 +1,27 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
+import { getCurrentUserOrDefault } from "@/lib/auth"
 
-const DEMO_USER_ID = "user_demo_001"
 
 export async function GET(_request: NextRequest) {
   try {
+    const user = await getCurrentUserOrDefault()
     const now = new Date()
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
 
     // 1. Subscriptions & API accounts
     const [subscriptions, apiAccounts, billingRecords] = await Promise.all([
       prisma.subscription.findMany({
-        where: { userId: DEMO_USER_ID },
+        where: { userId: user.id },
         include: { provider: true },
       }),
       prisma.apiAccount.findMany({
-        where: { userId: DEMO_USER_ID },
+        where: { userId: user.id },
         include: { provider: true },
       }),
       prisma.billingRecord.findMany({
         where: {
-          userId: DEMO_USER_ID,
+          userId: user.id,
           billingDate: { gte: sixMonthsAgo },
         },
         orderBy: { billingDate: "asc" },

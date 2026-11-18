@@ -3,6 +3,7 @@
 // Seeds organizations, workspaces, projects, agents, subscriptions, and executions
 
 const { PrismaClient } = require("@prisma/client")
+const bcrypt = require("bcryptjs")
 
 const prisma = new PrismaClient()
 
@@ -12,13 +13,16 @@ async function main() {
   // ─── Create demo user ──────────────────────────────────────────────
   const user = await prisma.user.upsert({
     where: { email: "demo@modelvault.dev" },
-    update: {},
     create: {
       id: "user_demo_001",
       email: "demo@modelvault.dev",
       name: "Alex Kumar",
+      passwordHash: bcrypt.hashSync("password", 10),
       currency: "INR",
       timezone: "Asia/Kolkata",
+    },
+    update: {
+      passwordHash: bcrypt.hashSync("password", 10),
     },
   })
   console.log("✓ Demo user created")

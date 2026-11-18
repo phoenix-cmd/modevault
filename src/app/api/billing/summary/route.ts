@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
+import { getCurrentUserOrDefault } from "@/lib/auth"
 
-const DEMO_USER_ID = "user_demo_001"
 
 export async function GET(_request: NextRequest) {
   try {
+    const user = await getCurrentUserOrDefault()
     const records = await prisma.billingRecord.findMany({
-      where: { userId: DEMO_USER_ID },
+      where: { userId: user.id },
       include: {
         subscription: {
           include: {
