@@ -27,6 +27,15 @@ export function SubscriptionForm({
 }: SubscriptionFormProps) {
   const isEditing = Boolean(subscription)
 
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [isOpen, onClose])
+
   const [formData, setFormData] = useState({
     providerSlug: "openai" as ProviderSlug,
     planName: "ChatGPT Plus",

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { AlertTriangle, X } from "lucide-react"
 
 interface DeleteDialogProps {
@@ -20,6 +20,15 @@ export function DeleteDialog({
 }: DeleteDialogProps) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [isOpen, onClose])
 
   if (!isOpen || !subscriptionId) return null
 
