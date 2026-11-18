@@ -56,15 +56,13 @@ export default function OverviewPage() {
 
   useEffect(() => {
     // Resolve after hydration so the prerender stays deterministic.
-    const frame = requestAnimationFrame(() =>
-      setReportingPeriod(
-        new Date().toLocaleString("default", {
-          month: "long",
-          year: "numeric",
-        })
-      )
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only clock value
+    setReportingPeriod(
+      new Date().toLocaleString("default", {
+        month: "long",
+        year: "numeric",
+      })
     )
-    return () => cancelAnimationFrame(frame)
   }, [])
 
   useEffect(() => {
