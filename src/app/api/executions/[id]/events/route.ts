@@ -33,7 +33,7 @@ export async function GET(
           payload: JSON.parse(event.payloadJson || "{}"),
           createdAt: event.createdAt,
         })
-        controller.enqueue(encoder.encode(`event: ${event.eventType}\ndata: ${payload}\n\n`))
+        controller.enqueue(encoder.encode(`data: ${payload}\n\n`))
         await new Promise((resolve) => setTimeout(resolve, 120))
       }
       controller.enqueue(encoder.encode("event: done\ndata: {}\n\n"))

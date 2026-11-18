@@ -129,6 +129,34 @@ function AgentCenterContent() {
     }
   }, [selectedExecution?.id])
 
+  // Stream real execution events when an execution is selected.
+  useEffect(() => {
+    if (!selectedExecution?.id) return
+    const source = new EventSource(`/api/executions/${selectedExecution.id}/events`)
+    source.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data)
+        if (payload.eventType === "done") return
+        setSelectedExecution((prev: any) => {
+          if (!prev || prev.id !== selectedExecution.id) return prev
+          const events = [...(prev.events || [])]
+          if (!events.some((item: any) => item.id === payload.id)) {
+            events.push(payload)
+          }
+          return { ...prev, events }
+        })
+      } catch {
+        // Ignore malformed event payloads.
+      }
+    }
+    source.onerror = () => {
+      source.close()
+    }
+    return () => {
+      source.close()
+    }
+  }, [selectedExecution?.id])
+
   // Preview Multi-Agent DAG Plan
   const handlePreviewPlan = async () => {
     if (!prompt) return
