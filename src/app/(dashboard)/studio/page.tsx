@@ -19,9 +19,6 @@ import {
   Sparkles,
   ArrowRight,
   ShieldCheck,
-  Check,
-  CreditCard,
-  Lock,
 } from "lucide-react"
 import Editor from "@monaco-editor/react"
 import { PageHeader } from "@/components/ui/page-header"
@@ -35,16 +32,13 @@ export default function StudioPage() {
   const [code, setCode] = useState("")
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewRunning, setPreviewRunning] = useState(false)
+  const [previewError, setPreviewError] = useState<string | null>(null)
+  const [previewFrameKey, setPreviewFrameKey] = useState(0)
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop")
   const [activePane, setActivePane] = useState<"split" | "editor" | "preview">("split")
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [devToolsTab, setDevToolsTab] = useState<"console" | "network" | "ast">("console")
   const [showDevTools, setShowDevTools] = useState(true)
-
-  // Interactive sandbox simulation state
-  const [checkoutAmount, setCheckoutAmount] = useState(199)
-  const [simulatedStatus, setSimulatedStatus] = useState<"idle" | "loading" | "success">("idle")
-  const [lastTxId, setLastTxId] = useState<string | null>(null)
 
   // DevTools logs
   const [logs, setLogs] = useState<Array<{ id: number; time: string; type: string; text: string }>>([
@@ -79,6 +73,8 @@ export default function StudioPage() {
   useEffect(() => {
     if (!projectId) return
     let active = true
+    setSelectedFile("")
+    setFileList([])
     fetch(`/api/projects/${projectId}/files`)
       .then((res) => res.json())
       .then((json) => {
@@ -86,6 +82,28 @@ export default function StudioPage() {
         const files = json?.data?.allFiles || []
         setFileList(files)
         if (files.length > 0) setSelectedFile((current) => current || files[0])
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [projectId])
+
+  // Sync preview state with the server when switching projects
+  useEffect(() => {
+    if (!projectId) return
+    let active = true
+    setPreviewRunning(false)
+    setPreviewUrl(null)
+    setPreviewError(null)
+    fetch(`/api/projects/${projectId}/preview`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (!active) return
+        if (json?.data?.running && json.data.port) {
+          setPreviewUrl(json.data.url || `http://localhost:${json.data.port}`)
+          setPreviewRunning(true)
+        }
       })
       .catch(() => {})
     return () => {
@@ -149,13 +167,20 @@ export default function StudioPage() {
 
   const handleStartPreview = async () => {
     if (!projectId) return
+    setPreviewError(null)
     try {
       const res = await fetch(`/api/projects/${projectId}/preview`, { method: "POST" })
       const json = await res.json()
-      if (json.data?.url) setPreviewUrl(json.data.url)
+      if (!res.ok || !json.data?.port) {
+        throw new Error(json.error || "Failed to start preview")
+      }
+      setPreviewUrl(json.data.url || `http://localhost:${json.data.port}`)
       setPreviewRunning(true)
-    } catch {
+      setPreviewFrameKey((key) => key + 1)
+    } catch (err) {
       setPreviewRunning(false)
+      setPreviewUrl(null)
+      setPreviewError(err instanceof Error ? err.message : "Failed to start preview")
     }
   }
 
@@ -169,36 +194,6 @@ export default function StudioPage() {
     }
   }
 
-  const handleSimulateCheckout = () => {
-    setSimulatedStatus("loading")
-    const tx = `tx_${Date.now().toString(36)}`
-    const reqTime = new Date().toLocaleTimeString()
-
-    setTimeout(() => {
-      setSimulatedStatus("success")
-      setLastTxId(tx)
-      setLogs((prev) => [
-        ...prev,
-        {
-          id: Date.now(),
-          time: reqTime,
-          type: "http",
-          text: `POST /api/checkout 201 Created — Idempotency-Key validated (tx: ${tx})`,
-        },
-      ])
-      setNetworkRequests((prev) => [
-        {
-          id: Date.now(),
-          method: "POST",
-          path: "/api/checkout",
-          status: 201,
-          duration: "45ms",
-        },
-        ...prev,
-      ])
-    }, 700)
-  }
-
   return (
     <div className="space-y-4 pb-16 max-w-7xl mx-auto">
       <PageHeader
@@ -208,19 +203,19 @@ export default function StudioPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowDevTools(!showDevTools)}
-              className="rounded-lg border border-[#E8EAED] bg-[#FFFFFF] px-3 py-1.5 text-xs font-semibold text-[#17191C] hover:bg-[#F2F3F5]"
+              className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2"
             >
               {showDevTools ? "Hide DevTools" : "Show DevTools"}
             </button>
             <button
               onClick={previewRunning ? handleStopPreview : handleStartPreview}
-              className="rounded-lg border border-[#E8EAED] bg-[#FFFFFF] px-3 py-1.5 text-xs font-semibold text-[#17191C] hover:bg-[#F2F3F5]"
+              className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2"
             >
               {previewRunning ? "Stop Preview" : "Start Preview"}
             </button>
             <button
               onClick={handleSave}
-              className="rounded-lg bg-[#040404] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#202020] active:scale-[0.98] transition-all"
+              className="rounded-lg bg-charcoal px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#202020] active:scale-[0.98] transition-all"
             >
               {saveSuccess ? "Saved to Worktree ✓" : "Save Changes"}
             </button>
@@ -229,14 +224,14 @@ export default function StudioPage() {
       />
 
       {/* Main Workspace Frame */}
-      <div className="rounded-xl border border-[#E8EAED] bg-[#FFFFFF] shadow-sm overflow-hidden flex flex-col h-[780px]">
+      <div className="rounded-xl border border-line bg-surface shadow-sm overflow-hidden flex flex-col h-[780px]">
         {/* Studio Top Control Bar */}
-        <div className="flex flex-wrap items-center justify-between border-b border-[#E8EAED] bg-[#F8F9FB] px-4 py-2 text-xs gap-2">
+        <div className="flex flex-wrap items-center justify-between border-b border-line bg-canvas px-4 py-2 text-xs gap-2">
           <div className="flex items-center gap-3">
             <select
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
-              className="rounded-md border border-[#E8EAED] bg-[#FFFFFF] px-2 py-1 text-xs text-[#17191C]"
+              className="rounded-md border border-line bg-surface px-2 py-1 text-xs text-ink"
             >
               {projects.length === 0 && <option value="">No projects</option>}
               {projects.map((project) => (
@@ -248,7 +243,7 @@ export default function StudioPage() {
             <select
               value={selectedFile}
               onChange={(e) => setSelectedFile(e.target.value)}
-              className="rounded-md border border-[#E8EAED] bg-[#FFFFFF] px-2 py-1 text-xs text-[#17191C] max-w-[260px]"
+              className="rounded-md border border-line bg-surface px-2 py-1 text-xs text-ink max-w-[260px]"
             >
               {fileList.length === 0 && <option value="">No files</option>}
               {fileList.map((file) => (
@@ -257,32 +252,32 @@ export default function StudioPage() {
                 </option>
               ))}
             </select>
-            <span className="text-[#9AA0A8]">•</span>
-            <span className="text-[11px] text-[#737982]">
+            <span className="text-ink-3">•</span>
+            <span className="text-[11px] text-ink-2">
               {previewRunning && previewUrl ? previewUrl : "Preview not running"}
             </span>
           </div>
 
           <div className="flex items-center gap-3">
             {/* Viewport controls */}
-            <div className="flex items-center rounded-lg border border-[#E8EAED] bg-[#FFFFFF] p-0.5">
+            <div className="flex items-center rounded-lg border border-line bg-surface p-0.5">
               <button
                 onClick={() => setViewport("desktop")}
-                className={`p-1 rounded ${viewport === "desktop" ? "bg-[#F2F3F5] text-[#17191C]" : "text-[#9AA0A8]"}`}
+                className={`p-1 rounded ${viewport === "desktop" ? "bg-surface-2 text-ink" : "text-ink-3"}`}
                 title="Desktop"
               >
                 <Monitor className="h-3.5 w-3.5" />
               </button>
               <button
                 onClick={() => setViewport("tablet")}
-                className={`p-1 rounded ${viewport === "tablet" ? "bg-[#F2F3F5] text-[#17191C]" : "text-[#9AA0A8]"}`}
+                className={`p-1 rounded ${viewport === "tablet" ? "bg-surface-2 text-ink" : "text-ink-3"}`}
                 title="Tablet"
               >
                 <Tablet className="h-3.5 w-3.5" />
               </button>
               <button
                 onClick={() => setViewport("mobile")}
-                className={`p-1 rounded ${viewport === "mobile" ? "bg-[#F2F3F5] text-[#17191C]" : "text-[#9AA0A8]"}`}
+                className={`p-1 rounded ${viewport === "mobile" ? "bg-surface-2 text-ink" : "text-ink-3"}`}
                 title="Mobile"
               >
                 <Smartphone className="h-3.5 w-3.5" />
@@ -290,22 +285,22 @@ export default function StudioPage() {
             </div>
 
             {/* Pane View Toggle */}
-            <div className="flex rounded-lg border border-[#E8EAED] bg-[#FFFFFF] p-0.5 text-xs font-semibold">
+            <div className="flex rounded-lg border border-line bg-surface p-0.5 text-xs font-semibold">
               <button
                 onClick={() => setActivePane("split")}
-                className={`px-2.5 py-1 rounded ${activePane === "split" ? "bg-[#040404] text-white" : "text-[#737982]"}`}
+                className={`px-2.5 py-1 rounded ${activePane === "split" ? "bg-charcoal text-white" : "text-ink-2"}`}
               >
                 Split
               </button>
               <button
                 onClick={() => setActivePane("editor")}
-                className={`px-2.5 py-1 rounded ${activePane === "editor" ? "bg-[#040404] text-white" : "text-[#737982]"}`}
+                className={`px-2.5 py-1 rounded ${activePane === "editor" ? "bg-charcoal text-white" : "text-ink-2"}`}
               >
                 Editor
               </button>
               <button
                 onClick={() => setActivePane("preview")}
-                className={`px-2.5 py-1 rounded ${activePane === "preview" ? "bg-[#040404] text-white" : "text-[#737982]"}`}
+                className={`px-2.5 py-1 rounded ${activePane === "preview" ? "bg-charcoal text-white" : "text-ink-2"}`}
               >
                 Preview
               </button>
@@ -316,8 +311,8 @@ export default function StudioPage() {
         {/* Studio Body */}
         <div className="flex-1 flex overflow-hidden">
           {/* File Tree Explorer (Left sidebar) */}
-          <div className="w-56 border-r border-[#E8EAED] bg-[#F8F9FB] p-3 overflow-y-auto space-y-3 text-xs">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-[#9AA0A8] px-2">
+          <div className="w-56 border-r border-line bg-canvas p-3 overflow-y-auto space-y-3 text-xs">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-ink-3 px-2">
               Project Explorer
             </p>
             <div className="space-y-0.5">
@@ -329,11 +324,11 @@ export default function StudioPage() {
                     onClick={() => setSelectedFile(file)}
                     className={`w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
                       isSelected
-                        ? "bg-[#FFFFFF] font-semibold text-[#17191C] shadow-xs border border-[#E8EAED]"
-                        : "text-[#737982] hover:bg-[#F2F3F5] hover:text-[#17191C]"
+                        ? "bg-surface font-semibold text-ink shadow-xs border border-line"
+                        : "text-ink-2 hover:bg-surface-2 hover:text-ink"
                     }`}
                   >
-                    <FileCode className={`h-3.5 w-3.5 ${isSelected ? "text-[#D5222D]" : "text-[#9AA0A8]"}`} />
+                    <FileCode className={`h-3.5 w-3.5 ${isSelected ? "text-accent" : "text-ink-3"}`} />
                     <span className="truncate">{file.split("/").pop()}</span>
                   </button>
                 )
@@ -345,7 +340,7 @@ export default function StudioPage() {
           <div className="flex-1 flex overflow-hidden">
             {/* Monaco Editor Pane */}
             {(activePane === "editor" || activePane === "split") && (
-              <div className={`overflow-hidden bg-[#FFFFFF] ${activePane === "split" ? "w-1/2 border-r border-[#E8EAED]" : "w-full"}`}>
+              <div className={`overflow-hidden bg-surface ${activePane === "split" ? "w-1/2 border-r border-line" : "w-full"}`}>
                 <Editor
                   height="100%"
                   language={selectedFile.endsWith(".json") ? "json" : "typescript"}
@@ -366,9 +361,9 @@ export default function StudioPage() {
 
             {/* Live Preview Pane */}
             {(activePane === "preview" || activePane === "split") && (
-              <div className={`overflow-hidden bg-[#F2F3F5] flex flex-col items-center justify-center p-3 ${activePane === "split" ? "w-1/2" : "w-full"}`}>
+              <div className={`overflow-hidden bg-surface-2 flex flex-col items-center justify-center p-3 ${activePane === "split" ? "w-1/2" : "w-full"}`}>
                 <div
-                  className={`h-full bg-white rounded-xl shadow-md border border-[#E8EAED] overflow-hidden flex flex-col transition-all duration-300 ${
+                  className={`h-full bg-white rounded-xl shadow-md border border-line overflow-hidden flex flex-col transition-all duration-300 ${
                     viewport === "mobile"
                       ? "w-[375px]"
                       : viewport === "tablet"
@@ -377,61 +372,74 @@ export default function StudioPage() {
                   }`}
                 >
                   {/* Browser Address Bar */}
-                  <div className="h-8 border-b border-[#E8EAED] bg-[#F8F9FB] px-3 flex items-center justify-between text-[11px] text-[#737982]">
-                    <div className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-[#1F7A4D]" />
-                      <span className="font-mono">{previewUrl || "Preview not running"}</span>
+                  <div className="h-8 border-b border-line bg-canvas px-3 flex items-center justify-between gap-2 text-[11px] text-ink-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span
+                        className={`h-2 w-2 shrink-0 rounded-full ${
+                          previewRunning ? "bg-success" : "bg-soft-grey"
+                        }`}
+                      />
+                      <span className="truncate font-mono">
+                        {previewUrl || previewError || "Preview not running"}
+                      </span>
                     </div>
-                    <button
-                      onClick={() => setSimulatedStatus("idle")}
-                      className="p-1 hover:text-[#17191C]"
-                      title="Reload sandbox"
-                    >
-                      <RotateCw className="h-3 w-3" />
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      {previewUrl && (
+                        <a
+                          href={previewUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-1 hover:text-ink"
+                          title="Open preview in new tab"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
+                      <button
+                        onClick={() => setPreviewFrameKey((key) => key + 1)}
+                        disabled={!previewRunning}
+                        className="p-1 hover:text-ink disabled:opacity-40"
+                        title="Reload preview"
+                      >
+                        <RotateCw className="h-3 w-3" />
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Sandboxed Interactive UI */}
-                  <div className="flex-1 p-6 flex flex-col justify-center items-center text-center space-y-4">
-                    <div className="w-full max-w-sm rounded-xl border border-[#E8EAED] bg-[#FFFFFF] p-5 shadow-sm space-y-4 text-left">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <CreditCard className="h-4 w-4 text-[#D5222D]" />
-                          <span className="text-xs font-bold text-[#17191C]">Enterprise Tier</span>
+                  {/* Real preview iframe — loaded directly from the dev server port so HMR WebSockets work */}
+                  <div className="relative flex-1 overflow-hidden bg-white">
+                    {previewRunning && previewUrl ? (
+                      <iframe
+                        key={previewFrameKey}
+                        src={previewUrl}
+                        title="Live project preview"
+                        className="h-full w-full border-0"
+                        allow="clipboard-read; clipboard-write; fullscreen"
+                      />
+                    ) : (
+                      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-canvas">
+                          <Play className="h-4 w-4 text-accent" />
                         </div>
-                        <span className="text-sm font-bold font-mono text-[#17191C]">${checkoutAmount}/mo</span>
-                      </div>
-
-                      <div className="rounded-lg bg-[#F8F9FB] p-2.5 text-[11px] text-[#737982] space-y-1 font-mono">
-                        <p className="flex items-center gap-1.5 text-[#1F7A4D]">
-                          <Lock className="h-3 w-3" />
-                          <span>Idempotency-Key: idemp_chk_9038</span>
-                        </p>
-                        <p className="text-[10px]">TTL Lock: 120s • Auto-retry: enabled</p>
-                      </div>
-
-                      <button
-                        onClick={handleSimulateCheckout}
-                        disabled={simulatedStatus === "loading"}
-                        className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-[#040404] py-2.5 text-xs font-semibold text-white hover:bg-black transition-colors"
-                      >
-                        {simulatedStatus === "loading" ? (
-                          <span>Authorizing Transaction...</span>
-                        ) : simulatedStatus === "success" ? (
-                          <span className="flex items-center gap-1 text-[#5FC08C]">
-                            <Check className="h-3.5 w-3.5" /> Payment Confirmed!
-                          </span>
-                        ) : (
-                          <span>Confirm Subscription (${checkoutAmount})</span>
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-ink">
+                            {previewError ? "Preview could not start" : "Preview is not running"}
+                          </p>
+                          <p className="max-w-xs text-xs text-ink-2">
+                            {previewError ||
+                              "Upload a project or select one with an extracted workspace, then start the preview to load its dev server here."}
+                          </p>
+                        </div>
+                        {previewError && (
+                          <button
+                            onClick={handleStartPreview}
+                            className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2"
+                          >
+                            Retry
+                          </button>
                         )}
-                      </button>
-
-                      {simulatedStatus === "success" && (
-                        <div className="rounded-md border border-[#1F7A4D]/20 bg-[#EDF7F1] p-2 text-[11px] text-[#1F7A4D]">
-                          Transaction record <strong>{lastTxId}</strong> cached with atomic idempotency validation.
-                        </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -441,13 +449,13 @@ export default function StudioPage() {
 
         {/* Bottom DevTools Drawer */}
         {showDevTools && (
-          <div className="h-48 border-t border-[#E8EAED] bg-[#040404] text-white flex flex-col">
+          <div className="h-48 border-t border-line bg-charcoal text-white flex flex-col">
             <div className="flex items-center justify-between border-b border-[#202020] px-4 py-1.5 text-xs">
               <div className="flex items-center gap-4">
                 <button
                   onClick={() => setDevToolsTab("console")}
                   className={`font-semibold transition-colors ${
-                    devToolsTab === "console" ? "text-white border-b-2 border-[#D5222D] pb-0.5" : "text-[#737982] hover:text-white"
+                    devToolsTab === "console" ? "text-white border-b-2 border-accent pb-0.5" : "text-ink-2 hover:text-white"
                   }`}
                 >
                   Console Logs
@@ -455,7 +463,7 @@ export default function StudioPage() {
                 <button
                   onClick={() => setDevToolsTab("network")}
                   className={`font-semibold transition-colors ${
-                    devToolsTab === "network" ? "text-white border-b-2 border-[#D5222D] pb-0.5" : "text-[#737982] hover:text-white"
+                    devToolsTab === "network" ? "text-white border-b-2 border-accent pb-0.5" : "text-ink-2 hover:text-white"
                   }`}
                 >
                   Network Inspector ({networkRequests.length})
@@ -463,14 +471,14 @@ export default function StudioPage() {
                 <button
                   onClick={() => setDevToolsTab("ast")}
                   className={`font-semibold transition-colors ${
-                    devToolsTab === "ast" ? "text-white border-b-2 border-[#D5222D] pb-0.5" : "text-[#737982] hover:text-white"
+                    devToolsTab === "ast" ? "text-white border-b-2 border-accent pb-0.5" : "text-ink-2 hover:text-white"
                   }`}
                 >
                   AST & Symbols
                 </button>
               </div>
 
-              <span className="text-[10px] font-mono text-[#6E7891]">Sandbox PID: 8192</span>
+              <span className="text-[10px] font-mono text-muted-slate">Sandbox PID: 8192</span>
             </div>
 
             <div className="flex-1 p-3 overflow-y-auto font-mono text-[11.5px] space-y-1">
@@ -478,10 +486,10 @@ export default function StudioPage() {
                 <>
                   {logs.map((log) => (
                     <div key={log.id} className="flex items-start gap-2 text-zinc-300">
-                      <span className="text-[#6E7891] shrink-0">[{log.time}]</span>
+                      <span className="text-muted-slate shrink-0">[{log.time}]</span>
                       <span
                         className={`font-bold shrink-0 ${
-                          log.type === "http" ? "text-[#5FC08C]" : log.type === "build" ? "text-cyan-400" : "text-amber-400"
+                          log.type === "http" ? "text-success" : log.type === "build" ? "text-cyan-400" : "text-amber-400"
                         }`}
                       >
                         [{log.type.toUpperCase()}]
@@ -497,13 +505,13 @@ export default function StudioPage() {
                   {networkRequests.map((req) => (
                     <div key={req.id} className="flex items-center justify-between text-zinc-300 py-0.5 border-b border-zinc-800/40">
                       <div className="flex items-center gap-3">
-                        <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] font-bold text-[#5FC08C]">
+                        <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] font-bold text-success">
                           {req.method}
                         </span>
                         <span className="text-zinc-200">{req.path}</span>
                       </div>
-                      <div className="flex items-center gap-3 text-[#9AA0A8]">
-                        <span className="text-[#5FC08C] font-semibold">{req.status}</span>
+                      <div className="flex items-center gap-3 text-ink-3">
+                        <span className="text-success font-semibold">{req.status}</span>
                         <span>{req.duration}</span>
                       </div>
                     </div>
