@@ -35,7 +35,7 @@ export async function POST(
       where: { executionId: id },
       data: {
         status: action === "approve" ? "committed" : action === "reject" ? "reverted" : "staged",
-        commitSha: action === "approve" ? `c_${Math.random().toString(16).slice(2, 9)}` : null,
+  
       },
     })
 
@@ -54,7 +54,8 @@ export async function POST(
     })
 
     return NextResponse.json({ data: updated })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err: unknown) {
+    const error = err as { message?: string }
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

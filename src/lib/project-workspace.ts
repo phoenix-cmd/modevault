@@ -205,3 +205,30 @@ export async function commitWorkspace(
   const { stdout } = await git(rootPath, ["rev-parse", "--short", "HEAD"])
   return stdout.trim()
 }
+
+export async function createBranch(rootPath: string, branchName: string): Promise<void> {
+  try {
+    await git(rootPath, ["checkout", "-b", branchName])
+  } catch {
+    // Branch may already exist; try switching to it.
+    await git(rootPath, ["checkout", branchName])
+  }
+}
+
+export async function checkoutBranch(rootPath: string, branchName: string): Promise<void> {
+  await git(rootPath, ["checkout", branchName])
+}
+
+export async function getLatestCommitDiff(rootPath: string): Promise<string> {
+  try {
+    const { stdout } = await git(rootPath, ["show", "--format=", "--no-color", "HEAD"])
+    return stdout
+  } catch {
+    return ""
+  }
+}
+
+export async function getCurrentCommitSha(rootPath: string): Promise<string> {
+  const { stdout } = await git(rootPath, ["rev-parse", "--short", "HEAD"])
+  return stdout.trim()
+}

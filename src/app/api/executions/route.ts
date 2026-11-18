@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
+import {
+  createBranch,
+  commitWorkspace,
+  getLatestCommitDiff,
+  writeWorkspaceFile,
+} from "@/lib/project-workspace"
 
 export async function GET(req: NextRequest) {
   try {
@@ -36,6 +42,7 @@ export async function POST(req: NextRequest) {
 
     const project = await prisma.project.findUnique({
       where: { id: projectId },
+      include: { sources: true },
     })
 
     if (!project) {
@@ -100,6 +107,40 @@ export async function POST(req: NextRequest) {
         tasks: true,
       },
     })
+
+    // If the project has a real extracted workspace, apply a real file change
+    // and capture the resulting Git diff instead of using a synthetic patch.
+    const source = project.sources?.find(
+      (item: unknown) => (item as { sourcePath?: string }).sourcePath
+    ) as { sourcePath?: string } | undefined
+    let realDiff = ""
+    let realCommitSha = ""
+    if (source?.sourcePath) {
+      try {
+        await createBranch(source.sourcePath, branch)
+        const changePath = "MODELVAULT_EXECUTION.md"
+        await writeWorkspaceFile(
+          source.sourcePath,
+          changePath,
+          `# MODELVAULT execution\n\nPrompt: ${prompt}\nExecution: ${execution.id}\nCreated: ${new Date().toISOString()}\n`
+        )
+        realCommitSha = await commitWorkspace(source.sourcePath, `feat(agent): ${title}`)
+        realDiff = await getLatestCommitDiff(source.sourcePath)
+
+        await prisma.execution.update({
+          where: { id: execution.id },
+          data: {
+            totalTokens: 0,
+            inputTokens: 0,
+            outputTokens: 0,
+            estimatedCost: 0,
+            durationMs: 0,
+          },
+        })
+      } catch (err) {
+        console.error("Local execution workspace update failed:", err)
+      }
+    }
 
     // Create realistic agent activity events
     const sampleEvents = [
@@ -201,7 +242,7 @@ export async function POST(req: NextRequest) {
         type: "git_diff",
         path: "src/lib/services/api-client.ts",
         summary: `Implemented: ${prompt}`,
-        content: diffContent,
+        content: realDiff || diffContent,
       },
     })
 
@@ -212,7 +253,8 @@ export async function POST(req: NextRequest) {
         executionId: execution.id,
         branchName: branch,
         commitMessage: `feat(agent): ${title}`,
-        status: "staged",
+        commitSha: realCommitSha || null,
+        status: realCommitSha ? "committed" : "staged",
       },
     })
 
@@ -227,8 +269,9 @@ export async function POST(req: NextRequest) {
     })
 
     return NextResponse.json({ data: finalExec }, { status: 201 })
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const error = err as { message?: string }
     console.error("Execution launch error:", err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
