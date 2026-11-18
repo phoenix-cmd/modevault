@@ -149,23 +149,28 @@ export default function GitControlPage() {
     }
   }
 
-  const handleCreateBranch = (e: React.FormEvent) => {
+  const handleCreateBranch = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newBranchName) return
-    setBranches((prev) => [
-      ...prev,
-      {
-        name: newBranchName,
-        isDefault: false,
-        protected: false,
-        lastCommit: "head_new",
-      },
-    ])
-    setCurrentBranch(newBranchName)
-    setNewBranchName("")
-    setShowBranchModal(false)
-    setActionSuccess(`Switched to new branch: ${newBranchName}`)
-    setTimeout(() => setActionSuccess(null), 3000)
+    if (!newBranchName || !projectId) return
+    try {
+      const res = await fetch("/api/git", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "branch", projectId, branchName: newBranchName }),
+      })
+      const json = await res.json()
+      if (json.data) {
+        setBranches(json.data.branches || branches)
+        setCurrentBranch(newBranchName)
+        setNewBranchName("")
+        setShowBranchModal(false)
+        setActionSuccess(`Created and switched to branch: ${newBranchName}`)
+        setTimeout(() => setActionSuccess(null), 4000)
+        loadGitData(projectId)
+      }
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   return (

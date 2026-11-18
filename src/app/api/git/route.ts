@@ -9,6 +9,8 @@ import {
   getGitStatus,
   getGitStatusFiles,
   getCurrentGitBranch,
+  createBranch,
+  checkoutBranch,
   commitWorkspace,
   stageFiles,
   unstageFiles,
@@ -229,6 +231,39 @@ export async function POST(req: NextRequest) {
       }
       const changes = source?.sourcePath ? await getGitStatusFiles(source.sourcePath).catch(() => []) : []
       return NextResponse.json({ data: { message: "Changes discarded", changes } })
+    }
+
+    if (action === "branch") {
+      const branchName = body.branchName
+      if (!branchName) {
+        return NextResponse.json({ error: "branchName is required" }, { status: 400 })
+      }
+      const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find((item) => item.sourcePath)
+      if (source?.sourcePath) {
+        await createBranch(source.sourcePath, branchName)
+      }
+      await prisma.project.update({
+        where: { id: project.id },
+        data: { defaultBranch: branchName },
+      })
+      const branches = source?.sourcePath ? await getGitBranches(source.sourcePath).catch(() => []) : []
+      return NextResponse.json({ data: { message: "Branch created", branchName, branches } })
+    }
+
+    if (action === "checkout") {
+      const branchName = body.branchName
+      if (!branchName) {
+        return NextResponse.json({ error: "branchName is required" }, { status: 400 })
+      }
+      const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find((item) => item.sourcePath)
+      if (source?.sourcePath) {
+        await checkoutBranch(source.sourcePath, branchName)
+      }
+      await prisma.project.update({
+        where: { id: project.id },
+        data: { defaultBranch: branchName },
+      })
+      return NextResponse.json({ data: { message: "Checked out branch", branchName } })
     }
 
     return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 })
