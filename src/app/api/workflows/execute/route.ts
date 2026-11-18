@@ -55,13 +55,14 @@ export async function POST(req: NextRequest) {
 
     // Generate tasks from workflow nodes
     const taskNodes = nodes.filter((n) => n.type === "agent" || n.type === "action" || n.type === "approval")
+    const hasApprovalNode = taskNodes.some((n) => n.type === "approval")
     const tasksData = taskNodes.length > 0
       ? taskNodes.map((n, idx) => ({
           title: n.data?.label || `Step ${idx + 1}`,
           description: n.data?.description || `Executing automated workflow node: ${n.id}`,
           agentRole: n.type === "approval" ? "Human Reviewer" : n.type === "action" ? "CI/CD Action" : "AI Agent",
           agentName: n.type === "approval" ? "Tech Lead Gate" : "Claude Code 3.7",
-          status: idx === 0 ? "running" : "pending",
+          status: n.type === "approval" ? "pending" : idx === 0 ? "running" : "pending",
           orderIndex: idx,
         }))
       : [
@@ -97,7 +98,7 @@ export async function POST(req: NextRequest) {
         workspaceId: project.workspaceId,
         title,
         prompt: `Execute workflow pipeline: ${wfName}`,
-        status: "running",
+        status: hasApprovalNode ? "awaiting_approval" : "running",
         targetBranch: branch,
         totalTokens: 24500,
         inputTokens: 18000,
