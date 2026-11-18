@@ -5,7 +5,7 @@ import { promisify } from "node:util"
 
 const execFileAsync = promisify(execFile)
 
-export const PROJECT_WORKSPACE_ROOT = path.join(process.cwd(), "data", "projects")
+export const PROJECT_WORKSPACE_ROOT = path.join(/* turbopackIgnore: true */ process.cwd(), "data", "projects")
 
 export interface WorkspaceTreeNode {
   name: string
