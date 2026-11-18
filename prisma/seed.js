@@ -196,6 +196,20 @@ async function main() {
       status: "ready",
     },
   })
+
+  await prisma.projectEnvironment.upsert({
+    where: { id: "env_telemetry_001" },
+    update: {},
+    create: {
+      id: "env_telemetry_001",
+      projectId: project2.id,
+      runtime: "python-3.11",
+      buildCommand: "pip install -r requirements.txt",
+      startCommand: "python main.py",
+      runPort: 3002,
+      status: "stopped",
+    },
+  })
   console.log("✓ Projects & Environments initialized")
 
   // ─── Create Sample Execution with Tasks & Diff Artifact ────────────
