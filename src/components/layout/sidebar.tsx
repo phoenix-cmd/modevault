@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import {
@@ -150,36 +150,6 @@ function OrgWorkspaceSwitcher() {
 
 function NavContent({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname()
-  const router = useRouter()
-  const [userName, setUserName] = useState("Alex Kumar")
-  const [userEmail, setUserEmail] = useState("Staff Architect")
-  const [userInitial, setUserInitial] = useState("AK")
-
-  useEffect(() => {
-    let active = true
-    fetch("/api/auth/me")
-      .then((res) => res.json())
-      .then((json) => {
-        if (!active) return
-        const user = json?.data
-        if (user?.name) {
-          setUserName(user.name)
-          setUserInitial(
-            user.name
-              .split(" ")
-              .map((part: string) => part.charAt(0))
-              .join("")
-              .slice(0, 2)
-              .toUpperCase()
-          )
-        }
-        if (user?.email) setUserEmail(user.email)
-      })
-      .catch(() => {})
-    return () => {
-      active = false
-    }
-  }, [])
 
   return (
     <div className="flex h-full flex-col bg-[#FFFFFF]">
@@ -243,36 +213,6 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         ))}
       </nav>
-
-      <div className="shrink-0 border-t border-[#E8EAED] p-3 bg-[#F8F9FB]">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#040404] text-[11px] font-bold text-white shrink-0">
-              {userInitial}
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-[12px] font-medium text-[#17191C] leading-none">
-                {userName}
-              </p>
-              <p className="truncate text-[10px] text-[#737982] mt-0.5">
-                {userEmail}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={async () => {
-              await fetch("/api/auth/logout", { method: "POST" })
-              router.push("/login")
-              router.refresh()
-            }}
-            className="text-[10px] text-[#737982] hover:text-[#17191C]"
-          >
-            Sign out
-          </button>
-          <span className="h-2 w-2 rounded-full bg-[#1F7A4D] ring-2 ring-[#EDF7F1]" title="Online" />
-        </div>
-      </div>
     </div>
   )
 }

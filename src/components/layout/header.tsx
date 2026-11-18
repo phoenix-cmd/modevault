@@ -530,6 +530,16 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
             strokeWidth={1.8}
           />
         </Link>
+        <button
+          type="button"
+          onClick={async () => {
+            await fetch("/api/auth/logout", { method: "POST" })
+            window.location.href = "/login"
+          }}
+          className="hidden text-[11px] font-medium text-ink-3 hover:text-ink sm:block"
+        >
+          Sign out
+        </button>
       </div>
 
       {palette}
