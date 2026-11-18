@@ -15,7 +15,13 @@ import {
   stageFiles,
   unstageFiles,
   discardFiles,
+  getGitSyncStatus,
+  gitPush,
+  gitPull,
+  gitFetch,
 } from "@/lib/project-workspace"
+import { gitActionSchema, parseJson } from "@/lib/validation"
+import { logger, errorContext } from "@/lib/logger"
 
 export async function GET(req: NextRequest) {
   try {
@@ -106,17 +112,23 @@ export async function GET(req: NextRequest) {
         operations,
         diff: source?.sourcePath ? await getGitDiff(source.sourcePath).catch(() => "") : "",
         changes: source?.sourcePath ? await getGitStatusFiles(source.sourcePath).catch(() => []) : [],
+        sync: source?.sourcePath
+          ? await getGitSyncStatus(source.sourcePath).catch(() => null)
+          : { hasRemote: false, remoteUrl: null, upstream: null, branch: project.defaultBranch || "main", ahead: 0, behind: 0 },
       },
     })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err: unknown) {
+    logger.error("Failed to load git state", errorContext(err))
+    return NextResponse.json({ error: "Failed to load git state" }, { status: 500 })
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
-    const { action, projectId, branchName, commitMessage, commitSha, prTitle, prBody } = body
+    const parsed = await parseJson(req, gitActionSchema)
+    if ("response" in parsed) return parsed.response
+    const { action, projectId, branchName, commitMessage, commitSha, prTitle } = parsed.data
+    const body = parsed.data
 
     const project = projectId
       ? await prisma.project.findUnique({ where: { id: projectId }, include: { sources: true } })
@@ -266,8 +278,49 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ data: { message: "Checked out branch", branchName } })
     }
 
+    if (action === "push" || action === "pull" || action === "fetch") {
+      const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find(
+        (item) => item.sourcePath
+      )
+      if (!source?.sourcePath) {
+        return NextResponse.json(
+          { error: "This project has no local Git workspace to sync" },
+          { status: 400 }
+        )
+      }
+
+      try {
+        if (action === "push") {
+          const result = await gitPush(source.sourcePath)
+          await prisma.gitOperation.create({
+            data: {
+              projectId: project.id,
+              branchName: result.branch,
+              commitMessage: `push: ${result.branch} -> origin`,
+              status: "pushed",
+            },
+          })
+          const sync = await getGitSyncStatus(source.sourcePath)
+          return NextResponse.json({ data: { ...result, sync } })
+        }
+        if (action === "pull") {
+          const result = await gitPull(source.sourcePath)
+          const sync = await getGitSyncStatus(source.sourcePath)
+          return NextResponse.json({ data: { ...result, sync } })
+        }
+        const result = await gitFetch(source.sourcePath)
+        const sync = await getGitSyncStatus(source.sourcePath)
+        return NextResponse.json({ data: { ...result, sync } })
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Git sync failed"
+        logger.warn("Git sync failed", { action, projectId: project.id, message })
+        return NextResponse.json({ error: message }, { status: 409 })
+      }
+    }
+
     return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err: unknown) {
+    logger.error("Git action failed", errorContext(err))
+    return NextResponse.json({ error: "Git action failed" }, { status: 500 })
   }
 }

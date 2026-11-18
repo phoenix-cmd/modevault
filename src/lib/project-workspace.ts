@@ -272,3 +272,87 @@ export async function getCurrentCommitSha(rootPath: string): Promise<string> {
   const { stdout } = await git(rootPath, ["rev-parse", "--short", "HEAD"])
   return stdout.trim()
 }
+
+export interface GitSyncStatus {
+  hasRemote: boolean
+  remoteUrl: string | null
+  upstream: string | null
+  branch: string
+  ahead: number
+  behind: number
+}
+
+export async function getGitRemoteUrl(rootPath: string): Promise<string | null> {
+  try {
+    const { stdout } = await git(rootPath, ["remote", "get-url", "origin"])
+    return stdout.trim() || null
+  } catch {
+    return null
+  }
+}
+
+export async function getGitSyncStatus(rootPath: string): Promise<GitSyncStatus> {
+  const branch = await getCurrentGitBranch(rootPath).catch(() => "main")
+  const remoteUrl = await getGitRemoteUrl(rootPath)
+  let upstream: string | null = null
+  let ahead = 0
+  let behind = 0
+
+  if (remoteUrl) {
+    try {
+      const { stdout } = await git(rootPath, [
+        "rev-parse",
+        "--abbrev-ref",
+        "--symbolic-full-name",
+        "@{u}",
+      ])
+      upstream = stdout.trim()
+    } catch {
+      upstream = null
+    }
+  }
+
+  if (upstream) {
+    try {
+      const { stdout } = await git(rootPath, [
+        "rev-list",
+        "--left-right",
+        "--count",
+        "HEAD...@{u}",
+      ])
+      const [left, right] = stdout.trim().split(/\s+/)
+      ahead = Number.parseInt(left || "0", 10) || 0
+      behind = Number.parseInt(right || "0", 10) || 0
+    } catch {
+      ahead = 0
+      behind = 0
+    }
+  }
+
+  return { hasRemote: Boolean(remoteUrl), remoteUrl, upstream, branch, ahead, behind }
+}
+
+export async function gitPush(
+  rootPath: string
+): Promise<{ branch: string; output: string }> {
+  const branch = await getCurrentGitBranch(rootPath)
+  const remoteUrl = await getGitRemoteUrl(rootPath)
+  if (!remoteUrl) throw new Error("No Git remote configured for this workspace")
+  const { stdout } = await git(rootPath, ["push", "-u", "origin", "HEAD"])
+  return { branch, output: stdout.trim() || `Pushed ${branch} to origin` }
+}
+
+export async function gitPull(rootPath: string): Promise<{ branch: string; output: string }> {
+  const branch = await getCurrentGitBranch(rootPath)
+  const remoteUrl = await getGitRemoteUrl(rootPath)
+  if (!remoteUrl) throw new Error("No Git remote configured for this workspace")
+  const { stdout } = await git(rootPath, ["pull", "--ff-only", "origin", branch])
+  return { branch, output: stdout.trim() || `Pulled origin/${branch}` }
+}
+
+export async function gitFetch(rootPath: string): Promise<{ output: string }> {
+  const remoteUrl = await getGitRemoteUrl(rootPath)
+  if (!remoteUrl) throw new Error("No Git remote configured for this workspace")
+  const { stdout } = await git(rootPath, ["fetch", "origin", "--prune"])
+  return { output: stdout.trim() || "Fetched origin" }
+}

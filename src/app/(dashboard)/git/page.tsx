@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useModalA11y } from "@/lib/use-modal-a11y"
 import {
   GitBranch,
   GitCommit,
@@ -18,6 +19,9 @@ import {
   X,
   Sparkles,
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  RefreshCw,
 } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
 import { GlassCard } from "@/components/ui/glass-card"
@@ -36,6 +40,7 @@ export default function GitControlPage() {
 
   // PR Modal state
   const [showPrModal, setShowPrModal] = useState(false)
+  const prDialogRef = useModalA11y(showPrModal, () => setShowPrModal(false))
   const [prTitle, setPrTitle] = useState("")
   const [prBranch, setPrBranch] = useState("feature/checkout-idempotency")
   const [creatingPr, setCreatingPr] = useState(false)
@@ -43,10 +48,21 @@ export default function GitControlPage() {
 
   // New Branch state
   const [showBranchModal, setShowBranchModal] = useState(false)
+  const branchDialogRef = useModalA11y(showBranchModal, () => setShowBranchModal(false))
   const [newBranchName, setNewBranchName] = useState("")
 
   // Conflict resolution state
   const [conflictResolved, setConflictResolved] = useState(false)
+  const [sync, setSync] = useState<{
+    hasRemote: boolean
+    remoteUrl: string | null
+    upstream: string | null
+    branch: string
+    ahead: number
+    behind: number
+  } | null>(null)
+  const [syncing, setSyncing] = useState<string | null>(null)
+  const [syncError, setSyncError] = useState<string | null>(null)
 
   const loadGitData = async (targetProjectId?: string) => {
     const pid = targetProjectId || projectId
@@ -62,6 +78,7 @@ export default function GitControlPage() {
         setChanges(json.data.changes || [])
         setCurrentBranch(json.data.currentBranch || "main")
         setDiff(json.data.diff || "")
+        setSync(json.data.sync || null)
       }
     } catch (err) {
       console.error(err)
@@ -93,6 +110,29 @@ export default function GitControlPage() {
   useEffect(() => {
     if (projectId) loadGitData(projectId)
   }, [projectId])
+
+  const handleSync = async (action: "pull" | "push" | "fetch") => {
+    setSyncing(action)
+    setSyncError(null)
+    try {
+      const res = await fetch("/api/git", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, projectId }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || `Git ${action} failed`)
+      if (json.data?.sync) setSync(json.data.sync)
+      setActionSuccess(json.data?.output || `Git ${action} completed`)
+      setTimeout(() => setActionSuccess(null), 4000)
+      loadGitData()
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : `Git ${action} failed`)
+      setTimeout(() => setSyncError(null), 6000)
+    } finally {
+      setSyncing(null)
+    }
+  }
 
   const handleRollback = async (sha: string) => {
     if (!confirm(`Are you sure you want to revert commit ${sha}? A revert commit will be appended.`)) return
@@ -183,7 +223,7 @@ export default function GitControlPage() {
             <select
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
-              className="rounded-md border border-[#E8EAED] bg-[#FFFFFF] px-2 py-1.5 text-xs text-[#17191C]"
+              className="rounded-md border border-line bg-surface px-2 py-1.5 text-xs text-ink"
             >
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>
@@ -193,16 +233,56 @@ export default function GitControlPage() {
             </select>
             <button
               onClick={() => setShowBranchModal(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-[#E8EAED] bg-[#FFFFFF] px-3.5 py-1.5 text-xs font-semibold text-[#17191C] hover:bg-[#F2F3F5] transition-colors"
+              className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2 transition-colors"
             >
-              <GitBranch className="h-3.5 w-3.5 text-[#D5222D]" />
+              <GitBranch className="h-3.5 w-3.5 text-accent" />
               New Branch
             </button>
+            <div className="flex items-center overflow-hidden rounded-lg border border-line bg-surface">
+              <button
+                onClick={() => handleSync("pull")}
+                disabled={syncing !== null}
+                title={sync?.hasRemote ? "Pull from origin" : "No remote configured"}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2 disabled:opacity-50"
+              >
+                <ArrowDown className="h-3.5 w-3.5" />
+                {syncing === "pull" ? "Pulling" : "Pull"}
+              </button>
+              <span className="h-4 w-px bg-line" />
+              <button
+                onClick={() => handleSync("push")}
+                disabled={syncing !== null}
+                title={sync?.hasRemote ? "Push to origin" : "No remote configured"}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2 disabled:opacity-50"
+              >
+                <ArrowUp className="h-3.5 w-3.5" />
+                {syncing === "push" ? "Pushing" : "Push"}
+              </button>
+              <span className="h-4 w-px bg-line" />
+              <button
+                onClick={() => handleSync("fetch")}
+                disabled={syncing !== null}
+                title="Fetch origin"
+                className="p-1.5 text-ink-2 hover:bg-surface-2 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${syncing === "fetch" ? "animate-spin" : ""}`} />
+              </button>
+            </div>
+            {sync && (
+              <span
+                className="hidden items-center gap-1 rounded-full border border-line bg-surface-2 px-2 py-1 text-[10.5px] font-medium text-ink-2 md:flex"
+                title={sync.remoteUrl || "No remote configured"}
+              >
+                {sync.upstream || sync.branch}
+                <span className="text-success">↑{sync.ahead}</span>
+                <span className="text-warning">↓{sync.behind}</span>
+              </span>
+            )}
             <button
               onClick={() => setShowPrModal(true)}
-              className="flex items-center gap-1.5 rounded-lg bg-[#040404] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#202020] active:scale-[0.98] transition-all"
+              className="flex items-center gap-1.5 rounded-lg bg-charcoal px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#202020] active:scale-[0.98] transition-all"
             >
-              <GitPullRequest className="h-3.5 w-3.5 text-[#D5222D]" />
+              <GitPullRequest className="h-3.5 w-3.5 text-accent" />
               Open Pull Request
             </button>
           </div>
@@ -210,47 +290,59 @@ export default function GitControlPage() {
       />
 
       {actionSuccess && (
-        <div className="rounded-xl border border-[#1F7A4D]/20 bg-[#EDF7F1] p-3 text-xs text-[#1F7A4D] flex items-center gap-2">
+        <div className="rounded-xl border border-success/20 bg-success-soft p-3 text-xs text-success flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           <span className="font-semibold">{actionSuccess}</span>
+        </div>
+      )}
+
+      {syncError && (
+        <div className="rounded-xl border border-warning/20 bg-warning-soft p-3 text-xs text-warning flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span className="font-semibold">{syncError}</span>
         </div>
       )}
 
       {/* Branch & PR Modals */}
       {showPrModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-[#E8EAED] bg-[#FFFFFF] p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E8EAED]">
+          <div
+            ref={prDialogRef}
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-lg rounded-2xl border border-line bg-surface p-6 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-line">
               <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#040404] text-white">
-                  <GitPullRequest className="h-4 w-4 text-[#D5222D]" />
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-charcoal text-white">
+                  <GitPullRequest className="h-4 w-4 text-accent" />
                 </span>
-                <h3 className="text-sm font-bold text-[#17191C]">Create Pull Request</h3>
+                <h3 className="text-sm font-bold text-ink">Create Pull Request</h3>
               </div>
-              <button onClick={() => setShowPrModal(false)} className="rounded-lg p-1 text-[#737982] hover:bg-[#F2F3F5]">
+              <button onClick={() => setShowPrModal(false)} className="rounded-lg p-1 text-ink-2 hover:bg-surface-2">
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <form onSubmit={handleCreatePr} className="space-y-3">
               <div>
-                <label className="text-xs font-semibold text-[#17191C]">PR Title</label>
+                <label className="text-xs font-semibold text-ink">PR Title</label>
                 <input
                   type="text"
                   required
                   value={prTitle}
                   onChange={(e) => setPrTitle(e.target.value)}
                   placeholder="e.g. feat(checkout): atomic idempotency key validation"
-                  className="mt-1 w-full rounded-lg border border-[#E8EAED] bg-[#F8F9FB] px-3.5 py-2 text-xs text-[#17191C] outline-none focus:border-[#D5222D]/50"
+                  className="mt-1 w-full rounded-lg border border-line bg-canvas px-3.5 py-2 text-xs text-ink outline-none focus:border-accent/50"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-[#17191C]">Source Branch</label>
+                <label className="text-xs font-semibold text-ink">Source Branch</label>
                 <select
                   value={prBranch}
                   onChange={(e) => setPrBranch(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-[#E8EAED] bg-[#F8F9FB] px-3.5 py-2 text-xs text-[#17191C] outline-none"
+                  className="mt-1 w-full rounded-lg border border-line bg-canvas px-3.5 py-2 text-xs text-ink outline-none"
                 >
                   {branches.map((b) => (
                     <option key={b.name} value={b.name}>
@@ -260,27 +352,27 @@ export default function GitControlPage() {
                 </select>
               </div>
 
-              <div className="rounded-lg bg-[#F8F9FB] p-3 text-[11px] text-[#737982] space-y-1">
-                <p className="font-semibold text-[#17191C]">AI Pull Request Summary (Auto-generated)</p>
+              <div className="rounded-lg bg-canvas p-3 text-[11px] text-ink-2 space-y-1">
+                <p className="font-semibold text-ink">AI Pull Request Summary (Auto-generated)</p>
                 <p>• Atomic database transactions for deduplication locks</p>
                 <p>• Vitest test suite added: 8 unit test assertions passing</p>
                 <p>• Zero breaking changes to client payload contract</p>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E8EAED]">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-line">
                 <button
                   type="button"
                   onClick={() => setShowPrModal(false)}
-                  className="px-4 py-2 text-xs font-semibold text-[#737982] hover:bg-[#F2F3F5] rounded-lg"
+                  className="px-4 py-2 text-xs font-semibold text-ink-2 hover:bg-surface-2 rounded-lg"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={creatingPr}
-                  className="flex items-center gap-1.5 rounded-lg bg-[#040404] px-4 py-2 text-xs font-semibold text-white hover:bg-[#202020]"
+                  className="flex items-center gap-1.5 rounded-lg bg-charcoal px-4 py-2 text-xs font-semibold text-white hover:bg-[#202020]"
                 >
-                  <Sparkles className="h-3.5 w-3.5 text-[#D5222D]" />
+                  <Sparkles className="h-3.5 w-3.5 text-accent" />
                   {creatingPr ? "Submitting..." : "Submit Pull Request"}
                 </button>
               </div>
@@ -291,8 +383,13 @@ export default function GitControlPage() {
 
       {showBranchModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-[#E8EAED] bg-[#FFFFFF] p-5 shadow-2xl space-y-3">
-            <h3 className="text-sm font-bold text-[#17191C]">Create Worktree Branch</h3>
+          <div
+            ref={branchDialogRef}
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-sm rounded-2xl border border-line bg-surface p-5 shadow-2xl space-y-3"
+          >
+            <h3 className="text-sm font-bold text-ink">Create Worktree Branch</h3>
             <form onSubmit={handleCreateBranch} className="space-y-3">
               <input
                 type="text"
@@ -300,19 +397,19 @@ export default function GitControlPage() {
                 value={newBranchName}
                 onChange={(e) => setNewBranchName(e.target.value)}
                 placeholder="e.g. feature/auth-refresh"
-                className="w-full rounded-lg border border-[#E8EAED] bg-[#F8F9FB] px-3.5 py-2 text-xs text-[#17191C] outline-none"
+                className="w-full rounded-lg border border-line bg-canvas px-3.5 py-2 text-xs text-ink outline-none"
               />
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowBranchModal(false)}
-                  className="px-3 py-1.5 text-xs text-[#737982] hover:bg-[#F2F3F5] rounded-lg"
+                  className="px-3 py-1.5 text-xs text-ink-2 hover:bg-surface-2 rounded-lg"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="rounded-lg bg-[#040404] px-3.5 py-1.5 text-xs font-semibold text-white"
+                  className="rounded-lg bg-charcoal px-3.5 py-1.5 text-xs font-semibold text-white"
                 >
                   Create Branch
                 </button>
@@ -323,13 +420,13 @@ export default function GitControlPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-[#E8EAED] text-xs font-semibold">
+      <div className="flex border-b border-line text-xs font-semibold">
         <button
           onClick={() => setActiveTab("changes")}
           className={`py-2.5 px-4 border-b-2 transition-colors ${
             activeTab === "changes"
-              ? "border-[#D5222D] text-[#17191C]"
-              : "border-transparent text-[#737982] hover:text-[#17191C]"
+              ? "border-accent text-ink"
+              : "border-transparent text-ink-2 hover:text-ink"
           }`}
         >
           Changes ({changes.length})
@@ -338,8 +435,8 @@ export default function GitControlPage() {
           onClick={() => setActiveTab("commits")}
           className={`py-2.5 px-4 border-b-2 transition-colors ${
             activeTab === "commits"
-              ? "border-[#D5222D] text-[#17191C]"
-              : "border-transparent text-[#737982] hover:text-[#17191C]"
+              ? "border-accent text-ink"
+              : "border-transparent text-ink-2 hover:text-ink"
           }`}
         >
           Commit History ({commits.length})
@@ -348,8 +445,8 @@ export default function GitControlPage() {
           onClick={() => setActiveTab("pulls")}
           className={`py-2.5 px-4 border-b-2 transition-colors ${
             activeTab === "pulls"
-              ? "border-[#D5222D] text-[#17191C]"
-              : "border-transparent text-[#737982] hover:text-[#17191C]"
+              ? "border-accent text-ink"
+              : "border-transparent text-ink-2 hover:text-ink"
           }`}
         >
           Pull Requests ({pulls.length})
@@ -358,8 +455,8 @@ export default function GitControlPage() {
           onClick={() => setActiveTab("branches")}
           className={`py-2.5 px-4 border-b-2 transition-colors ${
             activeTab === "branches"
-              ? "border-[#D5222D] text-[#17191C]"
-              : "border-transparent text-[#737982] hover:text-[#17191C]"
+              ? "border-accent text-ink"
+              : "border-transparent text-ink-2 hover:text-ink"
           }`}
         >
           Branches ({branches.length})
@@ -368,8 +465,8 @@ export default function GitControlPage() {
           onClick={() => setActiveTab("conflicts")}
           className={`py-2.5 px-4 border-b-2 transition-colors ${
             activeTab === "conflicts"
-              ? "border-[#D5222D] text-[#17191C]"
-              : "border-transparent text-[#737982] hover:text-[#17191C]"
+              ? "border-accent text-ink"
+              : "border-transparent text-ink-2 hover:text-ink"
           }`}
         >
           Merge Conflict Resolver
@@ -377,9 +474,9 @@ export default function GitControlPage() {
       </div>
 
       {diff && (
-        <GlassCard className="p-4 border-[#E8EAED] bg-[#FFFFFF]">
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-[#9AA0A8]">Latest workspace diff</p>
-          <pre className="max-h-64 overflow-auto rounded-md bg-[#F8F9FB] p-3 font-mono text-[11px] text-[#17191C] whitespace-pre-wrap">
+        <GlassCard className="p-4 border-line bg-surface">
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-ink-3">Latest workspace diff</p>
+          <pre className="max-h-64 overflow-auto rounded-md bg-canvas p-3 font-mono text-[11px] text-ink whitespace-pre-wrap">
             {diff}
           </pre>
         </GlassCard>
@@ -388,9 +485,9 @@ export default function GitControlPage() {
       {/* Content */}
       {activeTab === "changes" && (
         <div className="space-y-4">
-          <GlassCard className="p-4 border-[#E8EAED] bg-[#FFFFFF]">
+          <GlassCard className="p-4 border-line bg-surface">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-[#9AA0A8]">Working tree changes</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-ink-3">Working tree changes</p>
               <div className="flex items-center gap-2">
                 <button
                   onClick={async () => {
@@ -401,7 +498,7 @@ export default function GitControlPage() {
                     })
                     loadGitData(projectId)
                   }}
-                  className="rounded-md border border-[#E8EAED] px-2.5 py-1 text-[11px] font-semibold text-[#17191C] hover:bg-[#F2F3F5]"
+                  className="rounded-md border border-line px-2.5 py-1 text-[11px] font-semibold text-ink hover:bg-surface-2"
                 >
                   Stage all
                 </button>
@@ -414,28 +511,28 @@ export default function GitControlPage() {
                     })
                     loadGitData(projectId)
                   }}
-                  className="rounded-md border border-[#E8EAED] px-2.5 py-1 text-[11px] font-semibold text-[#17191C] hover:bg-[#F2F3F5]"
+                  className="rounded-md border border-line px-2.5 py-1 text-[11px] font-semibold text-ink hover:bg-surface-2"
                 >
                   Unstage all
                 </button>
               </div>
             </div>
             {changes.length === 0 ? (
-              <p className="mt-3 text-[12px] text-[#737982]">No changes detected.</p>
+              <p className="mt-3 text-[12px] text-ink-2">No changes detected.</p>
             ) : (
               <div className="mt-3 space-y-1">
                 {changes.map((change: any) => (
-                  <div key={change.path} className="flex items-center justify-between rounded-md border border-[#E8EAED] px-3 py-2">
-                    <span className="font-mono text-[11px] text-[#17191C]">{change.path}</span>
-                    <span className="text-[10px] font-semibold uppercase text-[#737982]">{change.code}</span>
+                  <div key={change.path} className="flex items-center justify-between rounded-md border border-line px-3 py-2">
+                    <span className="font-mono text-[11px] text-ink">{change.path}</span>
+                    <span className="text-[10px] font-semibold uppercase text-ink-2">{change.code}</span>
                   </div>
                 ))}
               </div>
             )}
           </GlassCard>
 
-          <GlassCard className="p-4 border-[#E8EAED] bg-[#FFFFFF]">
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-[#9AA0A8]">Commit</p>
+          <GlassCard className="p-4 border-line bg-surface">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-ink-3">Commit</p>
             <div className="flex items-center gap-2">
               <input
                 value={prTitle}
@@ -464,28 +561,28 @@ export default function GitControlPage() {
       )}
 
       {activeTab === "commits" && (
-        <div className="rounded-xl border border-[#E8EAED] bg-[#FFFFFF] divide-y divide-[#E8EAED] shadow-xs overflow-hidden">
+        <div className="rounded-xl border border-line bg-surface divide-y divide-line shadow-xs overflow-hidden">
           {commits.map((c) => (
-            <div key={c.sha} className="p-4 flex items-center justify-between hover:bg-[#F8F9FB] transition-colors">
+            <div key={c.sha} className="p-4 flex items-center justify-between hover:bg-canvas transition-colors">
               <div className="flex items-center gap-3">
-                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#F2F3F5] text-[#17191C]">
-                  <GitCommit className="h-4 w-4 text-[#D5222D]" />
+                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-surface-2 text-ink">
+                  <GitCommit className="h-4 w-4 text-accent" />
                 </span>
                 <div>
-                  <p className="text-xs font-semibold text-[#17191C]">{c.message}</p>
-                  <p className="text-[11px] text-[#737982]">
+                  <p className="text-xs font-semibold text-ink">{c.message}</p>
+                  <p className="text-[11px] text-ink-2">
                     By <strong>{c.author}</strong> on <span className="font-mono">{c.branch}</span> • {new Date(c.timestamp).toLocaleTimeString()}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-3">
-                <span className="font-mono text-xs bg-[#F2F3F5] px-2 py-0.5 rounded border border-[#E8EAED] text-[#17191C]">
+                <span className="font-mono text-xs bg-surface-2 px-2 py-0.5 rounded border border-line text-ink">
                   {c.sha}
                 </span>
                 <button
                   onClick={() => handleRollback(c.sha)}
-                  className="rounded-lg p-1.5 text-[#737982] hover:bg-[#F2F3F5] hover:text-[#D5222D] transition-colors flex items-center gap-1 text-[11px]"
+                  className="rounded-lg p-1.5 text-ink-2 hover:bg-surface-2 hover:text-accent transition-colors flex items-center gap-1 text-[11px]"
                   title="Rollback commit"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
@@ -500,17 +597,17 @@ export default function GitControlPage() {
       {activeTab === "pulls" && (
         <div className="space-y-3">
           {pulls.map((pr) => (
-            <GlassCard key={pr.number} className="p-4 border-[#E8EAED] bg-[#FFFFFF] flex items-center justify-between">
+            <GlassCard key={pr.number} className="p-4 border-line bg-surface flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EDF7F1] text-[#1F7A4D]">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-success-soft text-success">
                   <GitPullRequest className="h-4 w-4" />
                 </span>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-[#17191C]">#{pr.number}</span>
-                    <h4 className="text-xs font-semibold text-[#17191C]">{pr.title}</h4>
+                    <span className="text-xs font-bold text-ink">#{pr.number}</span>
+                    <h4 className="text-xs font-semibold text-ink">{pr.title}</h4>
                   </div>
-                  <p className="text-[11px] text-[#737982] mt-0.5">
+                  <p className="text-[11px] text-ink-2 mt-0.5">
                     {pr.branch} → {pr.targetBranch} • Author: {pr.author}
                   </p>
                 </div>
@@ -519,8 +616,8 @@ export default function GitControlPage() {
               <span
                 className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
                   pr.status === "merged"
-                    ? "bg-[#EDF7F1] text-[#1F7A4D]"
-                    : "bg-[rgba(213,34,45,0.08)] text-[#D5222D]"
+                    ? "bg-success-soft text-success"
+                    : "bg-[rgba(213,34,45,0.08)] text-accent"
                 }`}
               >
                 {pr.status.replace("_", " ")}
@@ -531,15 +628,15 @@ export default function GitControlPage() {
       )}
 
       {activeTab === "branches" && (
-        <div className="rounded-xl border border-[#E8EAED] bg-[#FFFFFF] divide-y divide-[#E8EAED] shadow-xs overflow-hidden">
+        <div className="rounded-xl border border-line bg-surface divide-y divide-line shadow-xs overflow-hidden">
           {branches.map((b) => (
-            <div key={b.name} className="p-4 flex items-center justify-between hover:bg-[#F8F9FB] transition-colors">
+            <div key={b.name} className="p-4 flex items-center justify-between hover:bg-canvas transition-colors">
               <div className="flex items-center gap-3">
-                <GitBranch className={`h-4 w-4 ${b.isDefault ? "text-[#1F7A4D]" : "text-[#D5222D]"}`} />
+                <GitBranch className={`h-4 w-4 ${b.isDefault ? "text-success" : "text-accent"}`} />
                 <div>
-                  <span className="text-xs font-semibold text-[#17191C] font-mono">{b.name}</span>
+                  <span className="text-xs font-semibold text-ink font-mono">{b.name}</span>
                   {b.isDefault && (
-                    <span className="ml-2 rounded bg-[#EDF7F1] px-1.5 py-0.5 text-[9px] font-bold uppercase text-[#1F7A4D]">
+                    <span className="ml-2 rounded bg-success-soft px-1.5 py-0.5 text-[9px] font-bold uppercase text-success">
                       Default
                     </span>
                   )}
@@ -548,7 +645,7 @@ export default function GitControlPage() {
 
               <div className="flex items-center gap-2">
                 {currentBranch === b.name ? (
-                  <span className="text-[11px] font-semibold text-[#1F7A4D]">Current Branch</span>
+                  <span className="text-[11px] font-semibold text-success">Current Branch</span>
                 ) : (
                   <button
                     onClick={() => {
@@ -556,7 +653,7 @@ export default function GitControlPage() {
                       setActionSuccess(`Switched to branch: ${b.name}`)
                       setTimeout(() => setActionSuccess(null), 3000)
                     }}
-                    className="rounded-lg border border-[#E8EAED] bg-[#FFFFFF] px-3 py-1 text-xs text-[#17191C] hover:bg-[#F2F3F5]"
+                    className="rounded-lg border border-line bg-surface px-3 py-1 text-xs text-ink hover:bg-surface-2"
                   >
                     Checkout
                   </button>
@@ -568,13 +665,13 @@ export default function GitControlPage() {
       )}
 
       {activeTab === "conflicts" && (
-        <GlassCard className="p-6 border-[#E8EAED] bg-[#FFFFFF] space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#E8EAED]">
+        <GlassCard className="p-6 border-line bg-surface space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-line">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-[#D5222D]" />
-              <h4 className="text-xs font-bold text-[#17191C]">Three-Way Merge Conflict Resolution</h4>
+              <AlertTriangle className="h-4 w-4 text-accent" />
+              <h4 className="text-xs font-bold text-ink">Three-Way Merge Conflict Resolution</h4>
             </div>
-            <span className="text-xs text-[#737982] font-mono">src/app/api/checkout/route.ts</span>
+            <span className="text-xs text-ink-2 font-mono">src/app/api/checkout/route.ts</span>
           </div>
 
           {!conflictResolved ? (
@@ -597,17 +694,17 @@ export default function GitControlPage() {
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   onClick={() => setConflictResolved(true)}
-                  className="rounded-lg bg-[#040404] px-4 py-2 text-xs font-semibold text-white hover:bg-[#202020]"
+                  className="rounded-lg bg-charcoal px-4 py-2 text-xs font-semibold text-white hover:bg-[#202020]"
                 >
                   Accept Incoming (Agent Version) & Commit
                 </button>
               </div>
             </div>
           ) : (
-            <div className="rounded-xl border border-[#1F7A4D]/20 bg-[#EDF7F1] p-4 text-center space-y-2">
-              <CheckCircle2 className="h-6 w-6 text-[#1F7A4D] mx-auto" />
-              <p className="text-xs font-bold text-[#1F7A4D]">Conflict Resolved Successfully</p>
-              <p className="text-[11px] text-[#737982]">
+            <div className="rounded-xl border border-success/20 bg-success-soft p-4 text-center space-y-2">
+              <CheckCircle2 className="h-6 w-6 text-success mx-auto" />
+              <p className="text-xs font-bold text-success">Conflict Resolved Successfully</p>
+              <p className="text-[11px] text-ink-2">
                 Merged into worktree without loss of data. Safe to push.
               </p>
             </div>
