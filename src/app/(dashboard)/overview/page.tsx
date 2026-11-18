@@ -9,8 +9,13 @@ import { UsageOverview, UsageOverviewSkeleton } from "@/components/dashboard/usa
 import { SpendingCharts, SpendingChartsSkeleton } from "@/components/dashboard/spending-charts"
 import { ActivityFeed, ActivityFeedSkeleton } from "@/components/dashboard/activity-feed"
 import { QuickInsights, QuickInsightsSkeleton } from "@/components/dashboard/quick-insights"
+import {
+  SuggestionsCard,
+  SuggestionsCardSkeleton,
+} from "@/components/dashboard/suggestions-card"
 import { PageHeader } from "@/components/ui/page-header"
 import { PROVIDERS } from "@/lib/providers"
+import type { Suggestion } from "@/lib/suggestions"
 import type {
   DashboardSummary,
   SpendingDataPoint,
@@ -46,6 +51,7 @@ export default function OverviewPage() {
   const [activities, setActivities] = useState<ActivityItem[]>([])
   const [spendingHistory, setSpendingHistory] = useState<SpendingDataPoint[]>([])
   const [providerSpending, setProviderSpending] = useState<ProviderSpendingData[]>([])
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [reportingPeriod, setReportingPeriod] = useState("—")
 
   useEffect(() => {
@@ -66,17 +72,21 @@ export default function OverviewPage() {
       try {
         setLoading(true)
 
-        const [dashRes, subRes, notifRes] = await Promise.all([
+        const [dashRes, subRes, notifRes, suggestionRes] = await Promise.all([
           fetch("/api/dashboard"),
           fetch("/api/subscriptions"),
           fetch("/api/notifications"),
+          fetch("/api/suggestions"),
         ])
 
-        const [dashJson, subJson, notifJson] = await Promise.all([
+        const [dashJson, subJson, notifJson, suggestionJson] = await Promise.all([
           dashRes.json(),
           subRes.json(),
           notifRes.json(),
+          suggestionRes.json().catch(() => ({ data: null })),
         ])
+
+        setSuggestions((suggestionJson?.data?.suggestions as Suggestion[]) || [])
 
         if (dashJson.data) {
           const d = dashJson.data as DashboardApiData
@@ -212,6 +222,12 @@ export default function OverviewPage() {
       </div>
 
       {loading || !summary ? <SummaryCardsSkeleton /> : <SummaryCards data={summary} />}
+
+      {loading ? (
+        <SuggestionsCardSkeleton />
+      ) : (
+        <SuggestionsCard suggestions={suggestions} />
+      )}
 
       {loading ? (
         <SpendingChartsSkeleton />

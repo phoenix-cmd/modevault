@@ -44,6 +44,61 @@ async function main() {
     if (res.status !== 200) failures.push(`${path} ${res.status}`)
   }
 
+  const models = await request("/api/models", {}, jar)
+  if (models.status !== 200) failures.push(`models ${models.status}`)
+  else if (!Array.isArray(models.json?.data) || models.json.data.length === 0) {
+    failures.push("models catalog empty")
+  }
+
+  const suggestions = await request("/api/suggestions", {}, jar)
+  if (suggestions.status !== 200) failures.push(`suggestions ${suggestions.status}`)
+  else if (!Array.isArray(suggestions.json?.data?.suggestions)) {
+    failures.push("suggestions shape invalid")
+  }
+
+  const integrations = await request("/api/integrations", {}, jar)
+  if (integrations.status !== 200) failures.push(`integrations ${integrations.status}`)
+
+  const savedIntegration = await request(
+    "/api/integrations",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        providerSlug: "smoke-test",
+        apiKey: "sk-smoke-test-1234",
+        status: "connected",
+      }),
+    },
+    jar
+  )
+  if (savedIntegration.status !== 201) {
+    failures.push(`integration save ${savedIntegration.status}`)
+  } else {
+    const record = savedIntegration.json?.data
+    if (record?.encryptedKey) failures.push("integration response leaked encrypted key")
+    if (!record?.hasKey || !record?.keyPreview) failures.push("integration key metadata missing")
+    const listed = await request("/api/integrations", {}, jar)
+    const stored = listed.json?.data?.find(
+      (item) => item.providerSlug === "smoke-test"
+    )
+    if (!stored?.hasKey) failures.push("integration not persisted")
+    const removed = await request(
+      "/api/integrations?providerSlug=smoke-test",
+      { method: "DELETE" },
+      jar
+    )
+    if (removed.status !== 200) failures.push(`integration delete ${removed.status}`)
+  }
+
+  const gitState = await request(
+    "/api/git?projectId=proj_ai_analytics_002",
+    {},
+    jar
+  )
+  if (gitState.status !== 200) failures.push(`git state ${gitState.status}`)
+  else if (!gitState.json?.data?.sync) failures.push("git sync state missing")
+
   const fs = await import("node:fs")
   const path = await import("node:path")
   const demoZipPath = path.join(process.cwd(), "scripts", "demo.zip")
