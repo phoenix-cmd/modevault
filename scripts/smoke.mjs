@@ -44,6 +44,17 @@ async function main() {
     if (res.status !== 200) failures.push(`${path} ${res.status}`)
   }
 
+  const projectsRes = await request("/api/projects", {}, jar)
+  const projectId = projectsRes.json?.data?.[0]?.id
+  if (projectId) {
+    const previewStart = await request(`/api/projects/${projectId}/preview`, { method: "POST" }, jar)
+    if (previewStart.status !== 200 && previewStart.status !== 500) failures.push(`preview start ${previewStart.status}`)
+    const previewGet = await request(`/api/projects/${projectId}/preview`, {}, jar)
+    if (previewGet.status !== 200) failures.push(`preview get ${previewGet.status}`)
+    const previewStop = await request(`/api/projects/${projectId}/preview`, { method: "DELETE" }, jar)
+    if (previewStop.status !== 200) failures.push(`preview stop ${previewStop.status}`)
+  }
+
   if (failures.length) {
     console.error("Smoke test failed:", failures.join(", "))
     process.exitCode = 1
