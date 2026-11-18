@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/db"
+import { getDb } from "@/lib/db"
 import {
   createBranch,
   commitWorkspace,
@@ -9,23 +9,22 @@ import {
 
 export async function GET(req: NextRequest) {
   try {
+    const db = getDb()
     const { searchParams } = new URL(req.url)
     const projectId = searchParams.get("projectId")
 
-    const where: any = {}
-    if (projectId) where.projectId = projectId
+    let executions = db.orm.public.Execution
+      .include("project")
+      .include("tasks")
+      .include("artifacts")
 
-    const executions = await prisma.execution.findMany({
-      where,
-      include: {
-        project: true,
-        tasks: true,
-        artifacts: true,
-      },
-      orderBy: { createdAt: "desc" },
-    })
+    if (projectId) {
+      executions = executions.where({ projectId })
+    }
 
-    return NextResponse.json({ data: executions })
+    const rows = await executions.orderBy((e) => e.createdAt.desc()).all()
+
+    return NextResponse.json({ data: rows })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
@@ -33,6 +32,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const db = getDb()
     const body = await req.json()
     const { projectId, prompt, agentId, targetBranch } = body
 
@@ -40,10 +40,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "projectId and prompt are required" }, { status: 400 })
     }
 
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: { sources: true },
-    })
+    const project = await db.orm.public.Project
+      .include("sources")
+      .first({ id: projectId })
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
@@ -53,8 +52,9 @@ export async function POST(req: NextRequest) {
     const title = prompt.length > 70 ? `${prompt.slice(0, 67)}...` : prompt
 
     // Create execution with orchestrated multi-agent plan
-    const execution = await prisma.execution.create({
-      data: {
+    const execution = await db.orm.public.Execution
+      .include("tasks")
+      .create({
         projectId,
         workspaceId: project.workspaceId,
         title,
@@ -74,8 +74,8 @@ export async function POST(req: NextRequest) {
             { name: "Quality Assurance & Diff Verification", agent: "OpenCode Reviewer", status: "awaiting_approval" },
           ],
         }),
-        tasks: {
-          create: [
+        tasks: (t) =>
+          t.create([
             {
               title: "Inspect repository AST and dependency tree",
               description: "Analyze imports, type definitions, and affected call sites",
@@ -100,13 +100,8 @@ export async function POST(req: NextRequest) {
               status: "running",
               orderIndex: 2,
             },
-          ],
-        },
-      },
-      include: {
-        tasks: true,
-      },
-    })
+          ]),
+      })
 
     // If the project has a real extracted workspace, apply a real file change
     // and capture the resulting Git diff instead of using a synthetic patch.
@@ -127,16 +122,15 @@ export async function POST(req: NextRequest) {
         realCommitSha = await commitWorkspace(source.sourcePath, `feat(agent): ${title}`)
         realDiff = await getLatestCommitDiff(source.sourcePath)
 
-        await prisma.execution.update({
-          where: { id: execution.id },
-          data: {
+        await db.orm.public.Execution
+          .where({ id: execution.id })
+          .update({
             totalTokens: 0,
             inputTokens: 0,
             outputTokens: 0,
             estimatedCost: 0,
             durationMs: 0,
-          },
-        })
+          })
       } catch (err) {
         console.error("Local execution workspace update failed:", err)
       }
@@ -196,7 +190,7 @@ export async function POST(req: NextRequest) {
     ]
 
     for (const ev of sampleEvents) {
-      await prisma.agentEvent.create({ data: ev })
+      await db.orm.public.AgentEvent.create(ev)
     }
 
     // Create realistic Git Diff Artifact
@@ -236,37 +230,30 @@ export async function POST(req: NextRequest) {
 +  }
  }`
 
-    await prisma.executionArtifact.create({
-      data: {
-        executionId: execution.id,
-        type: "git_diff",
-        path: "src/lib/services/api-client.ts",
-        summary: `Implemented: ${prompt}`,
-        content: realDiff || diffContent,
-      },
+    await db.orm.public.ExecutionArtifact.create({
+      executionId: execution.id,
+      type: "git_diff",
+      path: "src/lib/services/api-client.ts",
+      summary: `Implemented: ${prompt}`,
+      content: realDiff || diffContent,
     })
 
     // Also register Git Operation
-    await prisma.gitOperation.create({
-      data: {
-        projectId,
-        executionId: execution.id,
-        branchName: branch,
-        commitMessage: `feat(agent): ${title}`,
-        commitSha: realCommitSha || null,
-        status: realCommitSha ? "committed" : "staged",
-      },
+    await db.orm.public.GitOperation.create({
+      projectId,
+      executionId: execution.id,
+      branchName: branch,
+      commitMessage: `feat(agent): ${title}`,
+      commitSha: realCommitSha || null,
+      status: realCommitSha ? "committed" : "staged",
     })
 
-    const finalExec = await prisma.execution.findUnique({
-      where: { id: execution.id },
-      include: {
-        tasks: true,
-        events: true,
-        artifacts: true,
-        gitOperations: true,
-      },
-    })
+    const finalExec = await db.orm.public.Execution
+      .include("tasks")
+      .include("events")
+      .include("artifacts")
+      .include("gitOperations")
+      .first({ id: execution.id })
 
     return NextResponse.json({ data: finalExec }, { status: 201 })
   } catch (err: unknown) {

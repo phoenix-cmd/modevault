@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
+import { getDb } from "@/lib/db";
 import { getCurrentUserOrDefault } from "@/lib/auth"
 
 
@@ -9,18 +9,18 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
     const { id } = await params;
 
-    const subscription = await prisma.subscription.findFirst({
-      where: { id, userId: user.id },
-      include: {
-        provider: true,
-        plan: true,
-        usageRecords: { orderBy: { date: "desc" } },
-        billingRecords: { orderBy: { billingDate: "desc" } },
-      },
-    });
+    const subscription = await db.orm.public.Subscription
+      .include("provider")
+      .include("plan")
+      .include("usageRecords", (records) => records.orderBy((r) => r.date.desc()))
+      .include("billingRecords", (records) => records.orderBy((r) => r.billingDate.desc()))
+      .where({ id })
+      .where({ userId: user.id })
+      .first();
 
     if (!subscription) {
       return Response.json(
@@ -45,14 +45,16 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
     const { id } = await params;
     const body = await request.json();
 
     // Verify ownership
-    const existing = await prisma.subscription.findFirst({
-      where: { id, userId: user.id },
-    });
+    const existing = await db.orm.public.Subscription
+      .where({ id })
+      .where({ userId: user.id })
+      .first();
 
     if (!existing) {
       return Response.json(
@@ -61,9 +63,11 @@ export async function PUT(
       );
     }
 
-    const subscription = await prisma.subscription.update({
-      where: { id },
-      data: {
+    const subscription = await db.orm.public.Subscription
+      .include("provider")
+      .include("plan")
+      .where({ id })
+      .update({
         ...(body.providerId !== undefined && { providerId: body.providerId }),
         ...(body.planId !== undefined && { planId: body.planId }),
         ...(body.customPlanName !== undefined && { customPlanName: body.customPlanName }),
@@ -81,9 +85,7 @@ export async function PUT(
         ...(body.quotaCredits !== undefined && { quotaCredits: body.quotaCredits }),
         ...(body.quotaResetPeriod !== undefined && { quotaResetPeriod: body.quotaResetPeriod }),
         ...(body.notes !== undefined && { notes: body.notes }),
-      },
-      include: { provider: true, plan: true },
-    });
+      });
 
     return Response.json({ data: subscription });
   } catch (error) {
@@ -101,12 +103,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
     const { id } = await params;
 
-    const existing = await prisma.subscription.findFirst({
-      where: { id, userId: user.id },
-    });
+    const existing = await db.orm.public.Subscription
+      .where({ id })
+      .where({ userId: user.id })
+      .first();
 
     if (!existing) {
       return Response.json(
@@ -115,13 +119,12 @@ export async function DELETE(
       );
     }
 
-    const subscription = await prisma.subscription.update({
-      where: { id },
-      data: {
+    const subscription = await db.orm.public.Subscription
+      .where({ id })
+      .update({
         status: "cancelled",
         cancelledAt: new Date(),
-      },
-    });
+      });
 
     return Response.json({ data: subscription });
   } catch (error) {
@@ -139,13 +142,15 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
     const { id } = await params;
     const body = await request.json();
 
-    const existing = await prisma.subscription.findFirst({
-      where: { id, userId: user.id },
-    });
+    const existing = await db.orm.public.Subscription
+      .where({ id })
+      .where({ userId: user.id })
+      .first();
 
     if (!existing) {
       return Response.json(
@@ -154,15 +159,14 @@ export async function PATCH(
       );
     }
 
-    const subscription = await prisma.subscription.update({
-      where: { id },
-      data: {
+    const subscription = await db.orm.public.Subscription
+      .where({ id })
+      .update({
         ...(body.usedMessages !== undefined && { usedMessages: body.usedMessages }),
         ...(body.usedTokens !== undefined && { usedTokens: body.usedTokens }),
         ...(body.usedRequests !== undefined && { usedRequests: body.usedRequests }),
         ...(body.usedCredits !== undefined && { usedCredits: body.usedCredits }),
-      },
-    });
+      });
 
     return Response.json({ data: subscription });
   } catch (error) {

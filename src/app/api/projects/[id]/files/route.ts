@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/db"
+import { getDb } from "@/lib/db"
 import {
   listWorkspaceTree,
   readWorkspaceFile,
@@ -223,23 +223,19 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const db = getDb()
     const { id } = await params
     const { searchParams } = new URL(req.url)
     const filePath = searchParams.get("file")
 
-    let project = await prisma.project.findUnique({
-      where: { id },
-      include: {
-        sources: true,
-      },
-    })
+    let project = await db.orm.public.Project
+      .include("sources")
+      .first({ id })
 
     if (!project) {
-      project = await prisma.project.findFirst({
-        include: {
-          sources: true,
-        },
-      })
+      project = await db.orm.public.Project
+        .include("sources")
+        .first()
     }
 
     if (!project) {
@@ -370,10 +366,11 @@ export async function PUT(
       return NextResponse.json({ error: "file and content are required" }, { status: 400 })
     }
 
-    const project = await prisma.project.findUnique({
-      where: { id },
-      include: { sources: true },
-    })
+    const db = getDb()
+
+    const project = await db.orm.public.Project
+      .include("sources")
+      .first({ id })
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
     }

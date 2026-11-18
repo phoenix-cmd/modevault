@@ -1,23 +1,21 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/db"
+import { getDb } from "@/lib/db"
 
 export async function GET(req: NextRequest) {
   try {
+    const db = getDb()
     const { searchParams } = new URL(req.url)
     const workspaceId = searchParams.get("workspaceId") || "ws_core_001"
 
-    const projects = await prisma.project.findMany({
-      where: { workspaceId },
-      include: {
-        sources: true,
-        environments: true,
-        executions: {
-          orderBy: { createdAt: "desc" },
-          take: 3,
-        },
-      },
-      orderBy: { updatedAt: "desc" },
-    })
+    const projects = await db.orm.public.Project
+      .include("sources")
+      .include("environments")
+      .include("executions", (executions) =>
+        executions.orderBy((e) => e.createdAt.desc()).limit(3)
+      )
+      .where({ workspaceId })
+      .orderBy((p) => p.updatedAt.desc())
+      .all()
 
     return NextResponse.json({ data: projects })
   } catch (err: any) {
@@ -27,6 +25,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const db = getDb()
     const body = await req.json()
     const { name, description, framework, language, repositoryUrl, workspaceId } = body
 
@@ -37,8 +36,10 @@ export async function POST(req: NextRequest) {
     const wsId = workspaceId || "ws_core_001"
     const slug = name.toLowerCase().replace(/[^a-z0-9-]/g, "-")
 
-    const project = await prisma.project.create({
-      data: {
+    const project = await db.orm.public.Project
+      .include("environments")
+      .include("sources")
+      .create({
         workspaceId: wsId,
         name,
         slug,
@@ -47,33 +48,30 @@ export async function POST(req: NextRequest) {
         language: language || "typescript",
         repositoryUrl: repositoryUrl || null,
         status: "ready",
-        environments: {
-          create: {
-            runtime: language === "python" ? "python-3.11" : "nodejs-20",
-            buildCommand: language === "python" ? "pip install -r requirements.txt" : "npm install && npm run build",
-            startCommand: language === "python" ? "python main.py" : "npm run start",
-            runPort: 3000 + Math.floor(Math.random() * 500),
-            status: "running",
-          },
-        },
-        sources: {
-          create: {
-            type: repositoryUrl ? "git_clone" : "zip_upload",
-            branch: "main",
-            manifestJson: JSON.stringify({
-              framework: framework || "Next.js 16",
-              language: language || "TypeScript",
-              detectedDependencies: ["react", "next", "tailwindcss", "prisma"],
-              fileCount: 28,
-            }),
-          },
-        },
-      },
-      include: {
-        environments: true,
-        sources: true,
-      },
-    })
+        environments: (e) =>
+          e.create([
+            {
+              runtime: language === "python" ? "python-3.11" : "nodejs-20",
+              buildCommand: language === "python" ? "pip install -r requirements.txt" : "npm install && npm run build",
+              startCommand: language === "python" ? "python main.py" : "npm run start",
+              runPort: 3000 + Math.floor(Math.random() * 500),
+              status: "running",
+            },
+          ]),
+        sources: (s) =>
+          s.create([
+            {
+              type: repositoryUrl ? "git_clone" : "zip_upload",
+              branch: "main",
+              manifestJson: JSON.stringify({
+                framework: framework || "Next.js 16",
+                language: language || "TypeScript",
+                detectedDependencies: ["react", "next", "tailwindcss", "prisma"],
+                fileCount: 28,
+              }),
+            },
+          ]),
+      })
 
     return NextResponse.json({ data: project }, { status: 201 })
   } catch (err: any) {

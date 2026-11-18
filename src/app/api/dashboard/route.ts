@@ -1,67 +1,71 @@
 import { NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
+import { getDb } from "@/lib/db";
 import { getCurrentUserOrDefault } from "@/lib/auth"
 
 export async function GET(_request: NextRequest) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
     const now = new Date();
     const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
     // Active subscriptions count
-    const activeSubscriptions = await prisma.subscription.count({
-      where: { userId: user.id, status: "active" },
-    });
+    const activeSubscriptions = await db.orm.public.Subscription
+      .where({ userId: user.id })
+      .where({ status: "active" })
+      .aggregate((a) => ({ total: a.count() }))
+      .then((r) => r.total);
 
     // Total monthly spend (sum of active monthly subscription prices)
-    const activeMonthlyAgg = await prisma.subscription.aggregate({
-      where: { userId: user.id, status: "active", billingCycle: "monthly" },
-      _sum: { price: true },
-    });
-    const activeYearlyAgg = await prisma.subscription.aggregate({
-      where: { userId: user.id, status: "active", billingCycle: "yearly" },
-      _sum: { price: true },
-    });
+    const activeMonthlyAgg = await db.orm.public.Subscription
+      .where({ userId: user.id })
+      .where({ status: "active" })
+      .where({ billingCycle: "monthly" })
+      .aggregate((a) => ({ price: a.sum("price") }));
+    const activeYearlyAgg = await db.orm.public.Subscription
+      .where({ userId: user.id })
+      .where({ status: "active" })
+      .where({ billingCycle: "yearly" })
+      .aggregate((a) => ({ price: a.sum("price") }));
 
-    const monthlyFromMonthly = activeMonthlyAgg._sum.price ?? 0;
-    const monthlyFromYearly = (activeYearlyAgg._sum.price ?? 0) / 12;
+    const monthlyFromMonthly = activeMonthlyAgg.price ?? 0;
+    const monthlyFromYearly = (activeYearlyAgg.price ?? 0) / 12;
     const totalMonthlySpend = monthlyFromMonthly + monthlyFromYearly;
-    const totalAnnualSpend = monthlyFromMonthly * 12 + (activeYearlyAgg._sum.price ?? 0);
+    const totalAnnualSpend = monthlyFromMonthly * 12 + (activeYearlyAgg.price ?? 0);
 
     // Total API balance
-    const apiBalanceAgg = await prisma.apiAccount.aggregate({
-      where: { userId: user.id },
-      _sum: { prepaidBalance: true },
-    });
-    const totalApiBalance = apiBalanceAgg._sum.prepaidBalance ?? 0;
+    const apiBalanceAgg = await db.orm.public.ApiAccount
+      .where({ userId: user.id })
+      .aggregate((a) => ({ prepaidBalance: a.sum("prepaidBalance") }));
+    const totalApiBalance = apiBalanceAgg.prepaidBalance ?? 0;
 
     // Upcoming renewals (next 30 days)
-    const upcomingRenewals = await prisma.subscription.count({
-      where: {
-        userId: user.id,
-        status: "active",
-        renewalDate: { gte: now, lte: thirtyDaysFromNow },
-      },
-    });
+    const upcomingRenewals = await db.orm.public.Subscription
+      .where({ userId: user.id })
+      .where({ status: "active" })
+      .where((s) => s.renewalDate.gte(now))
+      .where((s) => s.renewalDate.lte(thirtyDaysFromNow))
+      .aggregate((a) => ({ total: a.count() }))
+      .then((r) => r.total);
 
     // Recent activity — last 10 events combined from billing, notifications, sync logs
     const [recentBilling, recentNotifications, recentSyncLogs] = await Promise.all([
-      prisma.billingRecord.findMany({
-        where: { userId: user.id },
-        orderBy: { createdAt: "desc" },
-        take: 10,
-      }),
-      prisma.notification.findMany({
-        where: { userId: user.id },
-        orderBy: { createdAt: "desc" },
-        take: 10,
-      }),
-      prisma.syncLog.findMany({
-        where: { userId: user.id },
-        orderBy: { createdAt: "desc" },
-        take: 10,
-      }),
+      db.orm.public.BillingRecord
+        .where({ userId: user.id })
+        .orderBy((b) => b.createdAt.desc())
+        .limit(10)
+        .all(),
+      db.orm.public.Notification
+        .where({ userId: user.id })
+        .orderBy((n) => n.createdAt.desc())
+        .limit(10)
+        .all(),
+      db.orm.public.SyncLog
+        .where({ userId: user.id })
+        .orderBy((s) => s.createdAt.desc())
+        .limit(10)
+        .all(),
     ]);
 
     type ActivityItem = {
@@ -99,13 +103,11 @@ export async function GET(_request: NextRequest) {
       .slice(0, 10);
 
     // Spending by month (last 6 months from billing records)
-    const billingRecords = await prisma.billingRecord.findMany({
-      where: {
-        userId: user.id,
-        billingDate: { gte: sixMonthsAgo },
-      },
-      orderBy: { billingDate: "asc" },
-    });
+    const billingRecords = await db.orm.public.BillingRecord
+      .where({ userId: user.id })
+      .where((b) => b.billingDate.gte(sixMonthsAgo))
+      .orderBy((b) => b.billingDate.asc())
+      .all();
 
     const spendingByMonth: Record<string, number> = {};
     for (const record of billingRecords) {
@@ -114,10 +116,11 @@ export async function GET(_request: NextRequest) {
     }
 
     // Provider spending
-    const subscriptionsWithProvider = await prisma.subscription.findMany({
-      where: { userId: user.id, status: "active" },
-      include: { provider: true },
-    });
+    const subscriptionsWithProvider = await db.orm.public.Subscription
+      .include("provider")
+      .where({ userId: user.id })
+      .where({ status: "active" })
+      .all();
 
     const providerSpending: Record<string, number> = {};
     for (const sub of subscriptionsWithProvider) {

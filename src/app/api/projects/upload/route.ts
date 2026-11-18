@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import JSZip from "jszip"
-import { prisma } from "@/lib/db"
+import { getDb } from "@/lib/db"
 import {
   ensureProjectWorkspace,
   initializeGitRepository,
@@ -9,6 +9,7 @@ import {
 
 export async function POST(req: NextRequest) {
   try {
+    const db = getDb()
     const formData = await req.formData()
     const file = formData.get("file") as File | null
     const name = (formData.get("name") as string) || "Imported Project"
@@ -67,46 +68,40 @@ export async function POST(req: NextRequest) {
     const slug = name.toLowerCase().replace(/[^a-z0-9-]/g, "-")
 
     // Create Project, Source, and provision Sandbox Environment in DB
-    const project = await prisma.project.create({
-      data: {
-        workspaceId,
-        name,
-        slug,
-        description: `Imported from archive: ${file.name} (${Math.round(file.size / 1024)} KB, ${fileList.length} files)`,
-        framework: detectedFramework,
-        language: detectedLanguage,
-        status: "ready",
-        environments: {
-          create: {
-            runtime: detectedLanguage === "python" ? "python-3.11" : "nodejs-20",
-            buildCommand: detectedLanguage === "python" ? "pip install -r requirements.txt" : "npm install",
-            startCommand: detectedLanguage === "python" ? "python main.py" : "npm run dev",
-            runPort: 3000 + Math.floor(Math.random() * 500),
-            status: "running",
-          },
-        },
-        sources: {
-          create: {
-            type: "zip_upload",
-            fileName: file.name,
-            fileSize: file.size,
-            branch: "main",
-            manifestJson: JSON.stringify({
-              fileName: file.name,
-              fileSize: file.size,
-              fileCount: fileList.length,
-              files: fileList.slice(0, 100),
-              detectedFramework,
-              detectedLanguage,
-              dependencies: detectedDependencies.slice(0, 20),
-            }),
-          },
-        },
-      },
-      include: {
-        environments: true,
-        sources: true,
-      },
+    const project = await db.orm.public.Project.create({
+      workspaceId,
+      name,
+      slug,
+      description: `Imported from archive: ${file.name} (${Math.round(file.size / 1024)} KB, ${fileList.length} files)`,
+      framework: detectedFramework,
+      language: detectedLanguage,
+      status: "ready",
+    })
+
+    const environment = await db.orm.public.ProjectEnvironment.create({
+      projectId: project.id,
+      runtime: detectedLanguage === "python" ? "python-3.11" : "nodejs-20",
+      buildCommand: detectedLanguage === "python" ? "pip install -r requirements.txt" : "npm install",
+      startCommand: detectedLanguage === "python" ? "python main.py" : "npm run dev",
+      runPort: 3000 + Math.floor(Math.random() * 500),
+      status: "running",
+    })
+
+    const source = await db.orm.public.ProjectSource.create({
+      projectId: project.id,
+      type: "zip_upload",
+      fileName: file.name,
+      fileSize: file.size,
+      branch: "main",
+      manifestJson: JSON.stringify({
+        fileName: file.name,
+        fileSize: file.size,
+        fileCount: fileList.length,
+        files: fileList.slice(0, 100),
+        detectedFramework,
+        detectedLanguage,
+        dependencies: detectedDependencies.slice(0, 20),
+      }),
     })
 
     // Persist the archive to a controlled local workspace and initialize Git.
@@ -126,16 +121,20 @@ export async function POST(req: NextRequest) {
     }
     await initializeGitRepository(workspacePath)
 
-    if (project.sources?.[0]?.id) {
-      await prisma.projectSource.update({
-        where: { id: project.sources[0].id },
-        data: { sourcePath: workspacePath },
-      })
+    if (source?.id) {
+      source.sourcePath = workspacePath
+      await db.orm.public.ProjectSource
+        .where({ id: source.id })
+        .update({ sourcePath: workspacePath })
     }
 
     return NextResponse.json({
       data: {
-        project,
+        project: {
+          ...project,
+          environments: environment ? [environment] : [],
+          sources: source ? [source] : [],
+        },
         inspection: {
           fileName: file.name,
           fileCount: fileList.length,

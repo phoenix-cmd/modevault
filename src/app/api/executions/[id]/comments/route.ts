@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/db"
+import { getDb } from "@/lib/db"
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const db = getDb()
     const { id } = await params
-    const comments = await prisma.reviewComment.findMany({
-      where: { executionId: id },
-      orderBy: { createdAt: "desc" },
-    })
+    const comments = await db.orm.public.ReviewComment
+      .where({ executionId: id })
+      .orderBy((c) => c.createdAt.desc())
+      .all()
 
     return NextResponse.json({ data: comments })
   } catch (err: any) {
@@ -23,6 +24,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const db = getDb()
     const { id } = await params
     const body = await req.json()
     const { filePath, lineNumber, comment, authorName } = body
@@ -34,31 +36,27 @@ export async function POST(
       )
     }
 
-    const newComment = await prisma.reviewComment.create({
-      data: {
-        executionId: id,
-        filePath,
-        lineNumber: parseInt(lineNumber, 10),
-        comment,
-        authorName: authorName || "Lead Architect",
-        status: "open",
-      },
+    const newComment = await db.orm.public.ReviewComment.create({
+      executionId: id,
+      filePath,
+      lineNumber: parseInt(lineNumber, 10),
+      comment,
+      authorName: authorName || "Lead Architect",
+      status: "open",
     })
 
     // Log comment event in execution stream
-    await prisma.agentEvent.create({
-      data: {
-        executionId: id,
-        eventType: "review_comment",
-        level: "action",
-        payloadJson: JSON.stringify({
-          commentId: newComment.id,
-          filePath,
-          lineNumber,
-          authorName: newComment.authorName,
-          comment,
-        }),
-      },
+    await db.orm.public.AgentEvent.create({
+      executionId: id,
+      eventType: "review_comment",
+      level: "action",
+      payloadJson: JSON.stringify({
+        commentId: newComment.id,
+        filePath,
+        lineNumber,
+        authorName: newComment.authorName,
+        comment,
+      }),
     })
 
     return NextResponse.json({ data: newComment }, { status: 201 })
@@ -72,6 +70,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const db = getDb()
     const body = await req.json()
     const { commentId, status } = body
 
@@ -79,10 +78,9 @@ export async function PATCH(
       return NextResponse.json({ error: "commentId is required" }, { status: 400 })
     }
 
-    const updated = await prisma.reviewComment.update({
-      where: { id: commentId },
-      data: { status: status || "resolved" },
-    })
+    const updated = await db.orm.public.ReviewComment
+      .where({ id: commentId })
+      .update({ status: status || "resolved" })
 
     return NextResponse.json({ data: updated })
   } catch (err: any) {

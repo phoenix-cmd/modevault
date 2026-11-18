@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/db"
+import { getDb } from "@/lib/db"
 import {
   getGitBranches,
   getGitCommits,
@@ -11,21 +11,22 @@ import {
 
 export async function GET(req: NextRequest) {
   try {
+    const db = getDb()
     const { searchParams } = new URL(req.url)
     const projectId = searchParams.get("projectId")
 
     const project = projectId
-      ? await prisma.project.findUnique({ where: { id: projectId }, include: { sources: true } })
-      : await prisma.project.findFirst({ include: { sources: true } })
+      ? await db.orm.public.Project.include("sources").first({ id: projectId })
+      : await db.orm.public.Project.include("sources").first()
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
     }
 
-    const operations = await prisma.gitOperation.findMany({
-      where: { projectId: project.id },
-      orderBy: { createdAt: "desc" },
-    })
+    const operations = await db.orm.public.GitOperation
+      .where({ projectId: project.id })
+      .orderBy((g) => g.createdAt.desc())
+      .all()
 
     const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find(
       (item) => item.sourcePath
@@ -102,9 +103,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { action, projectId, branchName, commitMessage, commitSha, prTitle, prBody } = body
 
+    const db = getDb()
+
     const project = projectId
-      ? await prisma.project.findUnique({ where: { id: projectId }, include: { sources: true } })
-      : await prisma.project.findFirst({ include: { sources: true } })
+      ? await db.orm.public.Project.include("sources").first({ id: projectId })
+      : await db.orm.public.Project.include("sources").first()
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
@@ -122,14 +125,12 @@ export async function POST(req: NextRequest) {
           // Fall back to a synthetic SHA if Git is unavailable.
         }
       }
-      const op = await prisma.gitOperation.create({
-        data: {
-          projectId: project.id,
-          branchName: branchName || project.defaultBranch,
-          commitSha: sha,
-          commitMessage: commitMessage || "feat: automated agent mutation",
-          status: "committed",
-        },
+      const op = await db.orm.public.GitOperation.create({
+        projectId: project.id,
+        branchName: branchName || project.defaultBranch,
+        commitSha: sha,
+        commitMessage: commitMessage || "feat: automated agent mutation",
+        status: "committed",
       })
       return NextResponse.json({
         data: {
@@ -142,14 +143,12 @@ export async function POST(req: NextRequest) {
 
     if (action === "revert") {
       const revertSha = `rev_${Math.random().toString(16).slice(2, 9)}`
-      const op = await prisma.gitOperation.create({
-        data: {
-          projectId: project.id,
-          branchName: branchName || project.defaultBranch,
-          commitSha: revertSha,
-          commitMessage: `revert: Revert commit ${commitSha || "target"}`,
-          status: "reverted",
-        },
+      const op = await db.orm.public.GitOperation.create({
+        projectId: project.id,
+        branchName: branchName || project.defaultBranch,
+        commitSha: revertSha,
+        commitMessage: `revert: Revert commit ${commitSha || "target"}`,
+        status: "reverted",
       })
       return NextResponse.json({
         data: {
@@ -162,15 +161,13 @@ export async function POST(req: NextRequest) {
 
     if (action === "pr") {
       const prNumber = Math.floor(Math.random() * 80) + 40
-      const op = await prisma.gitOperation.create({
-        data: {
-          projectId: project.id,
-          branchName: branchName || "feature/ai-update",
-          baseBranch: "main",
-          status: "pr_created",
-          pullRequestNum: prNumber,
-          prUrl: `https://github.com/acme/trade-engine/pull/${prNumber}`,
-        },
+      const op = await db.orm.public.GitOperation.create({
+        projectId: project.id,
+        branchName: branchName || "feature/ai-update",
+        baseBranch: "main",
+        status: "pr_created",
+        pullRequestNum: prNumber,
+        prUrl: `https://github.com/acme/trade-engine/pull/${prNumber}`,
       })
       return NextResponse.json({
         data: {

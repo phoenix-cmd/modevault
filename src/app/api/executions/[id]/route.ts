@@ -1,26 +1,20 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/db"
+import { getDb } from "@/lib/db"
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const db = getDb()
     const { id } = await params
-    const execution = await prisma.execution.findUnique({
-      where: { id },
-      include: {
-        project: true,
-        tasks: {
-          orderBy: { orderIndex: "asc" },
-        },
-        events: {
-          orderBy: { createdAt: "asc" },
-        },
-        artifacts: true,
-        gitOperations: true,
-      },
-    })
+    const execution = await db.orm.public.Execution
+      .include("project")
+      .include("tasks", (tasks) => tasks.orderBy((t) => t.orderIndex.asc()))
+      .include("events", (events) => events.orderBy((e) => e.createdAt.asc()))
+      .include("artifacts")
+      .include("gitOperations")
+      .first({ id })
 
     if (!execution) {
       return NextResponse.json({ error: "Execution not found" }, { status: 404 })

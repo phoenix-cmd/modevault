@@ -1,30 +1,29 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/db"
+import { getDb } from "@/lib/db"
 import { getCurrentUserOrDefault } from "@/lib/auth"
 
 export async function GET(_request: NextRequest) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
     const now = new Date()
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
 
     // 1. Subscriptions & API accounts
     const [subscriptions, apiAccounts, billingRecords] = await Promise.all([
-      prisma.subscription.findMany({
-        where: { userId: user.id },
-        include: { provider: true },
-      }),
-      prisma.apiAccount.findMany({
-        where: { userId: user.id },
-        include: { provider: true },
-      }),
-      prisma.billingRecord.findMany({
-        where: {
-          userId: user.id,
-          billingDate: { gte: sixMonthsAgo },
-        },
-        orderBy: { billingDate: "asc" },
-      }),
+      db.orm.public.Subscription
+        .include("provider")
+        .where({ userId: user.id })
+        .all(),
+      db.orm.public.ApiAccount
+        .include("provider")
+        .where({ userId: user.id })
+        .all(),
+      db.orm.public.BillingRecord
+        .where({ userId: user.id })
+        .where((b) => b.billingDate.gte(sixMonthsAgo))
+        .orderBy((b) => b.billingDate.asc())
+        .all(),
     ])
 
     // 2. Spending trends by month

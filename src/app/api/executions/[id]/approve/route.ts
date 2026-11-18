@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/db"
+import { getDb } from "@/lib/db"
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const db = getDb()
     const { id } = await params
     const body = await req.json()
     const { action, feedback } = body // "approve" | "reject" | "request_revision"
 
-    const execution = await prisma.execution.findUnique({
-      where: { id },
-    })
+    const execution = await db.orm.public.Execution.first({ id })
 
     if (!execution) {
       return NextResponse.json({ error: "Execution not found" }, { status: 404 })
@@ -22,35 +21,31 @@ export async function POST(
     if (action === "reject") nextStatus = "cancelled"
     else if (action === "request_revision") nextStatus = "running"
 
-    const updated = await prisma.execution.update({
-      where: { id },
-      data: {
+    const updated = await db.orm.public.Execution
+      .where({ id })
+      .update({
         status: nextStatus,
         completedAt: nextStatus === "completed" ? new Date() : null,
-      },
-    })
+      })
 
     // Update Git Operation status
-    await prisma.gitOperation.updateMany({
-      where: { executionId: id },
-      data: {
+    await db.orm.public.GitOperation
+      .where({ executionId: id })
+      .updateAll({
         status: action === "approve" ? "committed" : action === "reject" ? "reverted" : "staged",
   
-      },
-    })
+      })
 
     // Log approval event
-    await prisma.agentEvent.create({
-      data: {
-        executionId: id,
-        eventType: action === "approve" ? "approval_granted" : "approval_denied",
-        level: action === "approve" ? "action" : "warning",
-        payloadJson: JSON.stringify({
-          action,
-          feedback: feedback || null,
-          timestamp: new Date().toISOString(),
-        }),
-      },
+    await db.orm.public.AgentEvent.create({
+      executionId: id,
+      eventType: action === "approve" ? "approval_granted" : "approval_denied",
+      level: action === "approve" ? "action" : "warning",
+      payloadJson: JSON.stringify({
+        action,
+        feedback: feedback || null,
+        timestamp: new Date().toISOString(),
+      }),
     })
 
     return NextResponse.json({ data: updated })

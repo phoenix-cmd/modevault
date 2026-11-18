@@ -1,19 +1,25 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/db"
+import { getDb } from "@/lib/db"
 import { getCurrentUserOrDefault } from "@/lib/auth"
 
 
 export async function GET(_request: NextRequest) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
-    const notifications = await prisma.notification.findMany({
-      where: { userId: user.id },
-      orderBy: [{ isRead: "asc" }, { createdAt: "desc" }],
+    const notifications = await db.orm.public.Notification
+      .where({ userId: user.id })
+      .all()
+    notifications.sort((a, b) => {
+      if (a.isRead !== b.isRead) return a.isRead ? 1 : -1
+      return b.createdAt.getTime() - a.createdAt.getTime()
     })
 
-    const unreadCount = await prisma.notification.count({
-      where: { userId: user.id, isRead: false },
-    })
+    const unreadCount = await db.orm.public.Notification
+      .where({ userId: user.id })
+      .where({ isRead: false })
+      .aggregate((a) => ({ total: a.count() }))
+      .then((r) => r.total)
 
     return NextResponse.json({
       data: {
@@ -32,6 +38,7 @@ export async function GET(_request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
     const body = await request.json()
     const { type, title, message, severity, actionUrl } = body
@@ -43,15 +50,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const notification = await prisma.notification.create({
-      data: {
-        userId: user.id,
-        type: type || "general",
-        title,
-        message,
-        severity: severity || "info",
-        actionUrl: actionUrl || null,
-      },
+    const notification = await db.orm.public.Notification.create({
+      userId: user.id,
+      type: type || "general",
+      title,
+      message,
+      severity: severity || "info",
+      actionUrl: actionUrl || null,
     })
 
     return NextResponse.json({ data: notification }, { status: 201 })

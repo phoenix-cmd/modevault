@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/db"
+import { getDb } from "@/lib/db"
 
 export async function POST(req: NextRequest) {
   try {
+    const db = getDb()
     const body = await req.json()
     const { projectId, prompt } = body
 
@@ -11,8 +12,8 @@ export async function POST(req: NextRequest) {
     }
 
     const project = projectId
-      ? await prisma.project.findUnique({ where: { id: projectId } })
-      : await prisma.project.findFirst()
+      ? await db.orm.public.Project.first({ id: projectId })
+      : await db.orm.public.Project.first()
 
     // Determine targeted files and domain from prompt
     const isUiRelated = /ui|button|modal|component|page|css|tailwind|style|design/i.test(prompt)

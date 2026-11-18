@@ -1,45 +1,34 @@
 import { NextRequest, NextResponse } from "next/server"
-import { Prisma } from "@prisma/client"
-import { prisma } from "@/lib/db"
+import { getDb } from "@/lib/db"
 import { getCurrentUserOrDefault } from "@/lib/auth"
 
 
 export async function GET(request: NextRequest) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
     const { searchParams } = new URL(request.url)
     const apiAccountId = searchParams.get("apiAccountId")
     const model = searchParams.get("model")
     const limit = parseInt(searchParams.get("limit") || "100", 10)
 
-    const where: Prisma.ApiUsageRecordWhereInput = {
-      apiAccount: {
-        userId: user.id,
-      },
-    }
+    let records = db.orm.public.ApiUsageRecord
+      .include("apiAccount", (account) => account.include("provider"))
+      .where((r) => r.apiAccount.some((a) => a.userId.eq(user.id)))
+      .orderBy((r) => r.date.desc())
+      .limit(limit)
 
     if (apiAccountId) {
-      where.apiAccountId = apiAccountId
+      records = records.where({ apiAccountId })
     }
 
     if (model) {
-      where.model = model
+      records = records.where({ model })
     }
 
-    const records = await prisma.apiUsageRecord.findMany({
-      where,
-      include: {
-        apiAccount: {
-          include: {
-            provider: true,
-          },
-        },
-      },
-      orderBy: { date: "desc" },
-      take: limit,
-    })
+    const rows = await records.all()
 
-    return NextResponse.json({ data: records })
+    return NextResponse.json({ data: rows })
   } catch (error) {
     console.error("API usage error:", error)
     return NextResponse.json(
@@ -51,6 +40,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
     const body = await request.json()
     const {
@@ -76,30 +66,35 @@ export async function POST(request: NextRequest) {
 
     const computedTotal = totalTokens ?? ((inputTokens || 0) + (outputTokens || 0))
 
-    const record = await prisma.apiUsageRecord.create({
-      data: {
-        apiAccountId,
-        date: date ? new Date(date) : new Date(),
-        model: model || "custom",
-        inputTokens: inputTokens || 0,
-        outputTokens: outputTokens || 0,
-        cachedTokens: cachedTokens || 0,
-        totalTokens: computedTotal,
-        cost: cost || 0,
-        currency: currency || "USD",
-        requestCount: requestCount || 1,
-        dataSource: dataSource || "manual",
-      },
+    const record = await db.orm.public.ApiUsageRecord.create({
+      apiAccountId,
+      date: date ? new Date(date) : new Date(),
+      model: model || "custom",
+      inputTokens: inputTokens || 0,
+      outputTokens: outputTokens || 0,
+      cachedTokens: cachedTokens || 0,
+      totalTokens: computedTotal,
+      cost: cost || 0,
+      currency: currency || "USD",
+      requestCount: requestCount || 1,
+      dataSource: dataSource || "manual",
     })
 
-    // Update ApiAccount totalSpent
+    // Update ApiAccount totalSpent (increment/decrement computed on the row)
     if (cost) {
-      await prisma.apiAccount.update({
-        where: { id: apiAccountId },
-        data: {
-          totalSpent: { increment: cost },
-          prepaidBalance: { decrement: cost },
-        },
+      await db.transaction(async (tx) => {
+        const account = await tx.orm.public.ApiAccount
+          .where({ id: apiAccountId })
+          .select("id", "totalSpent", "prepaidBalance")
+          .first()
+        if (account) {
+          await tx.orm.public.ApiAccount
+            .where({ id: apiAccountId })
+            .update({
+              totalSpent: (account.totalSpent ?? 0) + cost,
+              prepaidBalance: (account.prepaidBalance ?? 0) - cost,
+            })
+        }
       })
     }
 

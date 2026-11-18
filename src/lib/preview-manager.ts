@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process"
 import path from "node:path"
-import { prisma } from "@/lib/db"
+import { getDb } from "@/lib/db"
 
 interface PreviewState {
   process: ChildProcess
@@ -12,10 +12,11 @@ interface PreviewState {
 const previews = new Map<string, PreviewState>()
 
 export async function startPreview(projectId: string): Promise<{ port: number; status: string }> {
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    include: { environments: true, sources: true },
-  })
+  const db = getDb()
+  const project = await db.orm.public.Project
+    .include("environments")
+    .include("sources")
+    .first({ id: projectId })
   if (!project) throw new Error("Project not found")
 
   const environment = project.environments[0]
@@ -50,15 +51,15 @@ export async function startPreview(projectId: string): Promise<{ port: number; s
     startedAt: Date.now(),
   })
 
-  await prisma.projectEnvironment.update({
-    where: { id: environment.id },
-    data: { status: "running" },
-  })
+  await db.orm.public.ProjectEnvironment
+    .where({ id: environment.id })
+    .update({ status: "running" })
 
   child.on("exit", async () => {
     previews.delete(projectId)
-    await prisma.projectEnvironment
-      .update({ where: { id: environment.id }, data: { status: "stopped" } })
+    await getDb().orm.public.ProjectEnvironment
+      .where({ id: environment.id })
+      .update({ status: "stopped" })
       .catch(() => {})
   })
 
@@ -66,22 +67,21 @@ export async function startPreview(projectId: string): Promise<{ port: number; s
 }
 
 export async function stopPreview(projectId: string): Promise<{ status: string }> {
+  const db = getDb()
   const state = previews.get(projectId)
   if (state) {
     state.process.kill()
     previews.delete(projectId)
   }
 
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    include: { environments: true },
-  })
+  const project = await db.orm.public.Project
+    .include("environments")
+    .first({ id: projectId })
   const environment = project?.environments[0]
   if (environment) {
-    await prisma.projectEnvironment.update({
-      where: { id: environment.id },
-      data: { status: "stopped" },
-    })
+    await db.orm.public.ProjectEnvironment
+      .where({ id: environment.id })
+      .update({ status: "stopped" })
   }
 
   return { status: "stopped" }

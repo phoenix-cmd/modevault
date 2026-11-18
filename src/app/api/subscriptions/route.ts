@@ -1,20 +1,19 @@
 import { type NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
+import { getDb } from "@/lib/db";
 import { getCurrentUserOrDefault } from "@/lib/auth"
 
 
 // GET /api/subscriptions — List all subscriptions for user, with provider data
 export async function GET(_request: NextRequest) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
-    const subscriptions = await prisma.subscription.findMany({
-      where: { userId: user.id },
-      include: {
-        provider: true,
-        plan: true,
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    const subscriptions = await db.orm.public.Subscription
+      .include("provider")
+      .include("plan")
+      .where({ userId: user.id })
+      .orderBy((s) => s.createdAt.desc())
+      .all();
 
     return Response.json({ data: subscriptions });
   } catch (error) {
@@ -29,6 +28,7 @@ export async function GET(_request: NextRequest) {
 // POST /api/subscriptions — Create a new subscription
 export async function POST(request: NextRequest) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
     const body = await request.json();
 
@@ -49,8 +49,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const subscription = await prisma.subscription.create({
-      data: {
+    const subscription = await db.orm.public.Subscription
+      .include("provider")
+      .include("plan")
+      .create({
         userId: user.id,
         providerId,
         planId: planId ?? null,
@@ -69,9 +71,7 @@ export async function POST(request: NextRequest) {
         quotaCredits: quotaCredits ?? null,
         quotaResetPeriod: quotaResetPeriod ?? null,
         notes: notes ?? null,
-      },
-      include: { provider: true, plan: true },
-    });
+      });
 
     return Response.json({ data: subscription }, { status: 201 });
   } catch (error) {

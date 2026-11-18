@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/db"
+import { getDb } from "@/lib/db"
 
 export async function GET(_request: NextRequest) {
   try {
-    const rates = await prisma.exchangeRate.findMany()
+    const db = getDb()
+    const rates = await db.orm.public.ExchangeRate.all()
 
     return NextResponse.json({
       data: rates,

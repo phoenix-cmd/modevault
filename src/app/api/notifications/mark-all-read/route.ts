@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/db"
+import { getDb } from "@/lib/db"
 import { getCurrentUserOrDefault } from "@/lib/auth"
 
 
 export async function POST(_request: NextRequest) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
-    await prisma.notification.updateMany({
-      where: { userId: user.id, isRead: false },
-      data: { isRead: true },
-    })
+    await db.orm.public.Notification
+      .where({ userId: user.id })
+      .where({ isRead: false })
+      .updateAll({ isRead: true })
 
     return NextResponse.json({ data: { success: true } })
   } catch (error) {

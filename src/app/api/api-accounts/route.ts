@@ -1,17 +1,18 @@
 import { type NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
+import { getDb } from "@/lib/db";
 import { getCurrentUserOrDefault } from "@/lib/auth"
 
 
 // GET /api/api-accounts — List all API accounts with provider info
 export async function GET(_request: NextRequest) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
-    const accounts = await prisma.apiAccount.findMany({
-      where: { userId: user.id },
-      include: { provider: true },
-      orderBy: { createdAt: "desc" },
-    });
+    const accounts = await db.orm.public.ApiAccount
+      .include("provider")
+      .where({ userId: user.id })
+      .orderBy((a) => a.createdAt.desc())
+      .all();
 
     return Response.json({ data: accounts });
   } catch (error) {
@@ -26,6 +27,7 @@ export async function GET(_request: NextRequest) {
 // POST /api/api-accounts — Create API account
 export async function POST(request: NextRequest) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
     const body = await request.json();
 
@@ -38,8 +40,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const account = await prisma.apiAccount.create({
-      data: {
+    const account = await db.orm.public.ApiAccount
+      .include("provider")
+      .create({
         userId: user.id,
         providerId,
         accountName: accountName ?? null,
@@ -49,9 +52,7 @@ export async function POST(request: NextRequest) {
         rateLimit: rateLimit ?? null,
         rateLimitTokens: rateLimitTokens ?? null,
         integrationStatus: integrationStatus ?? "manual",
-      },
-      include: { provider: true },
-    });
+      });
 
     return Response.json({ data: account }, { status: 201 });
   } catch (error) {

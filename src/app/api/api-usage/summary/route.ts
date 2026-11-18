@@ -1,25 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/db"
+import { getDb } from "@/lib/db"
 import { getCurrentUserOrDefault } from "@/lib/auth"
 
 export async function GET(_request: NextRequest) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
-    const records = await prisma.apiUsageRecord.findMany({
-      where: {
-        apiAccount: {
-          userId: user.id,
-        },
-      },
-      include: {
-        apiAccount: {
-          include: {
-            provider: true,
-          },
-        },
-      },
-      orderBy: { date: "asc" },
-    })
+    const records = await db.orm.public.ApiUsageRecord
+      .include("apiAccount", (account) => account.include("provider"))
+      .where((r) => r.apiAccount.some((a) => a.userId.eq(user.id)))
+      .orderBy((r) => r.date.asc())
+      .all()
 
     let totalTokens = 0
     let totalCost = 0
@@ -42,6 +33,9 @@ export async function GET(_request: NextRequest) {
     > = {}
 
     for (const r of records) {
+      const account = r.apiAccount
+      if (!account) continue
+
       totalTokens += r.totalTokens || 0
       totalCost += r.cost || 0
       totalRequests += r.requestCount || 0
@@ -54,7 +48,7 @@ export async function GET(_request: NextRequest) {
           tokens: 0,
           cost: 0,
           requests: 0,
-          provider: r.apiAccount.provider.name,
+          provider: account.provider.name,
         }
       }
       modelMap[modelName].tokens += r.totalTokens || 0
@@ -76,7 +70,7 @@ export async function GET(_request: NextRequest) {
       dailyMap[dateStr].requests += r.requestCount || 0
 
       // By Provider
-      const provName = r.apiAccount.provider.name
+      const provName = account.provider.name
       if (!providerMap[provName]) {
         providerMap[provName] = {
           tokens: 0,

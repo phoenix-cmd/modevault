@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
-import { prisma } from "@/lib/db"
+import { getDb } from "@/lib/db"
 import { signSession, COOKIE_NAME } from "@/lib/auth"
 
 export async function POST(req: NextRequest) {
   try {
+    const db = getDb()
     const body = await req.json()
     const email = String(body?.email || "").trim().toLowerCase()
     const password = String(body?.password || "")
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
     }
 
-    const user = await prisma.user.findUnique({ where: { email } })
+    const user = await db.orm.public.User.where({ email }).first()
     if (!user || !user.passwordHash) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
     }

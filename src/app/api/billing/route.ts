@@ -1,38 +1,29 @@
 import { NextRequest, NextResponse } from "next/server"
-import { Prisma } from "@prisma/client"
-import { prisma } from "@/lib/db"
+import { getDb } from "@/lib/db"
 import { getCurrentUserOrDefault } from "@/lib/auth"
 
 
 export async function GET(request: NextRequest) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
     const { searchParams } = new URL(request.url)
     const type = searchParams.get("type")
     const limit = parseInt(searchParams.get("limit") || "100", 10)
 
-    const where: Prisma.BillingRecordWhereInput = {
-      userId: user.id,
-    }
+    let records = db.orm.public.BillingRecord
+      .include("subscription", (subscription) => subscription.include("provider"))
+      .where({ userId: user.id })
+      .orderBy((r) => r.billingDate.desc())
+      .limit(limit)
 
     if (type) {
-      where.type = type
+      records = records.where({ type })
     }
 
-    const records = await prisma.billingRecord.findMany({
-      where,
-      include: {
-        subscription: {
-          include: {
-            provider: true,
-          },
-        },
-      },
-      orderBy: { billingDate: "desc" },
-      take: limit,
-    })
+    const rows = await records.all()
 
-    return NextResponse.json({ data: records })
+    return NextResponse.json({ data: rows })
   } catch (error) {
     console.error("Billing records error:", error)
     return NextResponse.json(
@@ -44,6 +35,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
     const body = await request.json()
     const {
@@ -63,17 +55,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const record = await prisma.billingRecord.create({
-      data: {
-        userId: user.id,
-        subscriptionId: subscriptionId || null,
-        type: type || "subscription_payment",
-        amount: parseFloat(amount),
-        currency: currency || "INR",
-        billingDate: billingDate ? new Date(billingDate) : new Date(),
-        description: description || null,
-        invoiceUrl: invoiceUrl || null,
-      },
+    const record = await db.orm.public.BillingRecord.create({
+      userId: user.id,
+      subscriptionId: subscriptionId || null,
+      type: type || "subscription_payment",
+      amount: parseFloat(amount),
+      currency: currency || "INR",
+      billingDate: billingDate ? new Date(billingDate) : new Date(),
+      description: description || null,
+      invoiceUrl: invoiceUrl || null,
     })
 
     return NextResponse.json({ data: record }, { status: 201 })

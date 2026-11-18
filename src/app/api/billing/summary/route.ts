@@ -1,21 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/db"
+import { getDb } from "@/lib/db"
 import { getCurrentUserOrDefault } from "@/lib/auth"
 
 export async function GET(_request: NextRequest) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
-    const records = await prisma.billingRecord.findMany({
-      where: { userId: user.id },
-      include: {
-        subscription: {
-          include: {
-            provider: true,
-          },
-        },
-      },
-      orderBy: { billingDate: "asc" },
-    })
+    const records = await db.orm.public.BillingRecord
+      .include("subscription", (subscription) => subscription.include("provider"))
+      .where({ userId: user.id })
+      .orderBy((r) => r.billingDate.asc())
+      .all()
 
     const now = new Date()
     const currentMonth = now.getMonth()

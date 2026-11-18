@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
+import { getDb } from "@/lib/db";
 import { getCurrentUserOrDefault } from "@/lib/auth"
 
 
@@ -9,16 +9,18 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
     const { id } = await params;
 
-    const account = await prisma.apiAccount.findFirst({
-      where: { id, userId: user.id },
-      include: {
-        provider: true,
-        apiUsageRecords: { orderBy: { date: "desc" }, take: 50 },
-      },
-    });
+    const account = await db.orm.public.ApiAccount
+      .include("provider")
+      .include("apiUsageRecords", (records) =>
+        records.orderBy((r) => r.date.desc()).limit(50)
+      )
+      .where({ id })
+      .where({ userId: user.id })
+      .first();
 
     if (!account) {
       return Response.json(
@@ -43,13 +45,15 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
     const { id } = await params;
     const body = await request.json();
 
-    const existing = await prisma.apiAccount.findFirst({
-      where: { id, userId: user.id },
-    });
+    const existing = await db.orm.public.ApiAccount
+      .where({ id })
+      .where({ userId: user.id })
+      .first();
 
     if (!existing) {
       return Response.json(
@@ -58,9 +62,10 @@ export async function PUT(
       );
     }
 
-    const account = await prisma.apiAccount.update({
-      where: { id },
-      data: {
+    const account = await db.orm.public.ApiAccount
+      .include("provider")
+      .where({ id })
+      .update({
         ...(body.accountName !== undefined && { accountName: body.accountName }),
         ...(body.apiKeyLastFour !== undefined && { apiKeyLastFour: body.apiKeyLastFour }),
         ...(body.prepaidBalance !== undefined && { prepaidBalance: body.prepaidBalance }),
@@ -69,9 +74,7 @@ export async function PUT(
         ...(body.rateLimit !== undefined && { rateLimit: body.rateLimit }),
         ...(body.rateLimitTokens !== undefined && { rateLimitTokens: body.rateLimitTokens }),
         ...(body.integrationStatus !== undefined && { integrationStatus: body.integrationStatus }),
-      },
-      include: { provider: true },
-    });
+      });
 
     return Response.json({ data: account });
   } catch (error) {
@@ -89,12 +92,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const db = getDb()
     const user = await getCurrentUserOrDefault()
     const { id } = await params;
 
-    const existing = await prisma.apiAccount.findFirst({
-      where: { id, userId: user.id },
-    });
+    const existing = await db.orm.public.ApiAccount
+      .where({ id })
+      .where({ userId: user.id })
+      .first();
 
     if (!existing) {
       return Response.json(
@@ -103,7 +108,7 @@ export async function DELETE(
       );
     }
 
-    await prisma.apiAccount.delete({ where: { id } });
+    await db.orm.public.ApiAccount.where({ id }).delete();
 
     return Response.json({ data: { id, deleted: true } });
   } catch (error) {

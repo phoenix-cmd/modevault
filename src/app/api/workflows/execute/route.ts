@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/db"
+import { getDb } from "@/lib/db"
 import {
   createBranch,
   commitWorkspace,
@@ -9,19 +9,20 @@ import {
 
 export async function POST(req: NextRequest) {
   try {
+    const db = getDb()
     const body = await req.json()
     const { workflowId, projectId, customPrompt } = body
 
     const project = projectId
-      ? await prisma.project.findUnique({ where: { id: projectId }, include: { sources: true } })
-      : await prisma.project.findFirst({ include: { sources: true } })
+      ? await db.orm.public.Project.include("sources").first({ id: projectId })
+      : await db.orm.public.Project.include("sources").first()
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
     }
 
     const workflow = workflowId
-      ? await prisma.workflowDefinition.findUnique({ where: { id: workflowId } })
+      ? await db.orm.public.WorkflowDefinition.first({ id: workflowId })
       : null
 
     const wfName = workflow ? workflow.name : "Custom Visual DAG Workflow"
@@ -82,8 +83,9 @@ export async function POST(req: NextRequest) {
           },
         ]
 
-    const execution = await prisma.execution.create({
-      data: {
+    const execution = await db.orm.public.Execution
+      .include("tasks")
+      .create({
         projectId: project.id,
         workspaceId: project.workspaceId,
         title,
@@ -100,14 +102,8 @@ export async function POST(req: NextRequest) {
           workflowName: wfName,
           nodeCount: nodes.length,
         }),
-        tasks: {
-          create: tasksData,
-        },
-      },
-      include: {
-        tasks: true,
-      },
-    })
+        tasks: (t) => t.create(tasksData as any),
+      })
 
     // If the project has a real extracted workspace, apply and commit a real change.
     const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find(
@@ -126,34 +122,29 @@ export async function POST(req: NextRequest) {
         realCommitSha = await commitWorkspace(source.sourcePath, `feat(workflow): ${wfName}`)
         realDiff = await getLatestCommitDiff(source.sourcePath)
 
-        await prisma.execution.update({
-          where: { id: execution.id },
-          data: {
+        await db.orm.public.Execution
+          .where({ id: execution.id })
+          .update({
             totalTokens: 0,
             inputTokens: 0,
             outputTokens: 0,
             estimatedCost: 0,
             durationMs: 0,
-          },
+          })
+        await db.orm.public.ExecutionArtifact.create({
+          executionId: execution.id,
+          type: "git_diff",
+          path: "WORKFLOW_EXECUTION.md",
+          summary: `Workflow executed: ${wfName}`,
+          content: realDiff,
         })
-        await prisma.executionArtifact.create({
-          data: {
-            executionId: execution.id,
-            type: "git_diff",
-            path: "WORKFLOW_EXECUTION.md",
-            summary: `Workflow executed: ${wfName}`,
-            content: realDiff,
-          },
-        })
-        await prisma.gitOperation.create({
-          data: {
-            projectId: project.id,
-            executionId: execution.id,
-            branchName: branch,
-            commitSha: realCommitSha || null,
-            commitMessage: `feat(workflow): ${wfName}`,
-            status: realCommitSha ? "committed" : "staged",
-          },
+        await db.orm.public.GitOperation.create({
+          projectId: project.id,
+          executionId: execution.id,
+          branchName: branch,
+          commitSha: realCommitSha || null,
+          commitMessage: `feat(workflow): ${wfName}`,
+          status: realCommitSha ? "committed" : "staged",
         })
       } catch (err) {
         console.error("Workflow workspace update failed:", err)
@@ -161,18 +152,16 @@ export async function POST(req: NextRequest) {
     }
 
     // Create initial execution event
-    await prisma.agentEvent.create({
-      data: {
+    await db.orm.public.AgentEvent.create({
+      executionId: execution.id,
+      eventType: "workflow_triggered",
+      level: "action",
+      payloadJson: JSON.stringify({
+        workflowName: wfName,
         executionId: execution.id,
-        eventType: "workflow_triggered",
-        level: "action",
-        payloadJson: JSON.stringify({
-          workflowName: wfName,
-          executionId: execution.id,
-          branch,
-          timestamp: new Date().toISOString(),
-        }),
-      },
+        branch,
+        timestamp: new Date().toISOString(),
+      }),
     })
 
     return NextResponse.json({ data: execution }, { status: 201 })
