@@ -8,11 +8,14 @@ import {
   getLatestCommitDiff,
   writeWorkspaceFile,
 } from "@/lib/project-workspace"
+import { parseJson, workflowExecuteSchema } from "@/lib/validation"
+import { logger, errorContext } from "@/lib/logger"
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
-    const { workflowId, projectId, customPrompt } = body
+    const parsed = await parseJson(req, workflowExecuteSchema)
+    if ("response" in parsed) return parsed.response
+    const { workflowId, projectId, customPrompt } = parsed.data
 
     const project = projectId
       ? await prisma.project.findUnique({ where: { id: projectId }, include: { sources: true } })
@@ -55,7 +58,6 @@ export async function POST(req: NextRequest) {
 
     // Generate tasks from workflow nodes
     const taskNodes = nodes.filter((n) => n.type === "agent" || n.type === "action" || n.type === "approval")
-    const hasApprovalNode = taskNodes.some((n) => n.type === "approval")
     const tasksData = taskNodes.length > 0
       ? taskNodes.map((n, idx) => ({
           title: n.data?.label || `Step ${idx + 1}`,
@@ -91,6 +93,9 @@ export async function POST(req: NextRequest) {
             orderIndex: 2,
           },
         ]
+
+    const hasApprovalNode =
+      taskNodes.some((n) => n.type === "approval") || taskNodes.length === 0
 
     const execution = await prisma.execution.create({
       data: {
@@ -166,7 +171,7 @@ export async function POST(req: NextRequest) {
           },
         })
       } catch (err) {
-        console.error("Workflow workspace update failed:", err)
+        logger.error("Workflow workspace update failed", errorContext(err))
       }
     }
 
@@ -187,7 +192,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ data: execution }, { status: 201 })
   } catch (err: unknown) {
-    const error = err as { message?: string }
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    logger.error("Workflow execution failed", errorContext(err))
+    return NextResponse.json({ error: "Workflow execution failed" }, { status: 500 })
   }
 }

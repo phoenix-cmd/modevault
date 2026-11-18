@@ -326,22 +326,22 @@ export default function WorkflowsPage() {
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => handleAddNode("agent")}
-              className="flex items-center gap-1.5 rounded-lg border border-[#E8EAED] bg-[#FFFFFF] px-3 py-1.5 text-xs font-semibold text-[#17191C] hover:bg-[#F2F3F5]"
+              className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2"
             >
-              <Plus className="h-3.5 w-3.5 text-[#D5222D]" />
+              <Plus className="h-3.5 w-3.5 text-accent" />
               Add Agent Node
             </button>
             <button
               onClick={handleSimulate}
               disabled={simulating}
-              className="flex items-center gap-1.5 rounded-lg border border-[#E8EAED] bg-[#FFFFFF] px-3 py-1.5 text-xs font-semibold text-[#17191C] hover:bg-[#F2F3F5]"
+              className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2"
             >
-              <Play className="h-3 w-3 fill-[#D5222D] text-[#D5222D]" />
+              <Play className="h-3 w-3 fill-accent text-accent" />
               {simulating ? "Validating..." : "Simulate"}
             </button>
             <button
               onClick={handleSave}
-              className="flex items-center gap-1.5 rounded-lg border border-[#E8EAED] bg-[#FFFFFF] px-3 py-1.5 text-xs font-semibold text-[#17191C] hover:bg-[#F2F3F5]"
+              className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2"
             >
               <Save className="h-3.5 w-3.5" />
               {saveSuccess ? "Saved ✓" : "Save DAG"}
@@ -349,9 +349,9 @@ export default function WorkflowsPage() {
             <button
               onClick={handleRunPipeline}
               disabled={runningPipeline}
-              className="flex items-center gap-1.5 rounded-lg bg-[#040404] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#202020] active:scale-[0.98] transition-all"
+              className="flex items-center gap-1.5 rounded-lg bg-charcoal px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#202020] active:scale-[0.98] transition-all"
             >
-              <Sparkles className="h-3.5 w-3.5 text-[#D5222D]" />
+              <Sparkles className="h-3.5 w-3.5 text-accent" />
               {runningPipeline ? "Dispatching..." : "Run Pipeline"}
             </button>
           </div>
@@ -359,15 +359,15 @@ export default function WorkflowsPage() {
       />
 
       {/* Template Selector Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E8EAED] bg-[#FFFFFF] p-3 shadow-xs">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface p-3 shadow-xs">
         <div className="flex items-center gap-2 text-xs">
-          <span className="font-semibold text-[#17191C]">Template:</span>
+          <span className="font-semibold text-ink">Template:</span>
           <button
             onClick={() => handleSelectTemplate("feature_pipeline")}
             className={`rounded-lg px-3 py-1 text-xs font-semibold transition-colors ${
               activeTemplate === "feature_pipeline"
-                ? "bg-[#040404] text-white"
-                : "bg-[#F2F3F5] text-[#737982] hover:text-[#17191C]"
+                ? "bg-charcoal text-white"
+                : "bg-surface-2 text-ink-2 hover:text-ink"
             }`}
           >
             Full-Stack Feature Pipeline
@@ -376,8 +376,8 @@ export default function WorkflowsPage() {
             onClick={() => handleSelectTemplate("pr_security")}
             className={`rounded-lg px-3 py-1 text-xs font-semibold transition-colors ${
               activeTemplate === "pr_security"
-                ? "bg-[#040404] text-white"
-                : "bg-[#F2F3F5] text-[#737982] hover:text-[#17191C]"
+                ? "bg-charcoal text-white"
+                : "bg-surface-2 text-ink-2 hover:text-ink"
             }`}
           >
             PR Auto-Reviewer & Security Gate
@@ -390,13 +390,13 @@ export default function WorkflowsPage() {
             value={customPrompt}
             onChange={(e) => setCustomPrompt(e.target.value)}
             placeholder="Custom trigger prompt or Jira ticket..."
-            className="w-64 rounded-lg border border-[#E8EAED] bg-[#F8F9FB] px-3 py-1 text-xs text-[#17191C] outline-none"
+            className="w-64 rounded-lg border border-line bg-canvas px-3 py-1 text-xs text-ink outline-none"
           />
         </div>
       </div>
 
       {/* React Flow Canvas Container */}
-      <div className="h-[680px] w-full rounded-xl border border-[#E8EAED] bg-[#FFFFFF] shadow-sm overflow-hidden relative">
+      <div className="h-[680px] w-full rounded-xl border border-line bg-surface shadow-sm overflow-hidden relative">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -415,13 +415,13 @@ export default function WorkflowsPage() {
         </ReactFlow>
 
         {/* Floating Canvas Legend */}
-        <div className="absolute top-4 left-4 z-10 rounded-xl border border-[#E8EAED] bg-[#FFFFFF]/95 backdrop-blur-md p-3.5 text-xs shadow-xs space-y-1">
-          <p className="font-bold text-[#17191C]">
+        <div className="absolute top-4 left-4 z-10 rounded-xl border border-line bg-surface/95 backdrop-blur-md p-3.5 text-xs shadow-xs space-y-1">
+          <p className="font-bold text-ink">
             {activeTemplate === "pr_security"
               ? "Autonomous PR Security & Review Pipeline"
               : "Full-Stack Feature Engineering Pipeline"}
           </p>
-          <p className="text-[11px] text-[#737982]">
+          <p className="text-[11px] text-ink-2">
             Drag nodes to rearrange • Connect output ports to link dependencies • Click Run Pipeline to execute
           </p>
         </div>

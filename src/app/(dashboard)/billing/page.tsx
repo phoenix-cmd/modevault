@@ -7,6 +7,7 @@ import { Download, Plus, Receipt, X } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
 import { cn, formatCurrency, formatDate } from "@/lib/utils"
 import type { BillingRecordData, BillingSummaryData } from "@/lib/types"
+import { useModalA11y } from "@/lib/use-modal-a11y"
 
 const TYPE_LABEL: Record<string, string> = {
   subscription_payment: "Subscription",
@@ -33,18 +34,11 @@ export default function BillingPage() {
   const [date, setDate] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
+  const dialogRef = useModalA11y(isModalOpen, () => setIsModalOpen(false))
+
   useEffect(() => {
     setDate(new Date().toISOString().split("T")[0])
   }, [])
-
-  useEffect(() => {
-    if (!isModalOpen) return
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setIsModalOpen(false)
-    }
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isModalOpen])
 
   const fetchData = async () => {
     try {
@@ -313,6 +307,7 @@ export default function BillingPage() {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm animate-fade-in">
           <div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="record-payment-title"

@@ -8,6 +8,8 @@ import {
   getLatestCommitDiff,
   writeWorkspaceFile,
 } from "@/lib/project-workspace"
+import { executionCreateSchema, parseJson } from "@/lib/validation"
+import { logger, errorContext } from "@/lib/logger"
 
 export async function GET(req: NextRequest) {
   try {
@@ -43,8 +45,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
-    const { projectId, prompt, agentId, targetBranch } = body
+    const parsed = await parseJson(req, executionCreateSchema)
+    if ("response" in parsed) return parsed.response
+    const { projectId, prompt, agentId, targetBranch } = parsed.data
 
     if (!projectId || !prompt) {
       return NextResponse.json({ error: "projectId and prompt are required" }, { status: 400 })

@@ -1,5 +1,24 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
+import { getCurrentUserOrDefault } from "@/lib/auth"
+import { requireProjectAccess } from "@/lib/permissions"
+import {
+  commentCreateSchema,
+  commentPatchSchema,
+  parseJson,
+} from "@/lib/validation"
+import { logger, errorContext } from "@/lib/logger"
+
+async function assertExecutionAccess(executionId: string): Promise<boolean> {
+  const execution = await prisma.execution.findUnique({
+    where: { id: executionId },
+    select: { projectId: true },
+  })
+  if (!execution) return false
+  const user = await getCurrentUserOrDefault()
+  await requireProjectAccess(execution.projectId, user.id, "viewer")
+  return true
+}
 
 export async function GET(
   req: NextRequest,
@@ -7,14 +26,18 @@ export async function GET(
 ) {
   try {
     const { id } = await params
+    if (!(await assertExecutionAccess(id))) {
+      return NextResponse.json({ error: "Execution not found" }, { status: 404 })
+    }
     const comments = await prisma.reviewComment.findMany({
       where: { executionId: id },
       orderBy: { createdAt: "desc" },
     })
 
     return NextResponse.json({ data: comments })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err) {
+    logger.error("Failed to load review comments", errorContext(err))
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 }
 
@@ -24,21 +47,18 @@ export async function POST(
 ) {
   try {
     const { id } = await params
-    const body = await req.json()
-    const { filePath, lineNumber, comment, authorName } = body
-
-    if (!filePath || !lineNumber || !comment) {
-      return NextResponse.json(
-        { error: "filePath, lineNumber, and comment are required" },
-        { status: 400 }
-      )
+    if (!(await assertExecutionAccess(id))) {
+      return NextResponse.json({ error: "Execution not found" }, { status: 404 })
     }
+    const parsed = await parseJson(req, commentCreateSchema)
+    if ("response" in parsed) return parsed.response
+    const { filePath, lineNumber, comment, authorName } = parsed.data
 
     const newComment = await prisma.reviewComment.create({
       data: {
         executionId: id,
         filePath,
-        lineNumber: parseInt(lineNumber, 10),
+        lineNumber,
         comment,
         authorName: authorName || "Lead Architect",
         status: "open",
@@ -62,8 +82,9 @@ export async function POST(
     })
 
     return NextResponse.json({ data: newComment }, { status: 201 })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err) {
+    logger.error("Failed to create review comment", errorContext(err))
+    return NextResponse.json({ error: "Failed to create comment" }, { status: 500 })
   }
 }
 
@@ -72,12 +93,13 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const body = await req.json()
-    const { commentId, status } = body
-
-    if (!commentId) {
-      return NextResponse.json({ error: "commentId is required" }, { status: 400 })
+    const { id } = await params
+    if (!(await assertExecutionAccess(id))) {
+      return NextResponse.json({ error: "Execution not found" }, { status: 404 })
     }
+    const parsed = await parseJson(req, commentPatchSchema)
+    if ("response" in parsed) return parsed.response
+    const { commentId, status } = parsed.data
 
     const updated = await prisma.reviewComment.update({
       where: { id: commentId },
@@ -85,7 +107,8 @@ export async function PATCH(
     })
 
     return NextResponse.json({ data: updated })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err) {
+    logger.error("Failed to update review comment", errorContext(err))
+    return NextResponse.json({ error: "Failed to update comment" }, { status: 500 })
   }
 }

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, Suspense } from "react"
+import { useModalA11y } from "@/lib/use-modal-a11y"
 import { useSearchParams } from "next/navigation"
 import {
   Bot,
@@ -34,7 +35,7 @@ import { formatCurrency, formatNumber } from "@/lib/utils"
 
 export default function AgentCenterPage() {
   return (
-    <Suspense fallback={<div className="p-12 text-center text-xs text-[#737982]">Loading Agent Command Center...</div>}>
+    <Suspense fallback={<div className="p-12 text-center text-xs text-ink-2">Loading Agent Command Center...</div>}>
       <AgentCenterContent />
     </Suspense>
   )
@@ -62,6 +63,7 @@ function AgentCenterContent() {
   const [planPreview, setPlanPreview] = useState<any | null>(null)
   const [generatingPlan, setGeneratingPlan] = useState(false)
   const [showPlanModal, setShowPlanModal] = useState(false)
+  const planDialogRef = useModalA11y(showPlanModal, () => setShowPlanModal(false))
 
   // Monaco Diff Editor state
   const [diffSideBySide, setDiffSideBySide] = useState(true)
@@ -369,7 +371,7 @@ export class ApiClient {
       />
 
       {actionSuccess && (
-        <div className="rounded-xl border border-[#1F7A4D]/20 bg-[#EDF7F1] p-3 text-xs text-[#1F7A4D] flex items-center justify-between">
+        <div className="rounded-xl border border-success/20 bg-success-soft p-3 text-xs text-success flex items-center justify-between">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4" />
             <span className="font-semibold">{actionSuccess}</span>
@@ -378,14 +380,14 @@ export class ApiClient {
       )}
 
       {/* Top Section: Dispatch Instruction to Agent Team */}
-      <GlassCard className="p-5 border-[#E8EAED] bg-[#FFFFFF] shadow-xs">
+      <GlassCard className="p-5 border-line bg-surface shadow-xs">
         <form onSubmit={handleDispatch} className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-[#E8EAED]">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-line">
             <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#040404] text-white">
-                <Bot className="h-3.5 w-3.5 text-[#D5222D]" />
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-charcoal text-white">
+                <Bot className="h-3.5 w-3.5 text-accent" />
               </span>
-              <span className="text-xs font-bold uppercase tracking-wider text-[#17191C]">
+              <span className="text-xs font-bold uppercase tracking-wider text-ink">
                 Dispatch Coding Instruction
               </span>
             </div>
@@ -395,7 +397,7 @@ export class ApiClient {
               <select
                 value={selectedProject}
                 onChange={(e) => setSelectedProject(e.target.value)}
-                className="rounded-lg border border-[#E8EAED] bg-[#F2F3F5] px-2.5 py-1 text-xs text-[#17191C] outline-none"
+                className="rounded-lg border border-line bg-surface-2 px-2.5 py-1 text-xs text-ink outline-none"
               >
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -408,7 +410,7 @@ export class ApiClient {
               <select
                 value={selectedAgent}
                 onChange={(e) => setSelectedAgent(e.target.value)}
-                className="rounded-lg border border-[#E8EAED] bg-[#F2F3F5] px-2.5 py-1 text-xs text-[#17191C] outline-none"
+                className="rounded-lg border border-line bg-surface-2 px-2.5 py-1 text-xs text-ink outline-none"
               >
                 <option value="agent_claude_code">Claude Code 3.7 (Architect)</option>
                 <option value="agent_codex">Codex 5.2 (Backend)</option>
@@ -425,23 +427,23 @@ export class ApiClient {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="e.g. Implement atomic idempotency key validation on /api/checkout or fix responsive navbar drawer"
-              className="flex-1 rounded-lg border border-[#E8EAED] bg-[#F8F9FB] px-3.5 py-2 text-xs text-[#17191C] placeholder-[#9AA0A8] outline-none focus:border-[#D5222D]/50 focus:bg-white"
+              className="flex-1 rounded-lg border border-line bg-canvas px-3.5 py-2 text-xs text-ink placeholder-ink-3 outline-none focus:border-accent/50 focus:bg-white"
             />
             <button
               type="button"
               onClick={handlePreviewPlan}
               disabled={generatingPlan || !prompt}
-              className="flex items-center gap-1.5 rounded-lg border border-[#E8EAED] bg-[#F2F3F5] px-3.5 py-2 text-xs font-semibold text-[#17191C] hover:bg-[#E8EAED] transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-3.5 py-2 text-xs font-semibold text-ink hover:bg-line transition-colors disabled:opacity-50"
             >
-              <Sparkles className="h-3.5 w-3.5 text-[#D5222D]" />
+              <Sparkles className="h-3.5 w-3.5 text-accent" />
               <span>{generatingPlan ? "Planning..." : "Preview DAG"}</span>
             </button>
             <button
               type="submit"
               disabled={dispatching}
-              className="flex items-center gap-1.5 rounded-lg bg-[#040404] px-4 py-2 text-xs font-semibold text-white hover:bg-[#202020] active:scale-[0.98] transition-all disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg bg-charcoal px-4 py-2 text-xs font-semibold text-white hover:bg-[#202020] active:scale-[0.98] transition-all disabled:opacity-50"
             >
-              <Play className="h-3.5 w-3.5 fill-[#D5222D] text-[#D5222D]" />
+              <Play className="h-3.5 w-3.5 fill-accent text-accent" />
               <span>{dispatching ? "Executing Plan..." : "Execute"}</span>
             </button>
           </div>
@@ -451,41 +453,46 @@ export class ApiClient {
       {/* Plan Preview Modal */}
       {showPlanModal && planPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-[#E8EAED] bg-[#FFFFFF] p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E8EAED]">
+          <div
+            ref={planDialogRef}
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-2xl rounded-2xl border border-line bg-surface p-6 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-line">
               <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#040404] text-white">
-                  <Sparkles className="h-4 w-4 text-[#D5222D]" />
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-charcoal text-white">
+                  <Sparkles className="h-4 w-4 text-accent" />
                 </span>
                 <div>
-                  <h3 className="text-sm font-bold text-[#17191C]">Decomposed Multi-Agent Plan DAG</h3>
-                  <p className="text-[11px] text-[#737982]">Target: {planPreview.projectName} • Branch: {planPreview.targetBranch}</p>
+                  <h3 className="text-sm font-bold text-ink">Decomposed Multi-Agent Plan DAG</h3>
+                  <p className="text-[11px] text-ink-2">Target: {planPreview.projectName} • Branch: {planPreview.targetBranch}</p>
                 </div>
               </div>
               <button
                 onClick={() => setShowPlanModal(false)}
-                className="rounded-lg p-1 text-[#737982] hover:bg-[#F2F3F5]"
+                className="rounded-lg p-1 text-ink-2 hover:bg-surface-2"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-xl border border-[#E8EAED] bg-[#F8F9FB] p-3 text-center">
-                <p className="text-[10px] text-[#737982] font-semibold uppercase">Est. Tokens</p>
-                <p className="text-base font-bold font-mono text-[#17191C] mt-0.5">
+              <div className="rounded-xl border border-line bg-canvas p-3 text-center">
+                <p className="text-[10px] text-ink-2 font-semibold uppercase">Est. Tokens</p>
+                <p className="text-base font-bold font-mono text-ink mt-0.5">
                   {formatNumber(planPreview.metrics.totalEstimatedTokens)}
                 </p>
               </div>
-              <div className="rounded-xl border border-[#E8EAED] bg-[#F8F9FB] p-3 text-center">
-                <p className="text-[10px] text-[#737982] font-semibold uppercase">Est. Cost</p>
-                <p className="text-base font-bold font-mono text-[#17191C] mt-0.5">
+              <div className="rounded-xl border border-line bg-canvas p-3 text-center">
+                <p className="text-[10px] text-ink-2 font-semibold uppercase">Est. Cost</p>
+                <p className="text-base font-bold font-mono text-ink mt-0.5">
                   ${planPreview.metrics.estimatedCost}
                 </p>
               </div>
-              <div className="rounded-xl border border-[#E8EAED] bg-[#F8F9FB] p-3 text-center">
-                <p className="text-[10px] text-[#737982] font-semibold uppercase">Est. Runtime</p>
-                <p className="text-base font-bold font-mono text-[#17191C] mt-0.5">
+              <div className="rounded-xl border border-line bg-canvas p-3 text-center">
+                <p className="text-[10px] text-ink-2 font-semibold uppercase">Est. Runtime</p>
+                <p className="text-base font-bold font-mono text-ink mt-0.5">
                   ~{planPreview.metrics.estimatedDurationSec}s
                 </p>
               </div>
@@ -493,30 +500,30 @@ export class ApiClient {
 
             <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
               {planPreview.stages.map((stage: any, idx: number) => (
-                <div key={stage.id} className="rounded-lg border border-[#E8EAED] bg-[#FFFFFF] p-3 space-y-1">
+                <div key={stage.id} className="rounded-lg border border-line bg-surface p-3 space-y-1">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-[#17191C]">{stage.name}</span>
-                    <span className="font-mono text-[11px] text-[#D5222D] font-medium">{stage.agentName}</span>
+                    <span className="font-semibold text-ink">{stage.name}</span>
+                    <span className="font-mono text-[11px] text-accent font-medium">{stage.agentName}</span>
                   </div>
-                  <p className="text-[11px] text-[#737982]">{stage.description}</p>
+                  <p className="text-[11px] text-ink-2">{stage.description}</p>
                 </div>
               ))}
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E8EAED]">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-line">
               <button
                 type="button"
                 onClick={() => setShowPlanModal(false)}
-                className="px-4 py-2 text-xs font-semibold text-[#737982] hover:bg-[#F2F3F5] rounded-lg"
+                className="px-4 py-2 text-xs font-semibold text-ink-2 hover:bg-surface-2 rounded-lg"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={() => handleDispatch()}
-                className="flex items-center gap-1.5 rounded-lg bg-[#040404] px-4 py-2 text-xs font-semibold text-white hover:bg-[#202020]"
+                className="flex items-center gap-1.5 rounded-lg bg-charcoal px-4 py-2 text-xs font-semibold text-white hover:bg-[#202020]"
               >
-                <Play className="h-3.5 w-3.5 fill-[#D5222D] text-[#D5222D]" />
+                <Play className="h-3.5 w-3.5 fill-accent text-accent" />
                 Confirm & Launch Execution
               </button>
             </div>
@@ -528,8 +535,8 @@ export class ApiClient {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
         {/* Left: Executions History */}
         <div className="lg:col-span-4 space-y-3">
-          <div className="flex items-center justify-between text-xs text-[#737982] px-1">
-            <span className="font-semibold text-[#17191C]">Recorded Executions</span>
+          <div className="flex items-center justify-between text-xs text-ink-2 px-1">
+            <span className="font-semibold text-ink">Recorded Executions</span>
             <span>{executions.length} runs</span>
           </div>
 
@@ -542,33 +549,33 @@ export class ApiClient {
                   onClick={() => setSelectedExecution(exec)}
                   className={`cursor-pointer rounded-xl border p-3.5 transition-all ${
                     isSelected
-                      ? "border-[#17191C] bg-[#FFFFFF] shadow-sm ring-1 ring-[#17191C]/5"
-                      : "border-[#E8EAED] bg-[#FFFFFF] hover:border-[#D2D6DC]"
+                      ? "border-ink bg-surface shadow-sm ring-1 ring-ink/5"
+                      : "border-line bg-surface hover:border-line-strong"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-[12.5px] font-semibold text-[#17191C] line-clamp-2 leading-snug">
+                    <p className="text-[12.5px] font-semibold text-ink line-clamp-2 leading-snug">
                       {exec.title}
                     </p>
                     <span
                       className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase shrink-0 ${
                         exec.status === "completed"
-                          ? "bg-[#EDF7F1] text-[#1F7A4D] border border-[#1F7A4D]/20"
+                          ? "bg-success-soft text-success border border-success/20"
                           : exec.status === "awaiting_approval"
-                          ? "bg-[rgba(213,34,45,0.08)] text-[#D5222D] border border-[rgba(213,34,45,0.2)]"
-                          : "bg-[#F2F3F5] text-[#737982]"
+                          ? "bg-[rgba(213,34,45,0.08)] text-accent border border-[rgba(213,34,45,0.2)]"
+                          : "bg-surface-2 text-ink-2"
                       }`}
                     >
                       {exec.status.replace("_", " ")}
                     </span>
                   </div>
 
-                  <div className="mt-2.5 flex items-center justify-between text-[11px] text-[#737982]">
+                  <div className="mt-2.5 flex items-center justify-between text-[11px] text-ink-2">
                     <span className="flex items-center gap-1 font-mono">
-                      <GitBranch className="h-3 w-3 text-[#9AA0A8]" />
+                      <GitBranch className="h-3 w-3 text-ink-3" />
                       {exec.targetBranch}
                     </span>
-                    <span className="font-mono text-[#17191C]">
+                    <span className="font-mono text-ink">
                       ${exec.estimatedCost?.toFixed(3) || "0.150"}
                     </span>
                   </div>
@@ -581,27 +588,27 @@ export class ApiClient {
         {/* Right: Selected Execution Workspace */}
         <div className="lg:col-span-8">
           {selectedExecution ? (
-            <GlassCard className="p-0 border-[#E8EAED] bg-[#FFFFFF] shadow-xs overflow-hidden">
+            <GlassCard className="p-0 border-line bg-surface shadow-xs overflow-hidden">
               {/* Header with Title and Approval Actions */}
-              <div className="p-5 border-b border-[#E8EAED] flex flex-wrap items-center justify-between gap-4">
+              <div className="p-5 border-b border-line flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-sm font-bold text-[#17191C]">
+                    <h2 className="text-sm font-bold text-ink">
                       {selectedExecution.title}
                     </h2>
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                         selectedExecution.status === "completed"
-                          ? "bg-[#EDF7F1] text-[#1F7A4D]"
+                          ? "bg-success-soft text-success"
                           : selectedExecution.status === "awaiting_approval"
-                          ? "bg-[rgba(213,34,45,0.08)] text-[#D5222D]"
-                          : "bg-[#F2F3F5] text-[#737982]"
+                          ? "bg-[rgba(213,34,45,0.08)] text-accent"
+                          : "bg-surface-2 text-ink-2"
                       }`}
                     >
                       {selectedExecution.status.replace("_", " ")}
                     </span>
                   </div>
-                  <p className="text-[11px] text-[#737982] mt-1 font-mono">
+                  <p className="text-[11px] text-ink-2 mt-1 font-mono">
                     Branch: {selectedExecution.targetBranch} • Tokens: {formatNumber(selectedExecution.totalTokens || 38400)} • Cost: ${selectedExecution.estimatedCost?.toFixed(4) || "0.1850"}
                   </p>
                 </div>
@@ -611,21 +618,21 @@ export class ApiClient {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleApprovalAction("reject")}
-                      className="rounded-lg border border-[#E8EAED] bg-[#FFFFFF] px-3 py-1.5 text-xs font-semibold text-[#737982] hover:bg-[#F2F3F5] hover:text-[#17191C]"
+                      className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink-2 hover:bg-surface-2 hover:text-ink"
                     >
                       Reject
                     </button>
                     <button
                       onClick={() => handleApprovalAction("request_revision")}
-                      className="rounded-lg border border-[#E8EAED] bg-[#FFFFFF] px-3 py-1.5 text-xs font-semibold text-[#17191C] hover:bg-[#F2F3F5]"
+                      className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2"
                     >
                       Request Revision
                     </button>
                     <button
                       onClick={() => handleApprovalAction("approve")}
-                      className="flex items-center gap-1.5 rounded-lg bg-[#040404] px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#202020] shadow-sm"
+                      className="flex items-center gap-1.5 rounded-lg bg-charcoal px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#202020] shadow-sm"
                     >
-                      <Check className="h-3.5 w-3.5 text-[#1F7A4D]" />
+                      <Check className="h-3.5 w-3.5 text-success" />
                       Approve & Merge
                     </button>
                   </div>
@@ -633,13 +640,13 @@ export class ApiClient {
               </div>
 
               {/* Navigation Tabs */}
-              <div className="flex border-b border-[#E8EAED] bg-[#F8F9FB] px-4 text-xs font-semibold">
+              <div className="flex border-b border-line bg-canvas px-4 text-xs font-semibold">
                 <button
                   onClick={() => setActiveTab("diff")}
                   className={`py-3 px-3 border-b-2 transition-colors ${
                     activeTab === "diff"
-                      ? "border-[#D5222D] text-[#17191C]"
-                      : "border-transparent text-[#737982] hover:text-[#17191C]"
+                      ? "border-accent text-ink"
+                      : "border-transparent text-ink-2 hover:text-ink"
                   }`}
                 >
                   Monaco Diff Review
@@ -648,13 +655,13 @@ export class ApiClient {
                   onClick={() => setActiveTab("comments")}
                   className={`py-3 px-3 border-b-2 transition-colors flex items-center gap-1.5 ${
                     activeTab === "comments"
-                      ? "border-[#D5222D] text-[#17191C]"
-                      : "border-transparent text-[#737982] hover:text-[#17191C]"
+                      ? "border-accent text-ink"
+                      : "border-transparent text-ink-2 hover:text-ink"
                   }`}
                 >
                   <span>Line Comments</span>
                   {comments.length > 0 && (
-                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#17191C] text-[9px] text-white">
+                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-ink text-[9px] text-white">
                       {comments.length}
                     </span>
                   )}
@@ -663,8 +670,8 @@ export class ApiClient {
                   onClick={() => setActiveTab("activity")}
                   className={`py-3 px-3 border-b-2 transition-colors ${
                     activeTab === "activity"
-                      ? "border-[#D5222D] text-[#17191C]"
-                      : "border-transparent text-[#737982] hover:text-[#17191C]"
+                      ? "border-accent text-ink"
+                      : "border-transparent text-ink-2 hover:text-ink"
                   }`}
                 >
                   Agent Activity & Terminal
@@ -673,8 +680,8 @@ export class ApiClient {
                   onClick={() => setActiveTab("tasks")}
                   className={`py-3 px-3 border-b-2 transition-colors ${
                     activeTab === "tasks"
-                      ? "border-[#D5222D] text-[#17191C]"
-                      : "border-transparent text-[#737982] hover:text-[#17191C]"
+                      ? "border-accent text-ink"
+                      : "border-transparent text-ink-2 hover:text-ink"
                   }`}
                 >
                   Orchestrated Task Graph
@@ -683,8 +690,8 @@ export class ApiClient {
                   onClick={() => setActiveTab("costs")}
                   className={`py-3 px-3 border-b-2 transition-colors ${
                     activeTab === "costs"
-                      ? "border-[#D5222D] text-[#17191C]"
-                      : "border-transparent text-[#737982] hover:text-[#17191C]"
+                      ? "border-accent text-ink"
+                      : "border-transparent text-ink-2 hover:text-ink"
                   }`}
                 >
                   Resource Ledger
@@ -695,13 +702,13 @@ export class ApiClient {
               <div className="p-5">
                 {activeTab === "diff" && (
                   <div className="space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#737982] pb-2 border-b border-[#E8EAED]">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-2 pb-2 border-b border-line">
                       <div className="flex items-center gap-2">
-                        <FileCode className="h-4 w-4 text-[#D5222D]" />
-                        <span className="font-mono text-[#17191C] font-semibold">
+                        <FileCode className="h-4 w-4 text-accent" />
+                        <span className="font-mono text-ink font-semibold">
                           {diffArtifact?.path || "src/lib/services/api-client.ts"}
                         </span>
-                        <span className="text-[11px] text-[#1F7A4D] font-medium">
+                        <span className="text-[11px] text-success font-medium">
                           +32 additions • -4 deletions
                         </span>
                       </div>
@@ -710,13 +717,13 @@ export class ApiClient {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setDiffSideBySide(!diffSideBySide)}
-                          className="rounded-lg border border-[#E8EAED] bg-[#F2F3F5] px-2.5 py-1 text-[11px] font-semibold text-[#17191C] hover:bg-[#E8EAED]"
+                          className="rounded-lg border border-line bg-surface-2 px-2.5 py-1 text-[11px] font-semibold text-ink hover:bg-line"
                         >
                           {diffSideBySide ? "Inline View" : "Side-by-Side"}
                         </button>
                         <button
                           onClick={() => setDiffTheme(diffTheme === "vs-dark" ? "light" : "vs-dark")}
-                          className="rounded-lg border border-[#E8EAED] bg-[#F2F3F5] px-2.5 py-1 text-[11px] font-semibold text-[#17191C] hover:bg-[#E8EAED]"
+                          className="rounded-lg border border-line bg-surface-2 px-2.5 py-1 text-[11px] font-semibold text-ink hover:bg-line"
                         >
                           {diffTheme === "vs-dark" ? "Light Mode" : "Dark Mode"}
                         </button>
@@ -725,16 +732,16 @@ export class ApiClient {
                             setActiveTab("comments")
                             setNewCommentLine(15)
                           }}
-                          className="flex items-center gap-1 rounded-lg bg-[#040404] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#202020]"
+                          className="flex items-center gap-1 rounded-lg bg-charcoal px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#202020]"
                         >
-                          <MessageSquare className="h-3 w-3 text-[#D5222D]" />
+                          <MessageSquare className="h-3 w-3 text-accent" />
                           Add Review Note
                         </button>
                       </div>
                     </div>
 
                     {/* Full Monaco Diff Editor Component */}
-                    <div className="rounded-xl border border-[#E8EAED] overflow-hidden shadow-xs">
+                    <div className="rounded-xl border border-line overflow-hidden shadow-xs">
                       <DiffEditor
                         height="440px"
                         language="typescript"
@@ -758,19 +765,19 @@ export class ApiClient {
                 {/* Line Comments Tab */}
                 {activeTab === "comments" && (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between pb-2 border-b border-[#E8EAED]">
-                      <h4 className="text-xs font-semibold text-[#17191C]">
+                    <div className="flex items-center justify-between pb-2 border-b border-line">
+                      <h4 className="text-xs font-semibold text-ink">
                         Line-Level Review Comments & Directives
                       </h4>
-                      <span className="text-xs text-[#737982] font-mono">
+                      <span className="text-xs text-ink-2 font-mono">
                         {comments.filter((c) => c.status === "open").length} open threads
                       </span>
                     </div>
 
                     {/* New Comment Box */}
-                    <form onSubmit={handleAddComment} className="rounded-xl border border-[#E8EAED] bg-[#F8F9FB] p-3 space-y-2">
+                    <form onSubmit={handleAddComment} className="rounded-xl border border-line bg-canvas p-3 space-y-2">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-[#17191C]">Comment on Line:</span>
+                        <span className="text-xs font-medium text-ink">Comment on Line:</span>
                         <input
                           type="number"
                           min="1"
@@ -778,7 +785,7 @@ export class ApiClient {
                           value={newCommentLine ?? ""}
                           onChange={(e) => setNewCommentLine(parseInt(e.target.value, 10))}
                           placeholder="e.g. 18"
-                          className="w-20 rounded-md border border-[#E8EAED] bg-white px-2 py-1 text-xs font-mono outline-none"
+                          className="w-20 rounded-md border border-line bg-white px-2 py-1 text-xs font-mono outline-none"
                         />
                       </div>
                       <div className="flex gap-2">
@@ -788,14 +795,14 @@ export class ApiClient {
                           value={newCommentText}
                           onChange={(e) => setNewCommentText(e.target.value)}
                           placeholder="Add suggestion, require guard check, or prompt agent revision..."
-                          className="flex-1 rounded-lg border border-[#E8EAED] bg-white px-3 py-1.5 text-xs outline-none"
+                          className="flex-1 rounded-lg border border-line bg-white px-3 py-1.5 text-xs outline-none"
                         />
                         <button
                           type="submit"
                           disabled={submittingComment || !newCommentText}
-                          className="flex items-center gap-1.5 rounded-lg bg-[#040404] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#202020] disabled:opacity-50"
+                          className="flex items-center gap-1.5 rounded-lg bg-charcoal px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#202020] disabled:opacity-50"
                         >
-                          <Send className="h-3 w-3 text-[#D5222D]" />
+                          <Send className="h-3 w-3 text-accent" />
                           Post
                         </button>
                       </div>
@@ -808,32 +815,32 @@ export class ApiClient {
                           key={c.id}
                           className={`rounded-xl border p-3 text-xs space-y-1.5 transition-colors ${
                             c.status === "resolved"
-                              ? "border-[#E8EAED] bg-[#F8F9FB] opacity-60"
-                              : "border-[#17191C]/20 bg-white shadow-xs"
+                              ? "border-line bg-canvas opacity-60"
+                              : "border-ink/20 bg-white shadow-xs"
                           }`}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <span className="font-semibold text-[#17191C]">{c.authorName}</span>
-                              <span className="font-mono text-[11px] rounded bg-[#F2F3F5] px-1.5 py-0.5 text-[#737982]">
+                              <span className="font-semibold text-ink">{c.authorName}</span>
+                              <span className="font-mono text-[11px] rounded bg-surface-2 px-1.5 py-0.5 text-ink-2">
                                 Line {c.lineNumber}
                               </span>
                             </div>
                             {c.status !== "resolved" ? (
                               <button
                                 onClick={() => handleResolveComment(c.id)}
-                                className="flex items-center gap-1 text-[11px] font-medium text-[#1F7A4D] hover:underline"
+                                className="flex items-center gap-1 text-[11px] font-medium text-success hover:underline"
                               >
                                 <CheckSquare className="h-3 w-3" />
                                 Resolve
                               </button>
                             ) : (
-                              <span className="text-[10px] uppercase font-bold text-[#1F7A4D]">
+                              <span className="text-[10px] uppercase font-bold text-success">
                                 Resolved
                               </span>
                             )}
                           </div>
-                          <p className="text-[#17191C] leading-relaxed">{c.comment}</p>
+                          <p className="text-ink leading-relaxed">{c.comment}</p>
                         </div>
                       ))}
                     </div>
@@ -842,7 +849,7 @@ export class ApiClient {
 
                 {activeTab === "activity" && (
                   <div className="space-y-3">
-                    <h4 className="text-xs font-semibold text-[#17191C]">
+                    <h4 className="text-xs font-semibold text-ink">
                       Real-time Execution Telemetry & Terminal Logs
                     </h4>
                     <div className="space-y-2">
@@ -855,28 +862,28 @@ export class ApiClient {
                         return (
                           <div
                             key={i}
-                            className="rounded-lg border border-[#E8EAED] bg-[#F8F9FB] p-3 text-xs space-y-1"
+                            className="rounded-lg border border-line bg-canvas p-3 text-xs space-y-1"
                           >
                             <div className="flex items-center justify-between">
-                              <span className="font-mono text-[10px] font-bold uppercase text-[#D5222D]">
+                              <span className="font-mono text-[10px] font-bold uppercase text-accent">
                                 {ev.eventType}
                               </span>
-                              <span className="text-[10px] text-[#9AA0A8]">
+                              <span className="text-[10px] text-ink-3">
                                 Seq #{ev.seq}
                               </span>
                             </div>
 
                             {ev.eventType === "terminal" ? (
-                              <div className="mt-1 rounded bg-[#040404] p-2 text-[11px] font-mono text-zinc-300">
-                                <p className="text-[#6E7891]">$ {payload.command}</p>
-                                <p className="text-[#5FC08C] whitespace-pre-wrap">{payload.output}</p>
+                              <div className="mt-1 rounded bg-charcoal p-2 text-[11px] font-mono text-zinc-300">
+                                <p className="text-muted-slate">$ {payload.command}</p>
+                                <p className="text-success whitespace-pre-wrap">{payload.output}</p>
                               </div>
                             ) : ev.eventType === "file_change" ? (
-                              <p className="text-[#17191C] font-mono text-[11px]">
+                              <p className="text-ink font-mono text-[11px]">
                                 Modified: <strong>{payload.path}</strong> (+{payload.linesAdded}, -{payload.linesRemoved})
                               </p>
                             ) : (
-                              <p className="text-[#737982] font-mono text-[11px]">
+                              <p className="text-ink-2 font-mono text-[11px]">
                                 Payload: {JSON.stringify(payload)}
                               </p>
                             )}
@@ -889,24 +896,24 @@ export class ApiClient {
 
                 {activeTab === "tasks" && (
                   <div className="space-y-3">
-                    <h4 className="text-xs font-semibold text-[#17191C]">
+                    <h4 className="text-xs font-semibold text-ink">
                       Multi-Agent Task Dependency Graph
                     </h4>
                     <div className="space-y-2.5">
                       {(selectedExecution.tasks || []).map((t: any, i: number) => (
                         <div
                           key={t.id}
-                          className="rounded-lg border border-[#E8EAED] bg-[#FFFFFF] p-3 flex items-center justify-between shadow-xs"
+                          className="rounded-lg border border-line bg-surface p-3 flex items-center justify-between shadow-xs"
                         >
                           <div className="flex items-center gap-3">
-                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#F2F3F5] text-xs font-bold text-[#17191C]">
+                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-2 text-xs font-bold text-ink">
                               {i + 1}
                             </span>
                             <div>
-                              <p className="text-xs font-semibold text-[#17191C]">
+                              <p className="text-xs font-semibold text-ink">
                                 {t.title}
                               </p>
-                              <p className="text-[11px] text-[#737982]">
+                              <p className="text-[11px] text-ink-2">
                                 Agent: <strong>{t.agentName}</strong> ({t.agentRole})
                               </p>
                             </div>
@@ -915,8 +922,8 @@ export class ApiClient {
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
                               t.status === "completed"
-                                ? "bg-[#EDF7F1] text-[#1F7A4D]"
-                                : "bg-[#F2F3F5] text-[#737982]"
+                                ? "bg-success-soft text-success"
+                                : "bg-surface-2 text-ink-2"
                             }`}
                           >
                             {t.status}
@@ -929,27 +936,27 @@ export class ApiClient {
 
                 {activeTab === "costs" && (
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="rounded-xl border border-[#E8EAED] bg-[#F8F9FB] p-4 space-y-1">
-                      <p className="text-xs text-[#737982]">Input Token Consumption</p>
-                      <p className="text-xl font-bold font-mono text-[#17191C]">
+                    <div className="rounded-xl border border-line bg-canvas p-4 space-y-1">
+                      <p className="text-xs text-ink-2">Input Token Consumption</p>
+                      <p className="text-xl font-bold font-mono text-ink">
                         {formatNumber(selectedExecution.inputTokens || 28000)}
                       </p>
-                      <p className="text-[11px] text-[#9AA0A8]">Repository AST & Context</p>
+                      <p className="text-[11px] text-ink-3">Repository AST & Context</p>
                     </div>
 
-                    <div className="rounded-xl border border-[#E8EAED] bg-[#F8F9FB] p-4 space-y-1">
-                      <p className="text-xs text-[#737982]">Output Token Generation</p>
-                      <p className="text-xl font-bold font-mono text-[#17191C]">
+                    <div className="rounded-xl border border-line bg-canvas p-4 space-y-1">
+                      <p className="text-xs text-ink-2">Output Token Generation</p>
+                      <p className="text-xl font-bold font-mono text-ink">
                         {formatNumber(selectedExecution.outputTokens || 10400)}
                       </p>
-                      <p className="text-[11px] text-[#9AA0A8]">Synthesized Source Code & Tests</p>
+                      <p className="text-[11px] text-ink-3">Synthesized Source Code & Tests</p>
                     </div>
                   </div>
                 )}
               </div>
             </GlassCard>
           ) : (
-            <div className="rounded-xl border border-dashed border-[#E8EAED] bg-[#FFFFFF] p-12 text-center text-xs text-[#737982]">
+            <div className="rounded-xl border border-dashed border-line bg-surface p-12 text-center text-xs text-ink-2">
               Select an execution from the left panel to review its code changes and agent telemetry.
             </div>
           )}

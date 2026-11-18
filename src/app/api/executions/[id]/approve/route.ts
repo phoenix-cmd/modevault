@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
+import { getCurrentUserOrDefault } from "@/lib/auth"
+import { requireProjectAccess } from "@/lib/permissions"
+import { approvalSchema, parseJson } from "@/lib/validation"
+import { logger, errorContext } from "@/lib/logger"
 
 export async function POST(
   req: NextRequest,
@@ -7,8 +11,9 @@ export async function POST(
 ) {
   try {
     const { id } = await params
-    const body = await req.json()
-    const { action, feedback } = body // "approve" | "reject" | "request_revision"
+    const parsed = await parseJson(req, approvalSchema)
+    if ("response" in parsed) return parsed.response
+    const { action, feedback } = parsed.data
 
     const execution = await prisma.execution.findUnique({
       where: { id },
@@ -16,6 +21,13 @@ export async function POST(
 
     if (!execution) {
       return NextResponse.json({ error: "Execution not found" }, { status: 404 })
+    }
+
+    const user = await getCurrentUserOrDefault()
+    try {
+      await requireProjectAccess(execution.projectId, user.id, "member")
+    } catch {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     let nextStatus = "completed"
@@ -30,12 +42,22 @@ export async function POST(
       },
     })
 
+    const taskStatus = action === "approve" ? "completed" : action === "reject" ? "failed" : "pending"
+    await prisma.executionTask.updateMany({
+      where: { executionId: id },
+      data: { status: taskStatus },
+    })
+
     // Update Git Operation status
     await prisma.gitOperation.updateMany({
       where: { executionId: id },
       data: {
-        status: action === "approve" ? "committed" : action === "reject" ? "reverted" : "staged",
-  
+        status:
+          action === "approve"
+            ? "committed"
+            : action === "reject"
+            ? "reverted"
+            : "staged",
       },
     })
 
@@ -48,6 +70,7 @@ export async function POST(
         payloadJson: JSON.stringify({
           action,
           feedback: feedback || null,
+          reviewerId: user.id,
           timestamp: new Date().toISOString(),
         }),
       },
@@ -55,7 +78,7 @@ export async function POST(
 
     return NextResponse.json({ data: updated })
   } catch (err: unknown) {
-    const error = err as { message?: string }
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    logger.error("Approval action failed", errorContext(err))
+    return NextResponse.json({ error: "Approval action failed" }, { status: 500 })
   }
 }

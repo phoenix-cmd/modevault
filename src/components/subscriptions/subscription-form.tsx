@@ -5,6 +5,7 @@
 import { useState, useEffect } from "react"
 import { X } from "lucide-react"
 import { PROVIDER_LIST } from "@/lib/providers"
+import { useModalA11y } from "@/lib/use-modal-a11y"
 import type {
   SubscriptionData,
   ProviderSlug,
@@ -27,14 +28,7 @@ export function SubscriptionForm({
 }: SubscriptionFormProps) {
   const isEditing = Boolean(subscription)
 
-  useEffect(() => {
-    if (!isOpen) return
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose()
-    }
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isOpen, onClose])
+  const dialogRef = useModalA11y(isOpen, onClose)
 
   const [formData, setFormData] = useState({
     providerSlug: "openai" as ProviderSlug,
@@ -194,6 +188,7 @@ export function SubscriptionForm({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm animate-fade-in">
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="subscription-form-title"

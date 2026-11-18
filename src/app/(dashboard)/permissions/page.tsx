@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useModalA11y } from "@/lib/use-modal-a11y"
 import {
   ShieldCheck,
   Lock,
@@ -80,6 +81,7 @@ export default function PermissionsPage() {
 
   // Invite modal
   const [showInviteModal, setShowInviteModal] = useState(false)
+  const inviteDialogRef = useModalA11y(showInviteModal, () => setShowInviteModal(false))
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteName, setInviteName] = useState("")
   const [inviteRole, setInviteRole] = useState<"Lead" | "Developer" | "Viewer">("Developer")
@@ -138,7 +140,7 @@ export default function PermissionsPage() {
       />
 
       {saved && (
-        <div className="rounded-xl border border-[#1F7A4D]/20 bg-[#EDF7F1] p-3 text-xs text-[#1F7A4D] flex items-center gap-2">
+        <div className="rounded-xl border border-success/20 bg-success-soft p-3 text-xs text-success flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           <span className="font-semibold">Governance policies and team permissions updated successfully!</span>
         </div>
@@ -147,50 +149,55 @@ export default function PermissionsPage() {
       {/* Invite Member Modal */}
       {showInviteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md rounded-2xl border border-[#E8EAED] bg-[#FFFFFF] p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E8EAED]">
+          <div
+            ref={inviteDialogRef}
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-md rounded-2xl border border-line bg-surface p-6 shadow-2xl space-y-4"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-line">
               <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#040404] text-white">
-                  <UserCheck className="h-4 w-4 text-[#D5222D]" />
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-charcoal text-white">
+                  <UserCheck className="h-4 w-4 text-accent" />
                 </span>
-                <h3 className="text-sm font-bold text-[#17191C]">Invite Team Member</h3>
+                <h3 className="text-sm font-bold text-ink">Invite Team Member</h3>
               </div>
-              <button onClick={() => setShowInviteModal(false)} className="rounded-lg p-1 text-[#737982] hover:bg-[#F2F3F5]">
+              <button onClick={() => setShowInviteModal(false)} className="rounded-lg p-1 text-ink-2 hover:bg-surface-2">
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <form onSubmit={handleInvite} className="space-y-3">
               <div>
-                <label className="text-xs font-semibold text-[#17191C]">Full Name</label>
+                <label className="text-xs font-semibold text-ink">Full Name</label>
                 <input
                   type="text"
                   required
                   value={inviteName}
                   onChange={(e) => setInviteName(e.target.value)}
                   placeholder="e.g. Elena Rostova"
-                  className="mt-1 w-full rounded-lg border border-[#E8EAED] bg-[#F8F9FB] px-3.5 py-2 text-xs outline-none"
+                  className="mt-1 w-full rounded-lg border border-line bg-canvas px-3.5 py-2 text-xs outline-none"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-[#17191C]">Work Email</label>
+                <label className="text-xs font-semibold text-ink">Work Email</label>
                 <input
                   type="email"
                   required
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                   placeholder="e.g. elena@acme.corp"
-                  className="mt-1 w-full rounded-lg border border-[#E8EAED] bg-[#F8F9FB] px-3.5 py-2 text-xs outline-none"
+                  className="mt-1 w-full rounded-lg border border-line bg-canvas px-3.5 py-2 text-xs outline-none"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-[#17191C]">Assigned Role</label>
+                <label className="text-xs font-semibold text-ink">Assigned Role</label>
                 <select
                   value={inviteRole}
                   onChange={(e: any) => setInviteRole(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-[#E8EAED] bg-[#F8F9FB] px-3.5 py-2 text-xs outline-none"
+                  className="mt-1 w-full rounded-lg border border-line bg-canvas px-3.5 py-2 text-xs outline-none"
                 >
                   <option value="Lead">Tech Lead (Can Approve & Merge PRs)</option>
                   <option value="Developer">Developer (Can Dispatch Agents in Sandbox)</option>
@@ -198,17 +205,17 @@ export default function PermissionsPage() {
                 </select>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-[#E8EAED]">
+              <div className="flex justify-end gap-2 pt-2 border-t border-line">
                 <button
                   type="button"
                   onClick={() => setShowInviteModal(false)}
-                  className="px-4 py-2 text-xs font-semibold text-[#737982] hover:bg-[#F2F3F5] rounded-lg"
+                  className="px-4 py-2 text-xs font-semibold text-ink-2 hover:bg-surface-2 rounded-lg"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="rounded-lg bg-[#040404] px-4 py-2 text-xs font-semibold text-white hover:bg-[#202020]"
+                  className="rounded-lg bg-charcoal px-4 py-2 text-xs font-semibold text-white hover:bg-[#202020]"
                 >
                   Send Invitation
                 </button>
@@ -220,38 +227,38 @@ export default function PermissionsPage() {
 
       <form onSubmit={handleSave} className="space-y-6 text-xs">
         {/* Guardrail Approval Policies */}
-        <GlassCard className="p-5 border-[#E8EAED] bg-[#FFFFFF] space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-[#E8EAED]">
-            <ShieldCheck className="h-4 w-4 text-[#D5222D]" />
-            <h3 className="text-sm font-semibold text-[#17191C]">
+        <GlassCard className="p-5 border-line bg-surface space-y-4">
+          <div className="flex items-center gap-2 pb-3 border-b border-line">
+            <ShieldCheck className="h-4 w-4 text-accent" />
+            <h3 className="text-sm font-semibold text-ink">
               Mandatory Approval Gates & Safeguards
             </h3>
           </div>
 
           <div className="space-y-3">
-            <div className="flex items-center justify-between py-2 border-b border-[#E8EAED]/60">
+            <div className="flex items-center justify-between py-2 border-b border-line/60">
               <div>
-                <p className="font-semibold text-[#17191C]">
+                <p className="font-semibold text-ink">
                   Require human approval before merging to protected branches
                 </p>
-                <p className="text-[11px] text-[#737982]">
-                  Agents cannot automatically commit directly to <code className="bg-[#F2F3F5] px-1 py-0.5 rounded">main</code> or <code className="bg-[#F2F3F5] px-1 py-0.5 rounded">production</code>.
+                <p className="text-[11px] text-ink-2">
+                  Agents cannot automatically commit directly to <code className="bg-surface-2 px-1 py-0.5 rounded">main</code> or <code className="bg-surface-2 px-1 py-0.5 rounded">production</code>.
                 </p>
               </div>
               <input
                 type="checkbox"
                 checked={requireMainMergeApproval}
                 onChange={(e) => setRequireMainMergeApproval(e.target.checked)}
-                className="h-4 w-4 accent-[#D5222D] rounded cursor-pointer"
+                className="h-4 w-4 accent-accent rounded cursor-pointer"
               />
             </div>
 
-            <div className="flex items-center justify-between py-2 border-b border-[#E8EAED]/60">
+            <div className="flex items-center justify-between py-2 border-b border-line/60">
               <div>
-                <p className="font-semibold text-[#17191C]">
+                <p className="font-semibold text-ink">
                   Require human sign-off on database schema migrations
                 </p>
-                <p className="text-[11px] text-[#737982]">
+                <p className="text-[11px] text-ink-2">
                   Any agent tasks modifying Prisma, migrations, or SQL files pause for lead architect review.
                 </p>
               </div>
@@ -259,16 +266,16 @@ export default function PermissionsPage() {
                 type="checkbox"
                 checked={requireSchemaApproval}
                 onChange={(e) => setRequireSchemaApproval(e.target.checked)}
-                className="h-4 w-4 accent-[#D5222D] rounded cursor-pointer"
+                className="h-4 w-4 accent-accent rounded cursor-pointer"
               />
             </div>
 
             <div className="flex items-center justify-between py-2">
               <div>
-                <p className="font-semibold text-[#17191C]">
+                <p className="font-semibold text-ink">
                   Auto-approve micro-changes under threshold
                 </p>
-                <p className="text-[11px] text-[#737982]">
+                <p className="text-[11px] text-ink-2">
                   Fast-track trivial documentation or unit test patches costing less than threshold.
                 </p>
               </div>
@@ -277,10 +284,10 @@ export default function PermissionsPage() {
                   type="checkbox"
                   checked={autoApproveUnderThreshold}
                   onChange={(e) => setAutoApproveUnderThreshold(e.target.checked)}
-                  className="h-4 w-4 accent-[#D5222D] rounded cursor-pointer"
+                  className="h-4 w-4 accent-accent rounded cursor-pointer"
                 />
                 {autoApproveUnderThreshold && (
-                  <span className="font-mono text-[11px] bg-[#F2F3F5] px-2 py-0.5 rounded border border-[#E8EAED]">
+                  <span className="font-mono text-[11px] bg-surface-2 px-2 py-0.5 rounded border border-line">
                     ${autoApproveLimit.toFixed(2)}/run
                   </span>
                 )}
@@ -291,17 +298,17 @@ export default function PermissionsPage() {
 
         {/* Budget Ceilings & Security Rotation */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <GlassCard className="p-5 border-[#E8EAED] bg-[#FFFFFF] space-y-3">
-            <div className="flex items-center gap-2 pb-2 border-b border-[#E8EAED]">
-              <DollarSign className="h-4 w-4 text-[#D5222D]" />
-              <h3 className="text-xs font-bold text-[#17191C]">Spending Caps</h3>
+          <GlassCard className="p-5 border-line bg-surface space-y-3">
+            <div className="flex items-center gap-2 pb-2 border-b border-line">
+              <DollarSign className="h-4 w-4 text-accent" />
+              <h3 className="text-xs font-bold text-ink">Spending Caps</h3>
             </div>
 
             <div className="space-y-3">
               <div>
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-[#737982]">Monthly Org Cap:</span>
-                  <span className="font-mono font-bold text-[#17191C]">${monthlySpendCap}</span>
+                  <span className="text-ink-2">Monthly Org Cap:</span>
+                  <span className="font-mono font-bold text-ink">${monthlySpendCap}</span>
                 </div>
                 <input
                   type="range"
@@ -310,14 +317,14 @@ export default function PermissionsPage() {
                   step="250"
                   value={monthlySpendCap}
                   onChange={(e) => setMonthlySpendCap(Number(e.target.value))}
-                  className="w-full mt-1.5 accent-[#D5222D]"
+                  className="w-full mt-1.5 accent-accent"
                 />
               </div>
 
               <div>
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-[#737982]">Per-Task Hard Ceiling:</span>
-                  <span className="font-mono font-bold text-[#17191C]">${taskSpendCap}</span>
+                  <span className="text-ink-2">Per-Task Hard Ceiling:</span>
+                  <span className="font-mono font-bold text-ink">${taskSpendCap}</span>
                 </div>
                 <input
                   type="range"
@@ -326,20 +333,20 @@ export default function PermissionsPage() {
                   step="1"
                   value={taskSpendCap}
                   onChange={(e) => setTaskSpendCap(Number(e.target.value))}
-                  className="w-full mt-1.5 accent-[#D5222D]"
+                  className="w-full mt-1.5 accent-accent"
                 />
               </div>
             </div>
           </GlassCard>
 
-          <GlassCard className="p-5 border-[#E8EAED] bg-[#FFFFFF] space-y-3">
-            <div className="flex items-center gap-2 pb-2 border-b border-[#E8EAED]">
-              <Key className="h-4 w-4 text-[#D5222D]" />
-              <h3 className="text-xs font-bold text-[#17191C]">API Key Rotation Policy</h3>
+          <GlassCard className="p-5 border-line bg-surface space-y-3">
+            <div className="flex items-center gap-2 pb-2 border-b border-line">
+              <Key className="h-4 w-4 text-accent" />
+              <h3 className="text-xs font-bold text-ink">API Key Rotation Policy</h3>
             </div>
 
             <div className="space-y-3 text-xs">
-              <p className="text-[#737982]">
+              <p className="text-ink-2">
                 Enforce periodic secret rolling for connected OpenAI, Anthropic, and Google provider tokens.
               </p>
               <div className="flex items-center gap-2">
@@ -350,8 +357,8 @@ export default function PermissionsPage() {
                     onClick={() => setKeyRotationDays(days)}
                     className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
                       keyRotationDays === days
-                        ? "border-[#040404] bg-[#040404] text-white"
-                        : "border-[#E8EAED] bg-[#F8F9FB] text-[#737982] hover:text-[#17191C]"
+                        ? "border-charcoal bg-charcoal text-white"
+                        : "border-line bg-canvas text-ink-2 hover:text-ink"
                     }`}
                   >
                     Every {days} Days
@@ -363,44 +370,44 @@ export default function PermissionsPage() {
         </div>
 
         {/* Team Members List */}
-        <GlassCard className="p-5 border-[#E8EAED] bg-[#FFFFFF] space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#E8EAED]">
+        <GlassCard className="p-5 border-line bg-surface space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-line">
             <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-[#17191C]" />
-              <h3 className="text-sm font-semibold text-[#17191C]">
+              <Users className="h-4 w-4 text-ink" />
+              <h3 className="text-sm font-semibold text-ink">
                 Workspace Members & Role Permissions
               </h3>
             </div>
             <button
               type="button"
               onClick={() => setShowInviteModal(true)}
-              className="flex items-center gap-1 rounded-lg border border-[#E8EAED] bg-[#F2F3F5] px-2.5 py-1 text-[11px] font-semibold text-[#17191C] hover:bg-[#E8EAED]"
+              className="flex items-center gap-1 rounded-lg border border-line bg-surface-2 px-2.5 py-1 text-[11px] font-semibold text-ink hover:bg-line"
             >
-              <Plus className="h-3 w-3 text-[#D5222D]" />
+              <Plus className="h-3 w-3 text-accent" />
               Invite Member
             </button>
           </div>
 
-          <div className="divide-y divide-[#E8EAED]">
+          <div className="divide-y divide-line">
             {team.map((m) => (
               <div key={m.id} className="py-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="font-semibold text-[#17191C]">{m.name}</p>
-                  <p className="text-[11px] text-[#737982]">{m.email}</p>
+                  <p className="font-semibold text-ink">{m.name}</p>
+                  <p className="text-[11px] text-ink-2">{m.email}</p>
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5 text-[11px] text-[#737982]">
-                    <span className={`h-2 w-2 rounded-full ${m.canDispatch ? "bg-[#1F7A4D]" : "bg-zinc-300"}`} />
+                  <div className="flex items-center gap-1.5 text-[11px] text-ink-2">
+                    <span className={`h-2 w-2 rounded-full ${m.canDispatch ? "bg-success" : "bg-zinc-300"}`} />
                     <span>Dispatch</span>
-                    <span className={`h-2 w-2 rounded-full ml-1.5 ${m.canMerge ? "bg-[#1F7A4D]" : "bg-zinc-300"}`} />
+                    <span className={`h-2 w-2 rounded-full ml-1.5 ${m.canMerge ? "bg-success" : "bg-zinc-300"}`} />
                     <span>Merge</span>
                   </div>
 
                   <select
                     value={m.role}
                     onChange={(e: any) => handleRoleChange(m.id, e.target.value)}
-                    className="rounded-lg border border-[#E8EAED] bg-[#F8F9FB] px-2 py-1 font-mono text-[11px] font-bold uppercase text-[#17191C] outline-none"
+                    className="rounded-lg border border-line bg-canvas px-2 py-1 font-mono text-[11px] font-bold uppercase text-ink outline-none"
                   >
                     <option value="Owner">Owner</option>
                     <option value="Lead">Lead</option>
@@ -416,7 +423,7 @@ export default function PermissionsPage() {
         <div className="flex justify-end">
           <button
             type="submit"
-            className="flex items-center gap-1.5 rounded-lg bg-[#040404] px-5 py-2 text-xs font-semibold text-white hover:bg-[#202020] active:scale-[0.98] transition-all shadow-sm"
+            className="flex items-center gap-1.5 rounded-lg bg-charcoal px-5 py-2 text-xs font-semibold text-white hover:bg-[#202020] active:scale-[0.98] transition-all shadow-sm"
           >
             <Save className="h-3.5 w-3.5" />
             Save Governance Settings

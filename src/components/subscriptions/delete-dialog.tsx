@@ -1,7 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { AlertTriangle, X } from "lucide-react"
+import { useModalA11y } from "@/lib/use-modal-a11y"
 
 interface DeleteDialogProps {
   subscriptionId: string | null
@@ -21,14 +22,7 @@ export function DeleteDialog({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!isOpen) return
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose()
-    }
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [isOpen, onClose])
+  const dialogRef = useModalA11y(isOpen, onClose)
 
   if (!isOpen || !subscriptionId) return null
 
@@ -57,6 +51,7 @@ export function DeleteDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm animate-fade-in">
       <div
+        ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="delete-dialog-title"

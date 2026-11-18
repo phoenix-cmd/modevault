@@ -8,7 +8,10 @@
     "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "db:postgres:prepare": "node scripts/prisma-schema.mjs",
+    "db:postgres:push": "node scripts/prisma-schema.mjs && prisma db push --schema prisma/.generated/schema.postgres.prisma --skip-generate",
+    "db:postgres:generate": "node scripts/prisma-schema.mjs && prisma generate --schema prisma/.generated/schema.postgres.prisma"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
@@ -32,6 +35,7 @@
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
     "uuid": "^14.0.3",
+    "zod": "^4.6.7",
     "zustand": "^5.1.0"
   },
   "devDependencies": {

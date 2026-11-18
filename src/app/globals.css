@@ -133,6 +133,12 @@
   --color-info: var(--mv-info);
   --color-info-soft: var(--mv-info-soft);
 
+  --color-charcoal: var(--mv-charcoal);
+  --color-neutral-dark: var(--mv-neutral-dark);
+  --color-soft-grey: var(--mv-soft-grey);
+  --color-secondary-grey: var(--mv-secondary-grey);
+  --color-muted-slate: var(--mv-muted-slate);
+
   --shadow-card: var(--mv-shadow-card);
   --shadow-panel: var(--mv-shadow-panel);
   --shadow-float: var(--mv-shadow-float);

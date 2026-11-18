@@ -45,35 +45,35 @@ export default function NotificationsPage() {
         action={
           <button
             onClick={handleMarkAllRead}
-            className="flex items-center gap-1.5 rounded-lg border border-[#E8EAED] bg-[#FFFFFF] px-3 py-1.5 text-xs font-semibold text-[#17191C] hover:bg-[#F2F3F5] transition-all"
+            className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2 transition-all"
           >
-            <CheckCheck className="h-3.5 w-3.5 text-[#1F7A4D]" />
+            <CheckCheck className="h-3.5 w-3.5 text-success" />
             Mark All as Read
           </button>
         }
       />
 
-      <div className="rounded-xl border border-[#E8EAED] bg-[#FFFFFF] divide-y divide-[#E8EAED] shadow-xs overflow-hidden">
+      <div className="rounded-xl border border-line bg-surface divide-y divide-line shadow-xs overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-xs text-[#737982]">Loading notifications...</div>
+          <div className="p-8 text-center text-xs text-ink-2">Loading notifications...</div>
         ) : notifications.length === 0 ? (
-          <div className="p-8 text-center text-xs text-[#737982]">No unread alerts at this time.</div>
+          <div className="p-8 text-center text-xs text-ink-2">No unread alerts at this time.</div>
         ) : (
           notifications.map((n) => (
             <div
               key={n.id}
               className={`p-4 flex items-start justify-between gap-3 transition-colors ${
-                !n.isRead ? "bg-[rgba(213,34,45,0.02)]" : "bg-white hover:bg-[#F8F9FB]"
+                !n.isRead ? "bg-[rgba(213,34,45,0.02)]" : "bg-white hover:bg-canvas"
               }`}
             >
               <div className="flex items-start gap-3">
                 <span
                   className={`flex h-7 w-7 items-center justify-center rounded-lg shrink-0 mt-0.5 ${
                     n.severity === "critical"
-                      ? "bg-[rgba(213,34,45,0.1)] text-[#D5222D]"
+                      ? "bg-[rgba(213,34,45,0.1)] text-accent"
                       : n.severity === "warning"
-                      ? "bg-[#FDF6E8] text-[#A3630A]"
-                      : "bg-[#EEF4FF] text-[#175CD3]"
+                      ? "bg-warning-soft text-warning"
+                      : "bg-info-soft text-info"
                   }`}
                 >
                   {n.severity === "critical" ? (
@@ -86,16 +86,16 @@ export default function NotificationsPage() {
                 </span>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h4 className="text-xs font-semibold text-[#17191C]">{n.title}</h4>
+                    <h4 className="text-xs font-semibold text-ink">{n.title}</h4>
                     {!n.isRead && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#D5222D]" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-accent" />
                     )}
                   </div>
-                  <p className="text-xs text-[#737982] mt-0.5 leading-relaxed">{n.message}</p>
+                  <p className="text-xs text-ink-2 mt-0.5 leading-relaxed">{n.message}</p>
                 </div>
               </div>
 
-              <span className="text-[10px] text-[#9AA0A8] whitespace-nowrap">
+              <span className="text-[10px] text-ink-3 whitespace-nowrap">
                 {new Date(n.createdAt).toLocaleDateString()}
               </span>
             </div>

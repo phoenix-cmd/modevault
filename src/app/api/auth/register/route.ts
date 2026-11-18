@@ -2,20 +2,14 @@ import { NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/db"
 import { signSession, COOKIE_NAME } from "@/lib/auth"
+import { parseJson, registerSchema } from "@/lib/validation"
+import { logger, errorContext } from "@/lib/logger"
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
-    const name = String(body?.name || "").trim()
-    const email = String(body?.email || "").trim().toLowerCase()
-    const password = String(body?.password || "")
-
-    if (!name || !email || !password) {
-      return NextResponse.json({ error: "Name, email, and password are required" }, { status: 400 })
-    }
-    if (password.length < 8) {
-      return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 })
-    }
+    const parsed = await parseJson(req, registerSchema)
+    if ("response" in parsed) return parsed.response
+    const { name, email, password } = parsed.data
 
     const existing = await prisma.user.findUnique({ where: { email } })
     if (existing) {
@@ -66,7 +60,7 @@ export async function POST(req: NextRequest) {
     })
     return response
   } catch (err: unknown) {
-    const error = err as { message?: string }
-    return NextResponse.json({ error: error.message || "Registration failed" }, { status: 500 })
+    logger.error("Registration failed", errorContext(err))
+    return NextResponse.json({ error: "Registration failed" }, { status: 500 })
   }
 }

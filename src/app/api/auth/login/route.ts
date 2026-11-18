@@ -2,16 +2,14 @@ import { NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/db"
 import { signSession, COOKIE_NAME } from "@/lib/auth"
+import { parseJson, loginSchema } from "@/lib/validation"
+import { logger, errorContext } from "@/lib/logger"
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
-    const email = String(body?.email || "").trim().toLowerCase()
-    const password = String(body?.password || "")
-
-    if (!email || !password) {
-      return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
-    }
+    const parsed = await parseJson(req, loginSchema)
+    if ("response" in parsed) return parsed.response
+    const { email, password } = parsed.data
 
     const user = await prisma.user.findUnique({ where: { email } })
     if (!user || !user.passwordHash) {
@@ -36,7 +34,7 @@ export async function POST(req: NextRequest) {
     })
     return response
   } catch (err: unknown) {
-    const error = err as { message?: string }
-    return NextResponse.json({ error: error.message || "Login failed" }, { status: 500 })
+    logger.error("Login failed", errorContext(err))
+    return NextResponse.json({ error: "Login failed" }, { status: 500 })
   }
 }
