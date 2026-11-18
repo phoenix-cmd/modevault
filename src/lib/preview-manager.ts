@@ -26,12 +26,16 @@ export async function startPreview(projectId: string): Promise<{ port: number; s
     return { port: existing.port, status: "running" }
   }
 
-  const source = project.sources?.find((item) => item.sourcePath)
-  const cwd = source?.sourcePath || path.join(/* turbopackIgnore: true */ process.cwd())
+  const source = project.sources?.find((item: any) => item.sourcePath)
+  const cwd = source?.sourcePath || path.join(/* turbopackIgnore: true */ process.cwd(), "data")
   const port = environment.runPort || 3000
   const command = environment.startCommand || "npm run dev"
 
-  const child = spawn(command, {
+  if (process.env.VERCEL) {
+    return { port, status: "simulated" }
+  }
+
+  const child = spawn(/* turbopackIgnore: true */ command, {
     cwd,
     shell: true,
     env: { ...process.env, PORT: String(port) },

@@ -47,7 +47,7 @@ export async function listWorkspaceTree(
   for (const entry of entries) {
     if (entry.name === ".git" || entry.name === "node_modules") continue
     const entryRelativePath = path.join(relativeRoot, entry.name)
-    const entryAbsolutePath = path.join(rootPath, entryRelativePath)
+    const entryAbsolutePath = path.join(/* turbopackIgnore: true */ rootPath, entryRelativePath)
 
     if (entry.isDirectory()) {
       nodes.push({
@@ -57,7 +57,7 @@ export async function listWorkspaceTree(
         children: await listWorkspaceTree(rootPath, entryRelativePath),
       })
     } else {
-      const fileStat = await stat(entryAbsolutePath)
+      const fileStat = await stat(/* turbopackIgnore: true */ entryAbsolutePath)
       nodes.push({
         name: entry.name,
         type: "file",

@@ -7,7 +7,7 @@ export async function GET() {
       orderBy: { isDefault: "desc" },
     })
 
-    const formatted = agents.map((a) => ({
+    const formatted = agents.map((a: any) => ({
       ...a,
       capabilities: a.capabilitiesJson ? JSON.parse(a.capabilitiesJson) : [],
     }))

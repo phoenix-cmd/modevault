@@ -52,17 +52,21 @@ export async function verifySession(token: string): Promise<string | null> {
 }
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
-  const cookieStore = await cookies()
-  const token = cookieStore.get(COOKIE_NAME)?.value
-  if (!token) return null
-  const userId = await verifySession(token)
-  if (!userId) return null
+  try {
+    const cookieStore = await cookies()
+    const token = cookieStore.get(COOKIE_NAME)?.value
+    if (!token) return null
+    const userId = await verifySession(token)
+    if (!userId) return null
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, email: true, name: true },
-  })
-  return user
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, name: true },
+    })
+    return user
+  } catch {
+    return null
+  }
 }
 
 export async function getCurrentUserOrDefault(): Promise<AuthUser> {
