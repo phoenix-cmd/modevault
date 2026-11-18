@@ -28,14 +28,13 @@ import { PageHeader } from "@/components/ui/page-header"
 import { GlassCard } from "@/components/ui/glass-card"
 
 export default function StudioPage() {
-  const [selectedFile, setSelectedFile] = useState("src/components/checkout-button.tsx")
-  const [fileList, setFileList] = useState<string[]>([
-    "src/components/checkout-button.tsx",
-    "src/app/api/checkout/route.ts",
-    "src/lib/services/api-client.ts",
-    "package.json",
-  ])
+  const [projects, setProjects] = useState<any[]>([])
+  const [projectId, setProjectId] = useState<string>("")
+  const [selectedFile, setSelectedFile] = useState("")
+  const [fileList, setFileList] = useState<string[]>([])
   const [code, setCode] = useState("")
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewRunning, setPreviewRunning] = useState(false)
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop")
   const [activePane, setActivePane] = useState<"split" | "editor" | "preview">("split")
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -59,10 +58,46 @@ export default function StudioPage() {
     { id: 2, method: "GET", path: "/api/health", status: 200, duration: "8ms" },
   ])
 
+  // Load projects
+  useEffect(() => {
+    let active = true
+    fetch("/api/projects")
+      .then((res) => res.json())
+      .then((json) => {
+        if (!active) return
+        const list = json?.data || []
+        setProjects(list)
+        if (list.length > 0) setProjectId((current) => current || list[0].id)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [])
+
+  // Load file tree when project changes
+  useEffect(() => {
+    if (!projectId) return
+    let active = true
+    fetch(`/api/projects/${projectId}/files`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (!active) return
+        const files = json?.data?.allFiles || []
+        setFileList(files)
+        if (files.length > 0) setSelectedFile((current) => current || files[0])
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [projectId])
+
   // Fetch file content
   const fetchFile = async (path: string) => {
+    if (!projectId || !path) return
     try {
-      const res = await fetch(`/api/projects/proj_001/files?file=${encodeURIComponent(path)}`)
+      const res = await fetch(`/api/projects/${projectId}/files?file=${encodeURIComponent(path)}`)
       const json = await res.json()
       if (json.data && json.data.content) {
         setCode(json.data.content)
@@ -76,20 +111,62 @@ export default function StudioPage() {
 
   useEffect(() => {
     fetchFile(selectedFile)
-  }, [selectedFile])
+  }, [selectedFile, projectId])
 
-  const handleSave = () => {
-    setSaveSuccess(true)
-    setLogs((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        time: new Date().toLocaleTimeString(),
-        type: "build",
-        text: `Modified ${selectedFile} — recompiled in 48ms`,
-      },
-    ])
-    setTimeout(() => setSaveSuccess(false), 2500)
+  const handleSave = async () => {
+    if (!projectId || !selectedFile) return
+    try {
+      const res = await fetch(`/api/projects/${projectId}/files`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file: selectedFile, content: code }),
+      })
+      if (!res.ok) throw new Error("Save failed")
+      setSaveSuccess(true)
+      setLogs((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          time: new Date().toLocaleTimeString(),
+          type: "build",
+          text: `Saved ${selectedFile}`,
+        },
+      ])
+    } catch {
+      setLogs((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          time: new Date().toLocaleTimeString(),
+          type: "error",
+          text: `Failed to save ${selectedFile}`,
+        },
+      ])
+    } finally {
+      setTimeout(() => setSaveSuccess(false), 2500)
+    }
+  }
+
+  const handleStartPreview = async () => {
+    if (!projectId) return
+    try {
+      const res = await fetch(`/api/projects/${projectId}/preview`, { method: "POST" })
+      const json = await res.json()
+      if (json.data?.url) setPreviewUrl(json.data.url)
+      setPreviewRunning(true)
+    } catch {
+      setPreviewRunning(false)
+    }
+  }
+
+  const handleStopPreview = async () => {
+    if (!projectId) return
+    try {
+      await fetch(`/api/projects/${projectId}/preview`, { method: "DELETE" })
+    } finally {
+      setPreviewRunning(false)
+      setPreviewUrl(null)
+    }
   }
 
   const handleSimulateCheckout = () => {
@@ -136,6 +213,12 @@ export default function StudioPage() {
               {showDevTools ? "Hide DevTools" : "Show DevTools"}
             </button>
             <button
+              onClick={previewRunning ? handleStopPreview : handleStartPreview}
+              className="rounded-lg border border-[#E8EAED] bg-[#FFFFFF] px-3 py-1.5 text-xs font-semibold text-[#17191C] hover:bg-[#F2F3F5]"
+            >
+              {previewRunning ? "Stop Preview" : "Start Preview"}
+            </button>
+            <button
               onClick={handleSave}
               className="rounded-lg bg-[#040404] px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#202020] active:scale-[0.98] transition-all"
             >
@@ -150,12 +233,34 @@ export default function StudioPage() {
         {/* Studio Top Control Bar */}
         <div className="flex flex-wrap items-center justify-between border-b border-[#E8EAED] bg-[#F8F9FB] px-4 py-2 text-xs gap-2">
           <div className="flex items-center gap-3">
-            <span className="font-mono text-[#17191C] font-semibold flex items-center gap-1.5">
-              <FileCode className="h-3.5 w-3.5 text-[#D5222D]" />
-              {selectedFile}
-            </span>
+            <select
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+              className="rounded-md border border-[#E8EAED] bg-[#FFFFFF] px-2 py-1 text-xs text-[#17191C]"
+            >
+              {projects.length === 0 && <option value="">No projects</option>}
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={selectedFile}
+              onChange={(e) => setSelectedFile(e.target.value)}
+              className="rounded-md border border-[#E8EAED] bg-[#FFFFFF] px-2 py-1 text-xs text-[#17191C] max-w-[260px]"
+            >
+              {fileList.length === 0 && <option value="">No files</option>}
+              {fileList.map((file) => (
+                <option key={file} value={file}>
+                  {file}
+                </option>
+              ))}
+            </select>
             <span className="text-[#9AA0A8]">•</span>
-            <span className="text-[11px] text-[#737982]">TypeScript Sandbox (Port :3001)</span>
+            <span className="text-[11px] text-[#737982]">
+              {previewRunning && previewUrl ? previewUrl : "Preview not running"}
+            </span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -275,7 +380,7 @@ export default function StudioPage() {
                   <div className="h-8 border-b border-[#E8EAED] bg-[#F8F9FB] px-3 flex items-center justify-between text-[11px] text-[#737982]">
                     <div className="flex items-center gap-2">
                       <span className="h-2 w-2 rounded-full bg-[#1F7A4D]" />
-                      <span className="font-mono">http://localhost:3001/checkout</span>
+                      <span className="font-mono">{previewUrl || "Preview not running"}</span>
                     </div>
                     <button
                       onClick={() => setSimulatedStatus("idle")}
