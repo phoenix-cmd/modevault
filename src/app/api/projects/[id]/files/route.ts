@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
+import { getCurrentUserOrDefault } from "@/lib/auth"
+import { requireProjectAccess } from "@/lib/permissions"
 import {
   listWorkspaceTree,
   readWorkspaceFile,
@@ -246,6 +248,13 @@ export async function GET(
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
     }
 
+    const user = await getCurrentUserOrDefault()
+    try {
+      await requireProjectAccess(project.id, user.id, "viewer")
+    } catch {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
     const source = project.sources?.find(
       (item: unknown) => (item as { sourcePath?: string }).sourcePath
     ) as { sourcePath?: string } | undefined
@@ -376,6 +385,13 @@ export async function PUT(
     })
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
+    }
+
+    const user = await getCurrentUserOrDefault()
+    try {
+      await requireProjectAccess(project.id, user.id, "member")
+    } catch {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     const source = project.sources?.find(

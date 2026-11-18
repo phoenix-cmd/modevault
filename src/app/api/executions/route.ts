@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
+import { getCurrentUserOrDefault } from "@/lib/auth"
+import { requireProjectAccess } from "@/lib/permissions"
 import {
   createBranch,
   commitWorkspace,
@@ -12,8 +14,16 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const projectId = searchParams.get("projectId")
 
-    const where: any = {}
-    if (projectId) where.projectId = projectId
+    const where: { projectId?: string } = {}
+    if (projectId) {
+      const user = await getCurrentUserOrDefault()
+      try {
+        await requireProjectAccess(projectId, user.id, "viewer")
+      } catch {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      }
+      where.projectId = projectId
+    }
 
     const executions = await prisma.execution.findMany({
       where,
@@ -47,6 +57,13 @@ export async function POST(req: NextRequest) {
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
+    }
+
+    const user = await getCurrentUserOrDefault()
+    try {
+      await requireProjectAccess(project.id, user.id, "member")
+    } catch {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     const branch = targetBranch || `feature/ai-${Date.now().toString(36)}`

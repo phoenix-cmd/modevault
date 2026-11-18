@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
+import { getCurrentUserOrDefault } from "@/lib/auth"
+import { requireProjectAccess } from "@/lib/permissions"
 import {
   createBranch,
   commitWorkspace,
@@ -18,6 +20,13 @@ export async function POST(req: NextRequest) {
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
+    }
+
+    const user = await getCurrentUserOrDefault()
+    try {
+      await requireProjectAccess(project.id, user.id, "member")
+    } catch {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     const workflow = workflowId
