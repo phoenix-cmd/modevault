@@ -23,11 +23,14 @@ import { PageHeader } from "@/components/ui/page-header"
 import { GlassCard } from "@/components/ui/glass-card"
 
 export default function GitControlPage() {
+  const [projects, setProjects] = useState<any[]>([])
+  const [projectId, setProjectId] = useState<string>("")
   const [activeTab, setActiveTab] = useState<"commits" | "pulls" | "branches" | "conflicts">("commits")
   const [branches, setBranches] = useState<any[]>([])
   const [commits, setCommits] = useState<any[]>([])
   const [pulls, setPulls] = useState<any[]>([])
   const [currentBranch, setCurrentBranch] = useState("main")
+  const [diff, setDiff] = useState<string>("")
   const [loading, setLoading] = useState(true)
 
   // PR Modal state
@@ -44,16 +47,19 @@ export default function GitControlPage() {
   // Conflict resolution state
   const [conflictResolved, setConflictResolved] = useState(false)
 
-  const loadGitData = async () => {
+  const loadGitData = async (targetProjectId?: string) => {
+    const pid = targetProjectId || projectId
+    if (!pid) return
     try {
       setLoading(true)
-      const res = await fetch("/api/git")
+      const res = await fetch(`/api/git?projectId=${pid}`)
       const json = await res.json()
       if (json.data) {
         setBranches(json.data.branches || [])
         setCommits(json.data.commits || [])
         setPulls(json.data.pullRequests || [])
         setCurrentBranch(json.data.currentBranch || "main")
+        setDiff(json.data.diff || "")
       }
     } catch (err) {
       console.error(err)
@@ -63,8 +69,28 @@ export default function GitControlPage() {
   }
 
   useEffect(() => {
-    loadGitData()
+    let active = true
+    fetch("/api/projects")
+      .then((res) => res.json())
+      .then((json) => {
+        if (!active) return
+        const list = json?.data || []
+        setProjects(list)
+        if (list.length > 0) {
+          const id = list[0].id
+          setProjectId(id)
+          loadGitData(id)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
   }, [])
+
+  useEffect(() => {
+    if (projectId) loadGitData(projectId)
+  }, [projectId])
 
   const handleRollback = async (sha: string) => {
     if (!confirm(`Are you sure you want to revert commit ${sha}? A revert commit will be appended.`)) return
@@ -75,6 +101,7 @@ export default function GitControlPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "revert",
+          projectId,
           commitSha: sha,
         }),
       })
@@ -99,6 +126,7 @@ export default function GitControlPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "pr",
+          projectId,
           branchName: prBranch,
           prTitle: prTitle || "feat: AI Agent feature branch update",
         }),
@@ -145,6 +173,17 @@ export default function GitControlPage() {
         description="Isolated task worktrees, automatic pull request generation, and atomic commit rollbacks."
         action={
           <div className="flex items-center gap-2">
+            <select
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+              className="rounded-md border border-[#E8EAED] bg-[#FFFFFF] px-2 py-1.5 text-xs text-[#17191C]"
+            >
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
             <button
               onClick={() => setShowBranchModal(true)}
               className="flex items-center gap-1.5 rounded-lg border border-[#E8EAED] bg-[#FFFFFF] px-3.5 py-1.5 text-xs font-semibold text-[#17191C] hover:bg-[#F2F3F5] transition-colors"
@@ -319,6 +358,15 @@ export default function GitControlPage() {
           Merge Conflict Resolver
         </button>
       </div>
+
+      {diff && (
+        <GlassCard className="p-4 border-[#E8EAED] bg-[#FFFFFF]">
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-[#9AA0A8]">Latest workspace diff</p>
+          <pre className="max-h-64 overflow-auto rounded-md bg-[#F8F9FB] p-3 font-mono text-[11px] text-[#17191C] whitespace-pre-wrap">
+            {diff}
+          </pre>
+        </GlassCard>
+      )}
 
       {/* Content */}
       {activeTab === "commits" && (
