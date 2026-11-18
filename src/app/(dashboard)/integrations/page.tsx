@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   Check,
   CheckCircle2,
@@ -115,6 +115,15 @@ export default function IntegrationsPage() {
   const [apiKeyInput, setApiKeyInput] = useState("")
   const [syncing, setSyncing] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!selectedProvider) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedProvider(null)
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [selectedProvider])
 
   const handleConnect = (e: React.FormEvent) => {
     e.preventDefault()

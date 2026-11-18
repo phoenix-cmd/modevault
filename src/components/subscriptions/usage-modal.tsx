@@ -35,6 +35,15 @@ export function UsageModal({
     setError(null)
   }, [subscription, isOpen])
 
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [isOpen, onClose])
+
   if (!isOpen || !subscription) return null
 
   const handleSubmit = async (e: React.FormEvent) => {

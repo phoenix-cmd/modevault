@@ -37,6 +37,15 @@ export default function BillingPage() {
     setDate(new Date().toISOString().split("T")[0])
   }, [])
 
+  useEffect(() => {
+    if (!isModalOpen) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsModalOpen(false)
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [isModalOpen])
+
   const fetchData = async () => {
     try {
       setLoading(true)
