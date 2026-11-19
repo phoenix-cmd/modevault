@@ -81,6 +81,7 @@ export default function SettingsPage() {
   const [renewalNoticeDays, setRenewalNoticeDays] = useState(7)
   const [creditAlertMin, setCreditAlertMin] = useState(15)
   const [savedMessage, setSavedMessage] = useState(false)
+  const [exportNotice, setExportNotice] = useState(false)
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault()
@@ -89,16 +90,15 @@ export default function SettingsPage() {
   }
 
   const exportData = () => {
-    alert(
-      "Export initiated: Generating comprehensive encrypted JSON archive of subscriptions, usage logs, and billing history..."
-    )
+    setExportNotice(true)
   }
 
   return (
-    <div className="max-w-4xl space-y-5 pb-12">
+    <div className="mx-auto max-w-4xl space-y-5 pb-16">
       <PageHeader
+        eyebrow="Workspace · Preferences"
         title="Settings"
-        description="Currency, alert thresholds, identity and data portability for your workspace."
+        description="Currency, alert thresholds, identity, and data portability for your workspace."
         action={
           <button type="submit" form="settings-form" className="btn-primary">
             <Save className="h-3.5 w-3.5" strokeWidth={2} />
@@ -307,6 +307,26 @@ export default function SettingsPage() {
               <Download className="h-3.5 w-3.5" strokeWidth={2} />
               Export database (JSON)
             </button>
+
+            {exportNotice && (
+              <div className="flex items-start justify-between gap-3 border border-warning/25 bg-warning-soft px-3.5 py-2.5 text-[11.5px] leading-relaxed text-warning animate-fade-in">
+                <span>
+                  <span className="font-medium">
+                    No export endpoint is wired in this build.
+                  </span>{" "}
+                  Nothing was generated or downloaded. The archive generator
+                  still needs to be implemented server-side.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setExportNotice(false)}
+                  className="shrink-0 text-warning/70 transition-colors hover:text-warning"
+                  aria-label="Dismiss export notice"
+                >
+                  <X className="h-3.5 w-3.5" strokeWidth={2} />
+                </button>
+              </div>
+            )}
           </div>
         </section>
 

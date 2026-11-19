@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
+import { StatBand, StatBandSkeleton } from "@/components/ui/stat-band"
 import { ProviderIcon } from "@/components/ui/provider-icon"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { cn } from "@/lib/utils"
@@ -258,10 +259,10 @@ export default function IntegrationsPage() {
   const capability = (label: string, supported: boolean) => (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] font-medium",
+        "inline-flex items-center gap-1 border px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.06em]",
         supported
-          ? "bg-success-soft text-success"
-          : "bg-surface-2 text-ink-3"
+          ? "border-success/25 bg-success-soft text-success"
+          : "border-line bg-surface-2 text-ink-3"
       )}
     >
       {supported ? (
@@ -274,14 +275,56 @@ export default function IntegrationsPage() {
   )
 
   return (
-    <div className="space-y-5 pb-12">
+    <div className="mx-auto max-w-7xl space-y-7 pb-16">
       <PageHeader
+        eyebrow="Workspace · Connectors"
         title="Integrations"
-        description="Connectors for live API telemetry, encrypted credential storage and manual tracking fallbacks."
+        description="Connectors for live API telemetry, encrypted credential storage, and manual tracking fallbacks."
       />
 
+      {loadingIntegrations ? (
+        <StatBandSkeleton columns={4} />
+      ) : (
+        <StatBand
+          columns={4}
+          items={[
+            {
+              label: "Connected",
+              value: String(
+                integrations.filter((item) => item.status === "connected").length
+              ),
+              meta: "Live official telemetry",
+              accent: true,
+            },
+            {
+              label: "Manual",
+              value: String(
+                integrations.filter((item) => item.status === "manual").length
+              ),
+              meta: "Tracked by hand",
+            },
+            {
+              label: "Not connected",
+              value: String(
+                integrations.filter(
+                  (item) => item.status === "not_connected"
+                ).length
+              ),
+              meta: "Available to configure",
+            },
+            {
+              label: "Token capable",
+              value: String(
+                integrations.filter((item) => item.features.apiTokens).length
+              ),
+              meta: "Report API usage",
+            },
+          ]}
+        />
+      )}
+
       {toastMessage && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-success/25 bg-success-soft px-3.5 py-2.5 text-[12px] text-success animate-fade-in">
+        <div className="flex items-center justify-between gap-3 border border-success/25 bg-success-soft px-3.5 py-2.5 text-[12px] text-success animate-fade-in">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} />
             <span>{toastMessage}</span>
@@ -297,7 +340,7 @@ export default function IntegrationsPage() {
       )}
 
       {errorMessage && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-danger/25 bg-danger-soft px-3.5 py-2.5 text-[12px] text-danger animate-fade-in">
+        <div className="flex items-center justify-between gap-3 border border-danger/25 bg-danger-soft px-3.5 py-2.5 text-[12px] text-danger animate-fade-in">
           <span>{errorMessage}</span>
           <button
             onClick={() => setErrorMessage(null)}
@@ -309,106 +352,115 @@ export default function IntegrationsPage() {
         </div>
       )}
 
-      {loadingIntegrations && (
-        <p className="text-[11px] text-ink-3">Loading saved credentials…</p>
-      )}
-
-      <section className="panel p-4 sm:p-5">
-        <div className="flex items-start gap-3.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-accent-line bg-accent-soft text-accent">
-            <Lock className="h-4 w-4" strokeWidth={1.8} />
-          </div>
-          <div className="space-y-1">
-            <h2 className="text-[13px] font-semibold text-ink">
-              Zero-knowledge credential security
-            </h2>
-            <p className="text-[12px] leading-relaxed text-ink-2">
-              MODELVAULT adheres to provider terms of service. We never request
-              account passwords or scrape private consumer portals. Developer API
-              keys are encrypted at rest using server-side AES-GCM and never
-              exposed to browser bundles. Where official telemetry APIs do not
-              exist, we provide transparent manual logging.
-            </p>
-          </div>
+      <section className="flex items-start gap-3.5 border-y border-line py-4">
+        <Lock
+          className="mt-0.5 h-4 w-4 shrink-0 text-accent"
+          strokeWidth={1.8}
+        />
+        <div className="space-y-1">
+          <h2 className="font-display text-[14.5px] font-medium tracking-[-0.02em] text-ink">
+            Zero-knowledge credential security
+          </h2>
+          <p className="max-w-3xl text-[12px] leading-relaxed text-ink-2">
+            MODELVAULT adheres to provider terms of service. We never request
+            account passwords or scrape private consumer portals. Developer API
+            keys are encrypted at rest using server-side AES-GCM and never
+            exposed to browser bundles. Where official telemetry APIs do not
+            exist, we provide transparent manual logging.
+          </p>
         </div>
       </section>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {integrations.map((item) => (
-          <section
-            key={item.slug}
-            className="panel flex flex-col p-4 transition-colors duration-150 hover:border-line-strong"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2.5">
-                <ProviderIcon slug={item.slug} size="md" />
-                <div className="min-w-0">
-                  <h3 className="truncate text-[13px] font-medium text-ink">
-                    {item.name}
-                  </h3>
-                  <p className="text-[11px] text-ink-3">
-                    {item.lastSync || "Manual"} sync
-                  </p>
-                </div>
-              </div>
-              <StatusBadge status={item.status} />
-            </div>
-
-            <p className="mt-3 flex-1 text-[11.5px] leading-relaxed text-ink-2">
-              {item.notes}
+      <section>
+        <div className="flex flex-wrap items-end justify-between gap-3 pb-3">
+          <div>
+            <h2 className="panel-title">Provider directory</h2>
+            <p className="panel-subtitle">
+              Read-only adapters for quota, token, and invoice telemetry.
             </p>
+          </div>
+          <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">
+            {integrations.length} providers
+          </span>
+        </div>
 
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {capability("Tokens", item.features.apiTokens)}
-              {capability("Quotas", item.features.subscriptionQuotas)}
-              {capability("Invoices", item.features.invoices)}
-            </div>
+        <div className="grid grid-cols-1 gap-3 border-t border-line pt-4 md:grid-cols-2 xl:grid-cols-3">
+          {integrations.map((item) => (
+            <article
+              key={item.slug}
+              className="flex flex-col border border-line bg-surface p-4 transition-colors duration-150 hover:border-line-strong"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <ProviderIcon slug={item.slug} size="md" />
+                  <div className="min-w-0">
+                    <h3 className="truncate text-[13px] font-medium text-ink">
+                      {item.name}
+                    </h3>
+                    <p className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-ink-3">
+                      {item.lastSync || "Manual"}
+                    </p>
+                  </div>
+                </div>
+                <StatusBadge status={item.status} />
+              </div>
 
-            <div className="mt-3.5 flex items-center justify-between border-t border-line pt-3">
-              <span className="text-[10px] font-medium uppercase tracking-[0.07em] text-ink-3">
-                {item.status === "connected" ? "Encrypted vault" : "Manual mode"}
-              </span>
-              <button
-                onClick={() => setSelectedProvider(item)}
-                className="btn-secondary btn-sm"
-              >
-                {item.status === "connected" ? "Reconfigure" : "Configure"}
-              </button>
-            </div>
-          </section>
-        ))}
-      </div>
+              <p className="mt-3 flex-1 text-[11.5px] leading-relaxed text-ink-2">
+                {item.notes}
+              </p>
+
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {capability("Tokens", item.features.apiTokens)}
+                {capability("Quotas", item.features.subscriptionQuotas)}
+                {capability("Invoices", item.features.invoices)}
+              </div>
+
+              <div className="mt-3.5 flex items-center justify-between border-t border-line pt-3">
+                <span className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-ink-3">
+                  {item.status === "connected" ? "Encrypted vault" : "Manual mode"}
+                </span>
+                <button
+                  onClick={() => setSelectedProvider(item)}
+                  className="btn-secondary btn-sm"
+                >
+                  {item.status === "connected" ? "Reconfigure" : "Configure"}
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
 
       {selectedProvider && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm animate-fade-in">
+        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div
             ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="configure-provider-title"
-            className="glass-panel relative w-full max-w-md rounded-xl"
+            className="panel max-h-[90vh] w-full max-w-md overflow-y-auto shadow-2xl"
           >
-            <div className="flex items-center justify-between gap-4 border-b border-line px-5 py-3.5">
-              <div className="flex items-center gap-2">
-                <Key className="h-4 w-4 text-accent" strokeWidth={1.8} />
-                <div>
-                  <h2
-                    id="configure-provider-title"
-                    className="text-[14px] font-semibold text-ink"
-                  >
-                    Configure {selectedProvider.name}
-                  </h2>
-                  <p className="text-[11.5px] text-ink-3">
-                    Read-only telemetry adapter
-                  </p>
-                </div>
+            <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
+              <div>
+                <p className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-accent">
+                  Telemetry adapter
+                </p>
+                <h2
+                  id="configure-provider-title"
+                  className="mt-1 font-display text-[16px] font-medium tracking-[-0.02em] text-ink"
+                >
+                  {selectedProvider.name}
+                </h2>
+                <p className="mt-1 text-[11.5px] text-ink-3">
+                  Read-only quota, token, and invoice access.
+                </p>
               </div>
               <button
                 onClick={() => setSelectedProvider(null)}
-                className="icon-btn"
+                className="icon-btn -mr-1.5 -mt-1"
                 aria-label="Close"
               >
-                <X className="h-4 w-4" strokeWidth={2} />
+                <X className="h-4 w-4" strokeWidth={1.8} />
               </button>
             </div>
 
@@ -421,13 +473,16 @@ export default function IntegrationsPage() {
                 </p>
 
                 <div>
-                  <label className="label">API key or access token</label>
+                  <label className="label" htmlFor="provider-api-key">
+                    API key or access token
+                  </label>
                   <div className="relative">
                     <Key
                       className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3"
-                      strokeWidth={2}
+                      strokeWidth={1.8}
                     />
                     <input
+                      id="provider-api-key"
                       type="password"
                       required={!selectedProvider.keyPreview}
                       placeholder={
@@ -442,12 +497,12 @@ export default function IntegrationsPage() {
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-line bg-surface-2/60 p-3">
-                  <div className="flex items-center gap-1.5 text-[11px] font-medium text-success">
+                <div className="border border-line bg-surface-2/50 p-3">
+                  <div className="flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-[0.1em] text-success">
                     <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.8} />
                     Encrypted client boundary
                   </div>
-                  <p className="mt-1 text-[11px] leading-relaxed text-ink-3">
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-ink-3">
                     Keys are used only for read-only quota and balance telemetry
                     and are never transmitted to third parties.
                   </p>
@@ -461,7 +516,7 @@ export default function IntegrationsPage() {
                       type="button"
                       onClick={handleDisconnect}
                       disabled={syncing}
-                      className="text-[11.5px] font-medium text-danger hover:underline disabled:opacity-50"
+                      className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-danger hover:underline disabled:opacity-50"
                     >
                       Disconnect credential
                     </button>
