@@ -65,10 +65,10 @@ function UsageRemaining({ subscription }: { subscription: SubscriptionData }) {
 
   return (
     <div className="w-[150px]">
-      <div className="flex items-center justify-between gap-2 text-[11.5px]">
+      <div className="flex items-center justify-between gap-2 font-mono text-[10.5px]">
         <span
           className={cn(
-            "font-medium tnum",
+            "font-medium tabular-nums",
             remaining <= 10
               ? "text-danger"
               : remaining <= 25
@@ -78,14 +78,14 @@ function UsageRemaining({ subscription }: { subscription: SubscriptionData }) {
         >
           {remaining}% left
         </span>
-        <span className="text-ink-3 tnum">
+        <span className="tabular-nums text-ink-3">
           {formatNumber(usage.used)} / {formatNumber(usage.quota)}
         </span>
       </div>
-      <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-surface-3">
+      <div className="mt-2 h-px w-full bg-surface-3">
         <div
           className={cn(
-            "h-full rounded-full",
+            "h-px",
             remaining <= 10
               ? "bg-danger"
               : remaining <= 25
@@ -273,11 +273,11 @@ export function SubscriptionList({
                       {sub.billingCycle}
                     </td>
                     <td className="whitespace-nowrap text-right">
-                      <p className="text-[13px] font-medium text-ink tnum">
+                      <p className="font-mono text-[12px] text-ink tabular-nums">
                         {formatCurrency(monthly, sub.currency)}
                       </p>
                       {sub.billingCycle !== "monthly" && (
-                        <p className="text-[11px] text-ink-3 tnum">
+                        <p className="font-mono text-[10px] text-ink-3 tabular-nums">
                           {formatCurrency(sub.price, sub.currency)} /{" "}
                           {sub.billingCycle === "yearly" ? "yr" : "cycle"}
                         </p>
@@ -346,13 +346,13 @@ export function SubscriptionList({
 
                 <div className="mt-3 flex items-end justify-between gap-3">
                   <div>
-                    <p className="text-[13px] font-medium text-ink tnum">
+                    <p className="font-mono text-[13px] font-medium text-ink tabular-nums">
                       {formatCurrency(monthly, sub.currency)}
-                      <span className="text-[10.5px] font-normal text-ink-3">
+                      <span className="text-[10px] font-normal text-ink-3">
                         /mo
                       </span>
                     </p>
-                    <p className="mt-0.5 text-[11px] text-ink-3">
+                    <p className="mt-1 text-[11px] text-ink-3">
                       {sub.renewalDate
                         ? `Renews ${formatRelativeDate(sub.renewalDate)}`
                         : "No renewal set"}

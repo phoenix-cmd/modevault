@@ -49,13 +49,13 @@ export function DeleteDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
       <div
         ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="delete-dialog-title"
-        className="glass-panel relative w-full max-w-sm rounded-xl"
+        className="panel relative w-full max-w-sm shadow-2xl"
       >
         <div className="flex items-start justify-between gap-3 px-5 pt-5">
           <div className="flex items-start gap-3">
@@ -65,7 +65,7 @@ export function DeleteDialog({
             <div>
               <h3
                 id="delete-dialog-title"
-                className="text-[14px] font-semibold text-ink"
+                className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink"
               >
                 Delete subscription
               </h3>

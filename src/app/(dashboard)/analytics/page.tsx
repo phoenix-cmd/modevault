@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useState, type ComponentProps } from "react"
-import { Activity, Layers, TrendingUp, Wallet } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
+import { StatBand, StatBandSkeleton } from "@/components/ui/stat-band"
 import {
   SpendingCharts,
   SpendingChartsSkeleton,
@@ -84,37 +84,36 @@ export default function AnalyticsPage() {
           label: "Monthly subscriptions",
           value: inr(data.overview.monthlySubscriptions),
           meta: "Fixed recurring spend",
-          icon: Layers,
         },
         {
           label: "Annual run-rate",
           value: inr(data.overview.annualSubscriptions),
           meta: "Projected 12-month baseline",
-          icon: TrendingUp,
         },
         {
           label: "API spend",
           value: usd(data.overview.apiSpent),
           meta: "Metered developer consumption",
-          icon: Activity,
         },
         {
           label: "Prepaid balance",
           value: usd(data.overview.apiBalance),
           meta: "Available across accounts",
-          icon: Wallet,
         },
       ]
     : []
 
   return (
-    <div className="space-y-5 pb-12">
+    <div className="space-y-8 pb-16">
       <PageHeader
+        eyebrow="Intelligence · Analysis"
         title="Analytics"
         description="Spend trends, portfolio composition and optimization signals across your AI stack."
         action={
-          <div className="flex items-center gap-2">
-            <span className="text-[11.5px] text-ink-3">Currency</span>
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-ink-3">
+              Currency
+            </span>
             <div className="segmented" role="group" aria-label="Display currency">
               <button
                 onClick={() => setCurrency("INR")}
@@ -142,28 +141,9 @@ export default function AnalyticsPage() {
       />
 
       {loading || !data?.overview ? (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="panel px-4 py-3.5">
-              <div className="skeleton h-2.5 w-24" />
-              <div className="skeleton mt-3 h-6 w-28" />
-              <div className="skeleton mt-2 h-2.5 w-32" />
-            </div>
-          ))}
-        </div>
+        <StatBandSkeleton columns={4} />
       ) : (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {metrics.map(({ label, value, meta, icon: Icon }) => (
-            <div key={label} className="panel px-4 py-3.5">
-              <div className="flex items-start justify-between gap-3">
-                <p className="metric-label">{label}</p>
-                <Icon className="h-3.5 w-3.5 text-ink-3" strokeWidth={1.8} />
-              </div>
-              <p className="metric-value">{value}</p>
-              <p className="metric-meta">{meta}</p>
-            </div>
-          ))}
-        </div>
+        <StatBand items={metrics} columns={4} />
       )}
 
       {loading ? (

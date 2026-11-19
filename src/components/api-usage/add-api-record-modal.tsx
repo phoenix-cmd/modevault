@@ -87,13 +87,13 @@ export function AddApiRecordModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="api-record-modal-title"
-        className="glass-panel relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl"
+        className="panel relative max-h-[90vh] w-full max-w-lg overflow-y-auto shadow-2xl"
       >
         <div className="flex items-center justify-between gap-4 border-b border-line px-5 py-3.5">
           <div className="flex items-center gap-2">
@@ -101,7 +101,7 @@ export function AddApiRecordModal({
             <div>
               <h2
                 id="api-record-modal-title"
-                className="text-[14px] font-semibold text-ink"
+                className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink"
               >
                 Log API usage
               </h2>

@@ -31,20 +31,20 @@ const TYPE_ICON: Record<InsightItem["type"], LucideIcon> = {
 
 const SEVERITY_STYLE: Record<
   InsightItem["severity"],
-  { box: string; label: string; text: string }
+  { icon: string; label: string; text: string }
 > = {
   high: {
-    box: "border-warning/20 bg-warning-soft text-warning",
+    icon: "text-warning",
     label: "High priority",
     text: "text-warning",
   },
   medium: {
-    box: "border-info/20 bg-info-soft text-info",
+    icon: "text-info",
     label: "Review",
     text: "text-info",
   },
   low: {
-    box: "border-success/20 bg-success-soft text-success",
+    icon: "text-success",
     label: "Opportunity",
     text: "text-success",
   },
@@ -52,75 +52,77 @@ const SEVERITY_STYLE: Record<
 
 export function SmartIntelligenceCards({ insights }: SmartIntelligenceCardsProps) {
   return (
-    <section className="panel overflow-hidden">
-      <div className="panel-header">
+    <section className="border-t border-line pt-5">
+      <div className="flex items-start justify-between gap-4 pb-4">
         <div>
-          <h2 className="panel-title">Optimization signals</h2>
-          <p className="panel-subtitle">
-            Efficiency observations across your subscription portfolio
+          <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
+            Optimization signals
+          </h2>
+          <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
+            Efficiency across your subscription portfolio
           </p>
         </div>
-        <span className="badge bg-surface-2 text-ink-3">
-          {insights.length} finding{insights.length === 1 ? "" : "s"}
+        <span className="font-mono text-[11px] tabular-nums text-ink-3">
+          {String(insights.length).padStart(2, "0")}
         </span>
       </div>
 
       {insights.length === 0 ? (
-        <p className="px-4 py-8 text-center text-[12px] text-ink-3">
+        <p className="border-t border-line py-8 text-center text-[12px] text-ink-3">
           No optimization signals right now.
         </p>
       ) : (
-        <div className="row-divide">
+        <ul className="border-t border-line">
           {insights.map((item, index) => {
             const Icon = TYPE_ICON[item.type] ?? Sparkles
             const style = SEVERITY_STYLE[item.severity] ?? SEVERITY_STYLE.low
 
             return (
-              <div
+              <li
                 key={`${item.type}-${index}`}
-                className="flex items-start gap-3 px-4 py-3.5 sm:px-5"
+                className="flex items-start gap-3 border-b border-line py-4 last:border-b-0"
               >
                 <div
                   className={cn(
-                    "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border",
-                    style.box
+                    "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded border border-line bg-surface-2",
+                    style.icon
                   )}
                 >
-                  <Icon className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  <Icon className="h-3 w-3" strokeWidth={1.8} />
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
-                    <p className="text-[13px] font-medium text-ink">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    <p className="text-[12.5px] font-medium text-ink">
                       {item.title}
                     </p>
                     {item.impact && (
-                      <span className="badge bg-success-soft text-success tnum">
+                      <span className="font-mono text-[9.5px] uppercase tracking-[0.06em] text-success">
                         {item.impact}
                       </span>
                     )}
                   </div>
-                  <p className="mt-0.5 text-[11.5px] leading-relaxed text-ink-2">
+                  <p className="mt-1 text-[11.5px] leading-relaxed text-ink-2">
                     {item.description}
                   </p>
                   <p
                     className={cn(
-                      "mt-1 text-[10.5px] font-medium uppercase tracking-[0.06em]",
+                      "mt-2 font-mono text-[9px] font-medium uppercase tracking-[0.1em]",
                       style.text
                     )}
                   >
                     {style.label}
                   </p>
                 </div>
-              </div>
+              </li>
             )
           })}
-        </div>
+        </ul>
       )}
 
-      <div className="flex items-start gap-2.5 border-t border-line bg-surface-2/50 px-4 py-3 sm:px-5">
+      <div className="flex items-start gap-2.5 border-t border-line pt-4">
         <ShieldAlert
-          className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-3"
+          className="mt-0.5 h-3 w-3 shrink-0 text-ink-3"
           strokeWidth={1.8}
         />
         <p className="text-[11px] leading-relaxed text-ink-3">

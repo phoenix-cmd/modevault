@@ -24,7 +24,7 @@ export function ModelComparisonTable({ models }: ModelComparisonTableProps) {
             Official benchmark rates per million tokens
           </p>
         </div>
-        <span className="hidden text-[11px] text-ink-3 sm:block">
+        <span className="hidden font-mono text-[9.5px] uppercase tracking-[0.12em] text-ink-3 sm:block">
           USD · per 1M tokens
         </span>
       </div>
@@ -52,16 +52,16 @@ export function ModelComparisonTable({ models }: ModelComparisonTableProps) {
                 <td className="whitespace-nowrap font-mono text-[11.5px] text-ink-2">
                   {model.model}
                 </td>
-                <td className="whitespace-nowrap text-ink-3 tnum">
+                <td className="whitespace-nowrap font-mono text-[11px] text-ink-3 tabular-nums">
                   {model.context}
                 </td>
-                <td className="text-right text-ink-2 tnum">
+                <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">
                   {model.inputPerM}
                 </td>
-                <td className="text-right font-medium text-ink tnum">
+                <td className="text-right font-mono text-[11px] font-medium text-ink tabular-nums">
                   {model.outputPerM}
                 </td>
-                <td className="hidden text-right text-ink-3 tnum lg:table-cell">
+                <td className="hidden text-right font-mono text-[11px] text-ink-3 tabular-nums lg:table-cell">
                   {model.cachedPerM}
                 </td>
                 <td className="hidden max-w-[220px] truncate text-ink-3 xl:table-cell">
@@ -89,26 +89,20 @@ export function ModelComparisonTable({ models }: ModelComparisonTableProps) {
             </div>
             <div className="mt-2.5 grid grid-cols-3 gap-3">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.06em] text-ink-3">
-                  Input
-                </p>
-                <p className="mt-0.5 text-[12px] text-ink-2 tnum">
+                <p className="metric-label">Input</p>
+                <p className="mt-1 font-mono text-[11px] text-ink-2 tabular-nums">
                   {model.inputPerM}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-[0.06em] text-ink-3">
-                  Output
-                </p>
-                <p className="mt-0.5 text-[12px] font-medium text-ink tnum">
+                <p className="metric-label">Output</p>
+                <p className="mt-1 font-mono text-[11px] font-medium text-ink tabular-nums">
                   {model.outputPerM}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-[0.06em] text-ink-3">
-                  Cached
-                </p>
-                <p className="mt-0.5 text-[12px] text-ink-2 tnum">
+                <p className="metric-label">Cached</p>
+                <p className="mt-1 font-mono text-[11px] text-ink-2 tabular-nums">
                   {model.cachedPerM}
                 </p>
               </div>

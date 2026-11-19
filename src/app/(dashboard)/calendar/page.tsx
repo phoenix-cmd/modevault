@@ -3,8 +3,8 @@
 /* eslint-disable react-hooks/set-state-in-effect -- session state is hydrated from the API on mount */
 
 import { useEffect, useState } from "react"
-import { AlertCircle, CheckCircle2, CreditCard } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
+import { StatBand, StatBandSkeleton } from "@/components/ui/stat-band"
 import { ProviderIcon } from "@/components/ui/provider-icon"
 import { formatCurrency, formatDate, formatRelativeDate } from "@/lib/utils"
 import type { RawSubscription, SubscriptionData } from "@/lib/types"
@@ -98,44 +98,37 @@ export default function CalendarPage() {
       label: "Next 7 days",
       value: String(next7Days.length),
       meta: next7Days.length > 0 ? "Imminent renewals" : "Nothing imminent",
-      icon: AlertCircle,
       accent: next7Days.length > 0,
     },
     {
       label: "30-day committed",
       value: formatCurrency(totalUpcoming30Days, "INR"),
       meta: "Scheduled charges",
-      icon: CreditCard,
     },
     {
       label: "Active schedules",
       value: String(subscriptions.length),
       meta: "Subscriptions with a renewal date",
-      icon: CheckCircle2,
     },
   ]
 
   if (loading) {
     return (
-      <div className="space-y-5 pb-12">
+      <div className="space-y-7 pb-16">
         <PageHeader
-          title="Renewal calendar"
+          eyebrow="Intelligence · Schedule"
+          title="Renewals"
           description="Forward-looking billing schedule and renewal forecast."
         />
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <div key={index} className="panel px-4 py-3.5">
-              <div className="skeleton h-2.5 w-20" />
-              <div className="skeleton mt-3 h-6 w-24" />
-              <div className="skeleton mt-2 h-2.5 w-32" />
-            </div>
-          ))}
-        </div>
-        <div className="grid gap-3 lg:grid-cols-2">
+        <StatBandSkeleton columns={3} />
+        <div className="grid gap-8 lg:grid-cols-2">
           {Array.from({ length: 2 }).map((_, index) => (
-            <div key={index} className="panel px-4 py-4">
-              <div className="skeleton mb-3 h-3.5 w-32" />
-              <div className="space-y-3">
+            <section key={index} className="border-t border-line pt-5">
+              <div className="space-y-2 pb-4">
+                <div className="skeleton h-3.5 w-32" />
+                <div className="skeleton h-2.5 w-44" />
+              </div>
+              <div className="space-y-3 border-t border-line pt-4">
                 {Array.from({ length: 3 }).map((__, i) => (
                   <div key={i} className="flex items-center gap-3">
                     <div className="skeleton h-7 w-7 rounded-[6px]" />
@@ -143,11 +136,11 @@ export default function CalendarPage() {
                       <div className="skeleton h-3 w-28" />
                       <div className="skeleton h-2.5 w-20" />
                     </div>
-                    <div className="skeleton h-4 w-14" />
+                    <div className="skeleton h-3 w-14" />
                   </div>
                 ))}
               </div>
-            </div>
+            </section>
           ))}
         </div>
       </div>
@@ -155,52 +148,41 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="space-y-5 pb-12">
+    <div className="space-y-8 pb-16">
       <PageHeader
-        title="Renewal calendar"
+        eyebrow="Intelligence · Schedule"
+        title="Renewals"
         description="A forward-looking schedule of upcoming auto-debits and cancellation warning horizons."
       />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {metrics.map(({ label, value, meta, icon: Icon, accent }) => (
-          <div key={label} className="panel px-4 py-3.5">
-            <div className="flex items-start justify-between gap-3">
-              <p className="metric-label">{label}</p>
-              <Icon
-                className={
-                  accent ? "h-3.5 w-3.5 text-accent" : "h-3.5 w-3.5 text-ink-3"
-                }
-                strokeWidth={1.8}
-              />
-            </div>
-            <p className="metric-value">{value}</p>
-            <p className="metric-meta">{meta}</p>
-          </div>
-        ))}
-      </div>
+      <StatBand items={metrics} columns={3} />
 
-      <div className="grid items-start gap-3 lg:grid-cols-2">
-        <section className="panel overflow-hidden">
-          <div className="panel-header">
+      <div className="grid items-start gap-8 lg:grid-cols-2">
+        <section className="border-t border-line pt-5">
+          <div className="flex items-start justify-between gap-4 pb-4">
             <div>
-              <h2 className="panel-title">Next 7 days</h2>
-              <p className="panel-subtitle">Imminent charges to review</p>
+              <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
+                Next 7 days
+              </h2>
+              <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
+                Imminent charges to review
+              </p>
             </div>
-            <span className="badge bg-warning-soft text-warning">
-              {next7Days.length}
+            <span className="font-mono text-[11px] tabular-nums text-warning">
+              {String(next7Days.length).padStart(2, "0")}
             </span>
           </div>
 
-          <div className="row-divide">
+          <div className="border-t border-line">
             {next7Days.length === 0 ? (
-              <p className="px-4 py-8 text-center text-[12px] text-ink-3">
+              <p className="py-8 text-center text-[12px] text-ink-3">
                 No subscriptions renew in the next 7 days.
               </p>
             ) : (
               next7Days.map((sub) => (
                 <div
                   key={sub.id}
-                  className="flex items-center justify-between gap-3 px-4 py-3"
+                  className="flex items-center justify-between gap-3 border-b border-line py-3 last:border-b-0"
                 >
                   <div className="flex min-w-0 items-center gap-2.5">
                     <ProviderIcon slug={sub.providerSlug} size="sm" />
@@ -217,10 +199,10 @@ export default function CalendarPage() {
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className="text-[12.5px] font-medium text-ink tnum">
+                    <p className="font-mono text-[12px] font-medium text-ink tabular-nums">
                       {formatCurrency(sub.price, sub.currency)}
                     </p>
-                    <p className="text-[10.5px] capitalize text-ink-3">
+                    <p className="font-mono text-[9.5px] uppercase text-ink-3">
                       {sub.billingCycle}
                     </p>
                   </div>
@@ -230,27 +212,31 @@ export default function CalendarPage() {
           </div>
         </section>
 
-        <section className="panel overflow-hidden">
-          <div className="panel-header">
+        <section className="border-t border-line pt-5">
+          <div className="flex items-start justify-between gap-4 pb-4">
             <div>
-              <h2 className="panel-title">Days 8–30</h2>
-              <p className="panel-subtitle">Upcoming later this month</p>
+              <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
+                Days 8–30
+              </h2>
+              <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
+                Upcoming later this month
+              </p>
             </div>
-            <span className="badge bg-surface-2 text-ink-3">
-              {next30Days.length}
+            <span className="font-mono text-[11px] tabular-nums text-ink-3">
+              {String(next30Days.length).padStart(2, "0")}
             </span>
           </div>
 
-          <div className="row-divide">
+          <div className="border-t border-line">
             {next30Days.length === 0 ? (
-              <p className="px-4 py-8 text-center text-[12px] text-ink-3">
+              <p className="py-8 text-center text-[12px] text-ink-3">
                 Nothing scheduled for the rest of the 30-day window.
               </p>
             ) : (
               next30Days.map((sub) => (
                 <div
                   key={sub.id}
-                  className="flex items-center justify-between gap-3 px-4 py-3"
+                  className="flex items-center justify-between gap-3 border-b border-line py-3 last:border-b-0"
                 >
                   <div className="flex min-w-0 items-center gap-2.5">
                     <ProviderIcon slug={sub.providerSlug} size="sm" />
@@ -264,10 +250,10 @@ export default function CalendarPage() {
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className="text-[12.5px] font-medium text-ink tnum">
+                    <p className="font-mono text-[12px] font-medium text-ink tabular-nums">
                       {formatCurrency(sub.price, sub.currency)}
                     </p>
-                    <p className="text-[10.5px] text-ink-3">
+                    <p className="font-mono text-[9.5px] text-ink-3 tabular-nums">
                       {formatDate(sub.renewalDate!)}
                     </p>
                   </div>
@@ -278,16 +264,18 @@ export default function CalendarPage() {
         </section>
       </div>
 
-      <section className="panel overflow-hidden">
-        <div className="panel-header">
-          <div>
-            <h2 className="panel-title">Full schedule</h2>
-            <p className="panel-subtitle">All active renewals in date order</p>
-          </div>
+      <section className="border-t border-line pt-5">
+        <div className="pb-4">
+          <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
+            Full schedule
+          </h2>
+          <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
+            All active renewals in date order
+          </p>
         </div>
 
         {/* Desktop table */}
-        <div className="hidden md:block">
+        <div className="hidden border-t border-line md:block">
           <table className="data-table">
             <thead>
               <tr>
@@ -301,7 +289,7 @@ export default function CalendarPage() {
             <tbody>
               {subscriptions.map((sub) => (
                 <tr key={sub.id}>
-                  <td className="whitespace-nowrap font-medium text-ink tnum">
+                  <td className="whitespace-nowrap font-mono text-[11px] font-medium text-ink tabular-nums">
                     {formatDate(sub.renewalDate!)}
                   </td>
                   <td>
@@ -311,10 +299,10 @@ export default function CalendarPage() {
                     <p className="text-[11px] text-ink-3">{sub.planName}</p>
                   </td>
                   <td className="capitalize text-ink-2">{sub.billingCycle}</td>
-                  <td className="text-right font-medium text-ink tnum">
+                  <td className="text-right font-mono text-[11.5px] font-medium text-ink tabular-nums">
                     {formatCurrency(sub.price, sub.currency)}
                   </td>
-                  <td className="text-right text-ink-2 tnum">
+                  <td className="text-right text-ink-2">
                     {formatRelativeDate(sub.renewalDate!)}
                   </td>
                 </tr>
@@ -324,9 +312,9 @@ export default function CalendarPage() {
         </div>
 
         {/* Mobile list */}
-        <div className="row-divide md:hidden">
+        <div className="border-t border-line md:hidden">
           {subscriptions.map((sub) => (
-            <div key={sub.id} className="px-4 py-3">
+            <div key={sub.id} className="border-b border-line py-3 last:border-b-0">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2.5">
                   <ProviderIcon slug={sub.providerSlug} size="sm" />
@@ -340,10 +328,10 @@ export default function CalendarPage() {
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-[12.5px] font-medium text-ink tnum">
+                  <p className="font-mono text-[12px] font-medium text-ink tabular-nums">
                     {formatCurrency(sub.price, sub.currency)}
                   </p>
-                  <p className="text-[10.5px] text-ink-3 tnum">
+                  <p className="font-mono text-[9.5px] text-ink-3 tabular-nums">
                     {formatRelativeDate(sub.renewalDate!)}
                   </p>
                 </div>

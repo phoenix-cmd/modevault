@@ -31,12 +31,12 @@ export function SubscriptionCard({
   const monthly = getMonthlyEquivalent(sub.price, sub.billingCycle)
 
   return (
-    <div className="panel relative flex flex-col p-4">
+    <div className="panel relative flex flex-col p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <ProviderIcon slug={sub.providerSlug} size="md" />
           <div className="min-w-0">
-            <p className="truncate text-[13.5px] font-semibold text-ink">
+            <p className="truncate text-[13px] font-medium text-ink">
               {sub.providerName}
             </p>
             <p className="truncate text-[11.5px] text-ink-3">{sub.planName}</p>
@@ -99,18 +99,18 @@ export function SubscriptionCard({
         </div>
       </div>
 
-      <div className="mt-4 flex items-baseline gap-1.5">
-        <span className="text-[21px] font-semibold tracking-[-0.02em] text-ink tnum">
+      <div className="mt-5 flex items-baseline gap-1.5">
+        <span className="font-mono text-[22px] font-medium tracking-[-0.045em] text-ink tabular-nums">
           {formatCurrency(monthly, sub.currency)}
         </span>
-        <span className="text-[11.5px] text-ink-3">
+        <span className="font-mono text-[10px] text-ink-3">
           /mo
           {sub.billingCycle !== "monthly" &&
             ` · billed ${sub.billingCycle}`}
         </span>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-5">
         {usage ? (
           <UsageBar
             used={usage.used}
@@ -118,20 +118,26 @@ export function SubscriptionCard({
             unit={usage.unit}
           />
         ) : (
-          <p className="text-[11.5px] text-ink-3">No usage quota configured</p>
+          <p className="font-mono text-[10.5px] text-ink-3">
+            No usage quota configured
+          </p>
         )}
       </div>
 
-      <div className="mt-auto space-y-1.5 border-t border-line pt-3 text-[11.5px]">
+      <div className="mt-auto space-y-2 border-t border-line pt-3">
         <div className="mt-2 flex items-center justify-between gap-3">
-          <span className="text-ink-3">Next renewal</span>
-          <span className="font-medium text-ink-2">
+          <span className="font-mono text-[9px] font-medium uppercase tracking-[0.12em] text-ink-3">
+            Next renewal
+          </span>
+          <span className="text-[11.5px] font-medium text-ink-2">
             {sub.renewalDate ? formatRelativeDate(sub.renewalDate) : "—"}
           </span>
         </div>
         <div className="flex items-center justify-between gap-3">
-          <span className="text-ink-3">Source</span>
-          <span className="text-ink-2 capitalize">
+          <span className="font-mono text-[9px] font-medium uppercase tracking-[0.12em] text-ink-3">
+            Source
+          </span>
+          <span className="text-[11.5px] capitalize text-ink-2">
             {sub.dataSource.replace("_", " ")}
           </span>
         </div>

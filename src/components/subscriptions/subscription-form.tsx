@@ -186,19 +186,19 @@ export function SubscriptionForm({
     "mb-3 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-3"
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="subscription-form-title"
-        className="glass-panel relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl"
+        className="panel relative max-h-[90vh] w-full max-w-2xl overflow-y-auto shadow-2xl"
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-line bg-surface/95 px-5 py-3.5 backdrop-blur">
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-line bg-surface px-5 py-4">
           <div>
             <h2
               id="subscription-form-title"
-              className="text-[14px] font-semibold text-ink"
+              className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink"
             >
               {isEditing ? "Edit subscription" : "Add subscription"}
             </h2>
@@ -451,7 +451,7 @@ export function SubscriptionForm({
             </div>
           </div>
 
-          <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-line bg-surface/95 px-5 py-3 backdrop-blur">
+          <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t border-line bg-surface px-5 py-3">
             <button type="button" onClick={onClose} className="btn-ghost">
               Cancel
             </button>

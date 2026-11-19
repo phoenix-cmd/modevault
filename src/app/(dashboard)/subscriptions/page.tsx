@@ -4,13 +4,11 @@
 
 import { useEffect, useState } from "react"
 import {
-  Clock,
   Layers,
   LayoutGrid,
   List,
   Plus,
   Search,
-  TrendingUp,
 } from "lucide-react"
 import { SubscriptionCard } from "@/components/subscriptions/subscription-card"
 import { SubscriptionList } from "@/components/subscriptions/subscription-list"
@@ -18,6 +16,7 @@ import { SubscriptionForm } from "@/components/subscriptions/subscription-form"
 import { UsageModal } from "@/components/subscriptions/usage-modal"
 import { DeleteDialog } from "@/components/subscriptions/delete-dialog"
 import { PageHeader } from "@/components/ui/page-header"
+import { StatBand, StatBandSkeleton } from "@/components/ui/stat-band"
 import { EmptyState } from "@/components/ui/empty-state"
 import { PROVIDER_LIST } from "@/lib/providers"
 import { formatCurrency, getMonthlyEquivalent } from "@/lib/utils"
@@ -146,133 +145,115 @@ export default function SubscriptionsPage() {
       label: "Active subscriptions",
       value: String(activeSubs.length),
       meta: `${subscriptions.length} tracked in total`,
-      icon: Layers,
     },
     {
       label: "Monthly committed",
       value: formatCurrency(totalMonthlySpend, "INR"),
       meta: "Normalized across billing cycles",
-      icon: TrendingUp,
     },
     {
       label: "Renewing in 14 days",
       value: String(expiringSoonCount),
       meta: expiringSoonCount > 0 ? "Review before renewal" : "Nothing due soon",
-      icon: Clock,
       accent: expiringSoonCount > 0,
     },
   ]
 
   return (
-    <div className="space-y-5 pb-12">
+    <div className="space-y-7 pb-16">
       <PageHeader
+        eyebrow="Intelligence · Portfolio"
         title="Subscriptions"
         description="Every AI plan and developer account in one portfolio, with live quota and renewal tracking."
         action={
           <button onClick={openCreate} className="btn-primary">
-            <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+            <Plus className="h-3.5 w-3.5" strokeWidth={2.2} />
             Add subscription
           </button>
         }
       />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {metrics.map(({ label, value, meta, icon: Icon, accent }) => (
-          <div key={label} className="panel px-4 py-3.5">
-            <div className="flex items-start justify-between gap-3">
-              <p className="metric-label">{label}</p>
-              <Icon
-                className={
-                  accent ? "h-3.5 w-3.5 text-accent" : "h-3.5 w-3.5 text-ink-3"
-                }
-                strokeWidth={1.8}
-              />
-            </div>
-            <p className="mt-1.5 text-[21px] font-semibold tracking-[-0.02em] text-ink tnum">
-              {value}
-            </p>
-            <p className="mt-0.5 text-[11px] text-ink-3">{meta}</p>
-          </div>
-        ))}
-      </div>
+      {loading ? (
+        <StatBandSkeleton columns={3} />
+      ) : (
+        <StatBand items={metrics} columns={3} />
+      )}
 
-      <div className="panel p-2.5">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          <div className="relative min-w-0 flex-1 lg:max-w-sm">
-            <Search
-              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3"
-              strokeWidth={2}
-            />
-            <input
-              type="text"
-              placeholder="Search provider, plan or notes…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="field field-sm pl-8"
-            />
-          </div>
+      <div className="flex flex-col gap-3 border-b border-line pb-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="relative min-w-0 flex-1 lg:max-w-sm">
+          <Search
+            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3"
+            strokeWidth={2}
+          />
+          <input
+            type="text"
+            placeholder="Search provider, plan or notes…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="field field-sm pl-8"
+          />
+        </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="select select-sm w-auto"
-              aria-label="Filter by status"
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="select select-sm w-auto"
+            aria-label="Filter by status"
+          >
+            <option value="all">All statuses</option>
+            <option value="active">Active</option>
+            <option value="paused">Paused</option>
+            <option value="trial">Trial</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+
+          <select
+            value={providerFilter}
+            onChange={(e) => setProviderFilter(e.target.value)}
+            className="select select-sm w-auto"
+            aria-label="Filter by provider"
+          >
+            <option value="all">All providers</option>
+            {PROVIDER_LIST.map((p) => (
+              <option key={p.slug} value={p.slug}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="select select-sm w-auto"
+            aria-label="Filter by category"
+          >
+            <option value="all">All categories</option>
+            <option value="consumer">Consumer</option>
+            <option value="api">API account</option>
+          </select>
+
+          <div className="segmented ml-auto lg:ml-0" role="group" aria-label="View mode">
+            <button
+              onClick={() => setViewMode("list")}
+              className={`segmented-item ${
+                viewMode === "list" ? "segmented-item-active" : ""
+              }`}
+              aria-pressed={viewMode === "list"}
             >
-              <option value="all">All statuses</option>
-              <option value="active">Active</option>
-              <option value="paused">Paused</option>
-              <option value="trial">Trial</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-
-            <select
-              value={providerFilter}
-              onChange={(e) => setProviderFilter(e.target.value)}
-              className="select select-sm w-auto"
-              aria-label="Filter by provider"
+              <List className="h-3.5 w-3.5" strokeWidth={1.8} />
+              <span className="hidden sm:inline">Table</span>
+            </button>
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`segmented-item ${
+                viewMode === "grid" ? "segmented-item-active" : ""
+              }`}
+              aria-pressed={viewMode === "grid"}
             >
-              <option value="all">All providers</option>
-              {PROVIDER_LIST.map((p) => (
-                <option key={p.slug} value={p.slug}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="select select-sm w-auto"
-              aria-label="Filter by category"
-            >
-              <option value="all">All categories</option>
-              <option value="consumer">Consumer</option>
-              <option value="api">API account</option>
-            </select>
-
-            <div className="segmented ml-auto lg:ml-0" role="group" aria-label="View mode">
-              <button
-                onClick={() => setViewMode("list")}
-                className={`segmented-item ${
-                  viewMode === "list" ? "segmented-item-active" : ""
-                }`}
-                aria-pressed={viewMode === "list"}
-              >
-                <List className="h-3.5 w-3.5" strokeWidth={1.8} />
-                <span className="hidden sm:inline">Table</span>
-              </button>
-              <button
-                onClick={() => setViewMode("grid")}
-                className={`segmented-item ${
-                  viewMode === "grid" ? "segmented-item-active" : ""
-                }`}
-                aria-pressed={viewMode === "grid"}
-              >
-                <LayoutGrid className="h-3.5 w-3.5" strokeWidth={1.8} />
-                <span className="hidden sm:inline">Cards</span>
-              </button>
-            </div>
+              <LayoutGrid className="h-3.5 w-3.5" strokeWidth={1.8} />
+              <span className="hidden sm:inline">Cards</span>
+            </button>
           </div>
         </div>
       </div>

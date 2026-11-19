@@ -3,19 +3,13 @@
 /* eslint-disable react-hooks/set-state-in-effect -- session state is hydrated from the API on mount */
 
 import { useEffect, useState } from "react"
-import {
-  Activity,
-  Cpu,
-  Layers,
-  Plus,
-  RefreshCw,
-  Wallet,
-} from "lucide-react"
+import { Plus, RefreshCw } from "lucide-react"
 import { ApiAccountsCards } from "@/components/api-usage/api-accounts-cards"
 import { ApiTokenChart } from "@/components/api-usage/api-token-chart"
 import { ApiRecordsTable } from "@/components/api-usage/api-records-table"
 import { AddApiRecordModal } from "@/components/api-usage/add-api-record-modal"
 import { PageHeader } from "@/components/ui/page-header"
+import { StatBand, StatBandSkeleton } from "@/components/ui/stat-band"
 import { formatNumber } from "@/lib/utils"
 import type {
   ApiAccountData,
@@ -91,33 +85,30 @@ export default function ApiUsagePage() {
           label: "Total tokens",
           value: formatNumber(summary.totalTokens),
           meta: `Cached ${formatNumber(summary.totalCachedTokens)}`,
-          icon: Cpu,
         },
         {
           label: "API spend",
           value: `$${summary.totalCost.toFixed(2)}`,
           meta: `~₹${(summary.totalCost * 84.5).toFixed(0)} at current rates`,
-          icon: Wallet,
         },
         {
           label: "Requests",
           value: formatNumber(summary.totalRequests),
           meta: "Across recorded usage",
-          icon: Activity,
         },
         {
           label: "Developer accounts",
           value: String(accounts.length),
           meta: "Connected and manual",
-          icon: Layers,
         },
       ]
     : []
 
   return (
-    <div className="space-y-5 pb-12">
+    <div className="space-y-7 pb-16">
       <PageHeader
-        title="API usage"
+        eyebrow="Intelligence · Developer APIs"
+        title="Usage"
         description="Token throughput, prepaid credit reserves and per-model unit economics across your developer APIs."
         action={
           <>
@@ -139,7 +130,7 @@ export default function ApiUsagePage() {
               }}
               className="btn-primary"
             >
-              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+              <Plus className="h-3.5 w-3.5" strokeWidth={2.2} />
               Log usage
             </button>
           </>
@@ -147,28 +138,9 @@ export default function ApiUsagePage() {
       />
 
       {loading || !summary ? (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="panel px-4 py-3.5">
-              <div className="skeleton h-2.5 w-20" />
-              <div className="skeleton mt-3 h-6 w-24" />
-              <div className="skeleton mt-2 h-2.5 w-28" />
-            </div>
-          ))}
-        </div>
+        <StatBandSkeleton columns={4} />
       ) : (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {metrics.map(({ label, value, meta, icon: Icon }) => (
-            <div key={label} className="panel px-4 py-3.5">
-              <div className="flex items-start justify-between gap-3">
-                <p className="metric-label">{label}</p>
-                <Icon className="h-3.5 w-3.5 text-ink-3" strokeWidth={1.8} />
-              </div>
-              <p className="metric-value">{value}</p>
-              <p className="metric-meta">{meta}</p>
-            </div>
-          ))}
-        </div>
+        <StatBand items={metrics} columns={4} />
       )}
 
       {loading ? (

@@ -72,7 +72,7 @@ export function ApiAccountsCards({ accounts, onAddLog }: ApiAccountsCardsProps) 
                 </td>
                 <td className="text-right">
                   <div className="flex items-center justify-end gap-1.5">
-                    <span className="text-[13px] font-medium text-ink tnum">
+                    <span className="font-mono text-[12px] font-medium text-ink tabular-nums">
                       {formatCurrency(acc.prepaidBalance, acc.currency)}
                     </span>
                     {acc.prepaidBalance < 20 && (
@@ -82,13 +82,13 @@ export function ApiAccountsCards({ accounts, onAddLog }: ApiAccountsCardsProps) 
                     )}
                   </div>
                 </td>
-                <td className="text-right text-ink-2 tnum">
+                <td className="text-right font-mono text-[11.5px] text-ink-2 tabular-nums">
                   {formatCurrency(acc.totalSpent, acc.currency)}
                 </td>
-                <td className="text-right text-ink-2 tnum">
+                <td className="text-right font-mono text-[11.5px] text-ink-2 tabular-nums">
                   {acc.rateLimit ? `${acc.rateLimit} RPM` : "Default"}
                 </td>
-                <td className="whitespace-nowrap text-ink-3">
+                <td className="whitespace-nowrap font-mono text-[10.5px] text-ink-3">
                   {acc.lastSyncAt
                     ? new Date(acc.lastSyncAt).toLocaleDateString("en-IN", {
                         day: "numeric",
@@ -131,18 +131,14 @@ export function ApiAccountsCards({ accounts, onAddLog }: ApiAccountsCardsProps) 
 
             <div className="mt-3 grid grid-cols-2 gap-3">
               <div>
-                <p className="text-[10.5px] uppercase tracking-[0.06em] text-ink-3">
-                  Prepaid balance
-                </p>
-                <p className="mt-0.5 text-[13px] font-medium text-ink tnum">
+                <p className="metric-label">Prepaid balance</p>
+                <p className="mt-1 font-mono text-[12px] font-medium text-ink tabular-nums">
                   {formatCurrency(acc.prepaidBalance, acc.currency)}
                 </p>
               </div>
               <div>
-                <p className="text-[10.5px] uppercase tracking-[0.06em] text-ink-3">
-                  Total spent
-                </p>
-                <p className="mt-0.5 text-[13px] font-medium text-ink tnum">
+                <p className="metric-label">Total spent</p>
+                <p className="mt-1 font-mono text-[12px] font-medium text-ink tabular-nums">
                   {formatCurrency(acc.totalSpent, acc.currency)}
                 </p>
               </div>

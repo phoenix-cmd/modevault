@@ -17,17 +17,17 @@ export function UsageBar({
 }: UsageBarProps) {
   if (!quota || quota === 0) {
     return (
-      <div className={cn("space-y-1.5", className)}>
+      <div className={cn("space-y-2", className)}>
         {showLabel && (
-          <div className="flex items-center justify-between gap-3 text-[11.5px] text-ink-3">
-            <span className="tnum">
+          <div className="flex items-center justify-between gap-3 font-mono text-[10.5px] text-ink-3">
+            <span className="tabular-nums">
               {used.toLocaleString()} {unit}
             </span>
             <span>Unmetered</span>
           </div>
         )}
-        <div className="h-1 w-full overflow-hidden rounded-full bg-surface-3">
-          <div className="h-full w-1/3 rounded-full bg-ink-3/40" />
+        <div className="h-px w-full bg-surface-3">
+          <div className="h-px w-1/3 bg-ink-3/40" />
         </div>
       </div>
     )
@@ -36,15 +36,15 @@ export function UsageBar({
   const percentage = Math.min(Math.round((used / quota) * 100), 100)
 
   return (
-    <div className={cn("space-y-1.5", className)}>
+    <div className={cn("space-y-2", className)}>
       {showLabel && (
-        <div className="flex items-center justify-between gap-3 text-[11.5px]">
-          <span className="text-ink-2 tnum">
+        <div className="flex items-center justify-between gap-3 font-mono text-[10.5px]">
+          <span className="text-ink-2 tabular-nums">
             {used.toLocaleString()} / {quota.toLocaleString()} {unit}
           </span>
           <span
             className={cn(
-              "font-medium tnum",
+              "font-medium tabular-nums",
               percentage >= 90
                 ? "text-danger"
                 : percentage >= 75
@@ -56,10 +56,10 @@ export function UsageBar({
           </span>
         </div>
       )}
-      <div className="h-1 w-full overflow-hidden rounded-full bg-surface-3">
+      <div className="h-px w-full bg-surface-3">
         <div
           className={cn(
-            "h-full rounded-full transition-[width] duration-500 ease-out",
+            "h-px transition-[width] duration-500 ease-out",
             getUsageBarColor(percentage)
           )}
           style={{ width: `${percentage}%` }}

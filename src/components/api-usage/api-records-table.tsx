@@ -151,7 +151,7 @@ export function ApiRecordsTable({ records }: ApiRecordsTableProps) {
               <tbody>
                 {visible.map((record) => (
                   <tr key={record.id}>
-                    <td className="whitespace-nowrap text-ink-3 tnum">
+                    <td className="whitespace-nowrap font-mono text-[10.5px] text-ink-3 tabular-nums">
                       {formatDate(record.date)}
                     </td>
                     <td>
@@ -162,24 +162,24 @@ export function ApiRecordsTable({ records }: ApiRecordsTableProps) {
                         {record.apiAccount?.provider?.name || "Provider"}
                       </p>
                     </td>
-                    <td className="text-right text-ink-2 tnum">
+                    <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">
                       {formatNumber(record.inputTokens)}
                     </td>
-                    <td className="text-right text-ink-2 tnum">
+                    <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">
                       {formatNumber(record.outputTokens)}
                     </td>
-                    <td className="text-right text-ink-3 tnum">
+                    <td className="text-right font-mono text-[11px] text-ink-3 tabular-nums">
                       {record.cachedTokens > 0
                         ? formatNumber(record.cachedTokens)
                         : "—"}
                     </td>
-                    <td className="text-right font-medium text-ink tnum">
+                    <td className="text-right font-mono text-[11px] font-medium text-ink tabular-nums">
                       {formatNumber(record.totalTokens)}
                     </td>
-                    <td className="text-right text-ink tnum">
+                    <td className="text-right font-mono text-[11px] text-ink tabular-nums">
                       {formatCost(record.cost, record.currency)}
                     </td>
-                    <td className="text-right text-ink-2 tnum">
+                    <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">
                       {record.requestCount}
                     </td>
                     <td>
@@ -207,12 +207,12 @@ export function ApiRecordsTable({ records }: ApiRecordsTableProps) {
                       {formatDate(record.date)}
                     </p>
                   </div>
-                  <span className="shrink-0 text-[12px] font-medium text-ink tnum">
+                  <span className="shrink-0 font-mono text-[11.5px] font-medium text-ink tabular-nums">
                     {formatCost(record.cost, record.currency)}
                   </span>
                 </div>
 
-                <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10.5px] text-ink-3 tnum">
+                <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[10px] text-ink-3 tabular-nums">
                   <span>
                     Total <span className="text-ink-2">{formatNumber(record.totalTokens)}</span>
                   </span>

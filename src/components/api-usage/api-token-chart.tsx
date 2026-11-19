@@ -11,9 +11,10 @@ import {
 } from "recharts"
 import { formatCurrency, formatNumber } from "@/lib/utils"
 
-const CHART_ACCENT = "#5b61d6"
-const GRID_COLOR = "rgba(115, 121, 130, 0.14)"
-const AXIS_COLOR = "#9aa0a8"
+const CHART_ACCENT = "var(--mv-chart-1)"
+const GRID_COLOR = "var(--mv-grid)"
+const AXIS_COLOR = "var(--mv-text-3)"
+const CURSOR_COLOR = "var(--mv-border-strong)"
 
 interface DailyPoint {
   date: string
@@ -45,29 +46,29 @@ function TrendTooltip({
   if (!point) return null
 
   return (
-    <div className="glass-panel rounded-lg px-3 py-2">
-      <p className="mb-1.5 text-[11px] font-medium text-ink-3">
+    <div className="rounded border border-line bg-surface px-3 py-2">
+      <p className="mb-1.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-ink-3">
         {new Date(point.date).toLocaleDateString("en-IN", {
           day: "numeric",
           month: "short",
         })}
       </p>
-      <div className="space-y-1 text-[12px]">
-        <div className="flex items-center justify-between gap-5">
+      <div className="space-y-1 font-mono text-[11px]">
+        <div className="flex items-center justify-between gap-6">
           <span className="text-ink-2">Tokens</span>
-          <span className="font-medium text-ink tnum">
+          <span className="tabular-nums text-ink">
             {formatNumber(point.tokens)}
           </span>
         </div>
-        <div className="flex items-center justify-between gap-5">
+        <div className="flex items-center justify-between gap-6">
           <span className="text-ink-2">Cost</span>
-          <span className="font-medium text-ink tnum">
+          <span className="tabular-nums text-ink">
             {formatCurrency(point.cost, "USD")}
           </span>
         </div>
-        <div className="flex items-center justify-between gap-5">
+        <div className="flex items-center justify-between gap-6">
           <span className="text-ink-2">Requests</span>
-          <span className="font-medium text-ink tnum">
+          <span className="tabular-nums text-ink">
             {formatNumber(point.requests)}
           </span>
         </div>
@@ -81,7 +82,7 @@ export function ApiTokenChart({ dailyTrend, byModel }: ApiTokenChartProps) {
   const maxCost = Math.max(...topModels.map((m) => m.cost), 0.0001)
 
   return (
-    <div className="grid gap-3 lg:grid-cols-3">
+    <div className="grid gap-8 lg:grid-cols-3">
       <section className="panel overflow-hidden lg:col-span-2">
         <div className="panel-header">
           <div>
@@ -90,7 +91,7 @@ export function ApiTokenChart({ dailyTrend, byModel }: ApiTokenChartProps) {
               Daily ingest and generation, last 30 days
             </p>
           </div>
-          <span className="flex items-center gap-1.5 text-[11px] text-ink-3">
+          <span className="flex items-center gap-1.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] text-ink-3">
             <span
               className="h-1.5 w-1.5 rounded-full"
               style={{ background: CHART_ACCENT }}
@@ -112,7 +113,7 @@ export function ApiTokenChart({ dailyTrend, byModel }: ApiTokenChartProps) {
               />
               <XAxis
                 dataKey="date"
-                tick={{ fill: AXIS_COLOR, fontSize: 11 }}
+                tick={{ fill: AXIS_COLOR, fontSize: 10.5 }}
                 axisLine={false}
                 tickLine={false}
                 dy={6}
@@ -122,7 +123,7 @@ export function ApiTokenChart({ dailyTrend, byModel }: ApiTokenChartProps) {
                 }}
               />
               <YAxis
-                tick={{ fill: AXIS_COLOR, fontSize: 11 }}
+                tick={{ fill: AXIS_COLOR, fontSize: 10.5 }}
                 axisLine={false}
                 tickLine={false}
                 width={48}
@@ -130,7 +131,7 @@ export function ApiTokenChart({ dailyTrend, byModel }: ApiTokenChartProps) {
               />
               <Tooltip
                 content={<TrendTooltip />}
-                cursor={{ stroke: "#d6dae1", strokeDasharray: "4 4" }}
+                cursor={{ stroke: CURSOR_COLOR, strokeDasharray: "4 4" }}
               />
               <Line
                 type="monotone"
@@ -161,26 +162,26 @@ export function ApiTokenChart({ dailyTrend, byModel }: ApiTokenChartProps) {
         ) : (
           <div className="row-divide">
             {topModels.map((model) => (
-              <div key={`${model.provider}-${model.model}`} className="px-4 py-3">
+              <div key={`${model.provider}-${model.model}`} className="px-4 py-3 sm:px-5">
                 <div className="flex items-baseline justify-between gap-3">
-                  <p className="truncate font-mono text-[11.5px] text-ink">
+                  <p className="truncate font-mono text-[11px] text-ink">
                     {model.model}
                   </p>
-                  <span className="shrink-0 text-[12px] font-medium text-ink tnum">
+                  <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-ink">
                     {formatCurrency(model.cost, "USD")}
                   </span>
                 </div>
-                <div className="mt-1 flex items-center gap-2">
-                  <div className="h-1 flex-1 overflow-hidden rounded-full bg-surface-3">
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="h-px flex-1 bg-surface-3">
                     <div
-                      className="h-full rounded-full"
+                      className="h-px"
                       style={{
-                        width: `${Math.max((model.cost / maxCost) * 100, 3)}%`,
+                        width: `${Math.max((model.cost / maxCost) * 100, 2)}%`,
                         background: CHART_ACCENT,
                       }}
                     />
                   </div>
-                  <span className="shrink-0 text-[10.5px] text-ink-3 tnum">
+                  <span className="shrink-0 font-mono text-[9.5px] tabular-nums text-ink-3">
                     {formatNumber(model.tokens)} tok
                   </span>
                 </div>

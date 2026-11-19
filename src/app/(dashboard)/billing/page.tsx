@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react"
 import { Download, Plus, Receipt, X } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
+import { StatBand, StatBandSkeleton } from "@/components/ui/stat-band"
 import { cn, formatCurrency, formatDate } from "@/lib/utils"
 import type { BillingRecordData, BillingSummaryData } from "@/lib/types"
 import { useModalA11y } from "@/lib/use-modal-a11y"
@@ -127,8 +128,9 @@ export default function BillingPage() {
   )
 
   return (
-    <div className="space-y-5 pb-12">
+    <div className="space-y-7 pb-16">
       <PageHeader
+        eyebrow="Intelligence · Ledger"
         title="Billing"
         description="Consolidated expense history, payment records and recurring subscription receipts."
         action={
@@ -136,36 +138,20 @@ export default function BillingPage() {
             onClick={() => setIsModalOpen(true)}
             className="btn-primary"
           >
-            <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+            <Plus className="h-3.5 w-3.5" strokeWidth={2.2} />
             Record payment
           </button>
         }
       />
 
       {loading ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <div key={index} className="panel px-4 py-3.5">
-              <div className="skeleton h-2.5 w-24" />
-              <div className="skeleton mt-3 h-6 w-28" />
-              <div className="skeleton mt-2 h-2.5 w-32" />
-            </div>
-          ))}
-        </div>
+        <StatBandSkeleton columns={3} />
       ) : summary ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {metrics.map(({ label, value, meta }) => (
-            <div key={label} className="panel px-4 py-3.5">
-              <p className="metric-label">{label}</p>
-              <p className="metric-value">{value}</p>
-              <p className="metric-meta">{meta}</p>
-            </div>
-          ))}
-        </div>
+        <StatBand items={metrics} columns={3} />
       ) : null}
 
       <section className="panel overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-b border-line px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div>
             <h2 className="panel-title">Transactions</h2>
             <p className="panel-subtitle">
@@ -227,7 +213,7 @@ export default function BillingPage() {
                 <tbody>
                   {filtered.map((item) => (
                     <tr key={item.id}>
-                      <td className="whitespace-nowrap text-ink-2 tnum">
+                      <td className="whitespace-nowrap font-mono text-[11px] text-ink-3 tabular-nums">
                         {formatDate(item.billingDate)}
                       </td>
                       <td>
@@ -241,7 +227,7 @@ export default function BillingPage() {
                         )}
                       </td>
                       <td>{typeBadge(item.type)}</td>
-                      <td className="text-right text-[13px] font-medium text-ink tnum">
+                      <td className="text-right font-mono text-[12px] font-medium text-ink tabular-nums">
                         {formatCurrency(item.amount, item.currency)}
                       </td>
                       <td className="text-right">
@@ -279,7 +265,7 @@ export default function BillingPage() {
                           : ""}
                       </p>
                     </div>
-                    <p className="shrink-0 text-[13px] font-medium text-ink tnum">
+                    <p className="shrink-0 font-mono text-[12px] font-medium text-ink tabular-nums">
                       {formatCurrency(item.amount, item.currency)}
                     </p>
                   </div>
@@ -305,21 +291,21 @@ export default function BillingPage() {
       </section>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
           <div
             ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="record-payment-title"
-            className="glass-panel relative w-full max-w-md rounded-xl"
+            className="panel relative w-full max-w-md shadow-2xl"
           >
-            <div className="flex items-center justify-between gap-4 border-b border-line px-5 py-3.5">
+            <div className="flex items-center justify-between gap-4 border-b border-line px-5 py-4">
               <div className="flex items-center gap-2">
                 <Receipt className="h-4 w-4 text-accent" strokeWidth={1.8} />
                 <div>
                   <h2
                     id="record-payment-title"
-                    className="text-[14px] font-semibold text-ink"
+                    className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink"
                   >
                     Record payment
                   </h2>
