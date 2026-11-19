@@ -53,70 +53,79 @@ interface SuggestionsCardProps {
 
 export function SuggestionsCard({ suggestions }: SuggestionsCardProps) {
   return (
-    <section className="panel overflow-hidden">
-      <div className="panel-header">
+    <section className="border-t border-line pt-5">
+      <div className="flex items-start justify-between gap-4 pb-4">
         <div>
-          <h2 className="panel-title">Recommendations</h2>
-          <p className="panel-subtitle">
-            Generated from live quota, spend, and model pricing signals
+          <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
+            Recommendations
+          </h2>
+          <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
+            Live quota, spend, and pricing signals
           </p>
         </div>
-        <span className="rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10.5px] font-semibold text-ink-2">
-          {suggestions.length}
+        <span className="font-mono text-[11px] tabular-nums text-ink-3">
+          {String(suggestions.length).padStart(2, "0")}
         </span>
       </div>
 
       {suggestions.length === 0 ? (
-        <div className="flex items-center gap-2 px-4 py-6 text-[12.5px] text-ink-3 sm:px-5">
-          <Sparkles className="h-3.5 w-3.5 text-success" strokeWidth={1.8} />
+        <div className="flex items-start gap-2 border-t border-line py-5 text-[12px] leading-relaxed text-ink-3">
+          <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" strokeWidth={1.8} />
           No action needed right now — quotas, renewals, and spend are all within range.
         </div>
       ) : (
-        <ul className="row-divide">
+        <ul className="border-t border-line">
           {suggestions.map((suggestion) => {
             const Icon = CATEGORY_ICON[suggestion.category] ?? AlertTriangle
             const style = SEVERITY_STYLE[suggestion.severity]
             return (
               <li
                 key={suggestion.id}
-                className="group flex items-start gap-3 px-4 py-3 sm:px-5"
+                className="group border-b border-line py-3.5 last:border-b-0"
               >
-                <span
-                  className={cn(
-                    "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-line bg-surface-2",
-                    style.text
-                  )}
-                >
-                  <Icon className="h-3.5 w-3.5" strokeWidth={1.8} />
-                </span>
+                <div className="flex items-start gap-3">
+                  <span
+                    className={cn(
+                      "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded border border-line bg-surface-2",
+                      style.text
+                    )}
+                  >
+                    <Icon className="h-3 w-3" strokeWidth={1.8} />
+                  </span>
 
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <p className="text-[12.5px] font-semibold text-ink">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12.5px] font-medium leading-snug text-ink">
                       {suggestion.title}
                     </p>
-                    <span className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-[0.06em]">
-                      <span className={cn("h-1.5 w-1.5 rounded-full", style.dot)} />
-                      <span className={style.text}>{style.label}</span>
-                    </span>
-                    {suggestion.estimatedMonthlySavings ? (
-                      <span className="rounded-full border border-success/20 bg-success-soft px-1.5 py-0.5 text-[10px] font-semibold text-success">
-                        ~{formatCurrency(suggestion.estimatedMonthlySavings, suggestion.currency)}/mo
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="mt-1 line-clamp-2 text-[11.5px] leading-relaxed text-ink-3">
-                    {suggestion.description}
-                  </p>
-                </div>
+                    <p className="mt-1 line-clamp-2 text-[11.5px] leading-relaxed text-ink-3">
+                      {suggestion.description}
+                    </p>
 
-                <Link
-                  href={suggestion.actionHref}
-                  className="mt-0.5 flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium text-ink-2 opacity-0 transition-opacity hover:text-ink focus:opacity-100 group-hover:opacity-100"
-                >
-                  {suggestion.actionLabel}
-                  <ArrowRight className="h-3 w-3" />
-                </Link>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                      <span className="flex items-center gap-1 font-mono text-[9px] font-medium uppercase tracking-[0.1em]">
+                        <span className={cn("h-1 w-1 rounded-full", style.dot)} />
+                        <span className={style.text}>{style.label}</span>
+                      </span>
+                      {suggestion.estimatedMonthlySavings ? (
+                        <span className="font-mono text-[9.5px] uppercase tracking-[0.06em] text-success">
+                          ~
+                          {formatCurrency(
+                            suggestion.estimatedMonthlySavings,
+                            suggestion.currency
+                          )}
+                          /mo
+                        </span>
+                      ) : null}
+                      <Link
+                        href={suggestion.actionHref}
+                        className="inline-flex items-center gap-1 font-mono text-[9.5px] uppercase tracking-[0.08em] text-ink-3 transition-colors hover:text-ink focus-visible:text-ink focus-visible:outline-none"
+                      >
+                        {suggestion.actionLabel}
+                        <ArrowRight className="h-2.5 w-2.5" />
+                      </Link>
+                    </div>
+                  </div>
+                </div>
               </li>
             )
           })}
@@ -128,20 +137,22 @@ export function SuggestionsCard({ suggestions }: SuggestionsCardProps) {
 
 export function SuggestionsCardSkeleton() {
   return (
-    <section className="panel overflow-hidden">
-      <div className="panel-header">
-        <div className="space-y-2">
-          <div className="skeleton h-3.5 w-32" />
-          <div className="skeleton h-2.5 w-52" />
-        </div>
+    <section className="border-t border-line pt-5">
+      <div className="space-y-2 pb-4">
+        <div className="skeleton h-3.5 w-32" />
+        <div className="skeleton h-2.5 w-52" />
       </div>
-      <div className="divide-y divide-line">
+      <div className="border-t border-line">
         {Array.from({ length: 2 }).map((_, index) => (
-          <div key={index} className="flex items-start gap-3 px-5 py-3">
-            <div className="skeleton h-7 w-7 rounded-lg" />
+          <div
+            key={index}
+            className="flex items-start gap-3 border-b border-line py-3.5 last:border-b-0"
+          >
+            <div className="skeleton h-6 w-6 rounded" />
             <div className="flex-1 space-y-1.5">
               <div className="skeleton h-3 w-1/2" />
               <div className="skeleton h-2.5 w-4/5" />
+              <div className="skeleton h-2 w-24" />
             </div>
           </div>
         ))}

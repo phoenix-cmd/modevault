@@ -13,13 +13,48 @@ import { ProviderIcon } from "@/components/ui/provider-icon"
 import { formatCurrency } from "@/lib/utils"
 import type { SpendingDataPoint, ProviderSpendingData } from "@/lib/types"
 
-/* ─── Chart palette (hex for cross-theme reliability) ─── */
+/* ─── Chart palette (CSS variables so both themes stay in sync) ─── */
 
-const CHART_ACCENT = "#5b61d6"
-const CHART_TEAL = "#2f8f83"
-const GRID_COLOR = "rgba(115, 121, 130, 0.14)"
-const AXIS_COLOR = "#9aa0a8"
-const CURSOR_COLOR = "#d6dae1"
+const CHART_ACCENT = "var(--mv-chart-1)"
+const CHART_TEAL = "var(--mv-chart-2)"
+const GRID_COLOR = "var(--mv-grid)"
+const AXIS_COLOR = "var(--mv-text-3)"
+const CURSOR_COLOR = "var(--mv-border-strong)"
+
+/* ─── Shared section frame ─── */
+
+function SectionHead({
+  title,
+  meta,
+  aside,
+}: {
+  title: string
+  meta: string
+  aside?: React.ReactNode
+}) {
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 pb-5">
+      <div className="min-w-0">
+        <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
+          {title}
+        </h2>
+        <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
+          {meta}
+        </p>
+      </div>
+      {aside}
+    </div>
+  )
+}
+
+function LegendItem({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="flex items-center gap-1.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] text-ink-3">
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+      {label}
+    </span>
+  )
+}
 
 /* ─── Tooltip ─── */
 
@@ -42,15 +77,17 @@ function ChartTooltip({
   if (!active || !payload?.length) return null
 
   return (
-    <div className="glass-panel rounded-lg px-3 py-2">
+    <div className="rounded border border-line bg-surface px-3 py-2">
       {label && (
-        <p className="mb-1 text-[11px] font-medium text-ink-3">{label}</p>
+        <p className="mb-1.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-ink-3">
+          {label}
+        </p>
       )}
       <div className="space-y-1">
         {payload.map((entry) => (
           <div
             key={entry.dataKey ?? entry.name}
-            className="flex items-center justify-between gap-5 text-[12px]"
+            className="flex items-center justify-between gap-6 font-mono text-[11px]"
           >
             <span className="flex items-center gap-1.5 text-ink-2">
               <span
@@ -59,7 +96,7 @@ function ChartTooltip({
               />
               {entry.name}
             </span>
-            <span className="font-medium text-ink tnum">
+            <span className="tabular-nums text-ink">
               {formatCurrency(Number(entry.value ?? 0), "INR")}
             </span>
           </div>
@@ -78,80 +115,74 @@ function compactCurrency(value: number) {
 
 function MonthlySpendingChart({ data }: { data: SpendingDataPoint[] }) {
   return (
-    <section className="panel flex h-full flex-col overflow-hidden">
-      <div className="panel-header">
-        <div>
-          <h2 className="panel-title">Spending trend</h2>
-          <p className="panel-subtitle">Subscription vs API cost by month</p>
-        </div>
-        <div className="hidden items-center gap-3 sm:flex">
-          <span className="flex items-center gap-1.5 text-[11px] text-ink-3">
-            <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ background: CHART_ACCENT }}
-            />
-            Subscriptions
-          </span>
-          <span className="flex items-center gap-1.5 text-[11px] text-ink-3">
-            <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ background: CHART_TEAL }}
-            />
-            API
-          </span>
-        </div>
-      </div>
+    <section className="border-t border-line pt-5">
+      <SectionHead
+        title="Spending trend"
+        meta="Subscriptions vs API · trailing six months"
+        aside={
+          <div className="flex items-center gap-4 pt-1">
+            <LegendItem color={CHART_ACCENT} label="Subscriptions" />
+            <LegendItem color={CHART_TEAL} label="API" />
+          </div>
+        }
+      />
 
-      <div className="h-[260px] w-full px-3 py-4 sm:px-4">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart
-            data={data}
-            margin={{ top: 4, right: 12, left: -18, bottom: 0 }}
-          >
-            <CartesianGrid
-              stroke={GRID_COLOR}
-              strokeDasharray="3 3"
-              vertical={false}
-            />
-            <XAxis
-              dataKey="month"
-              tick={{ fill: AXIS_COLOR, fontSize: 11 }}
-              axisLine={false}
-              tickLine={false}
-              dy={6}
-            />
-            <YAxis
-              tick={{ fill: AXIS_COLOR, fontSize: 11 }}
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={compactCurrency}
-              width={48}
-            />
-            <Tooltip
-              content={<ChartTooltip />}
-              cursor={{ stroke: CURSOR_COLOR, strokeDasharray: "4 4" }}
-            />
-            <Line
-              type="monotone"
-              dataKey="subscriptions"
-              name="Subscriptions"
-              stroke={CHART_ACCENT}
-              strokeWidth={1.5}
-              dot={false}
-              activeDot={{ r: 3, strokeWidth: 0 }}
-            />
-            <Line
-              type="monotone"
-              dataKey="api"
-              name="API"
-              stroke={CHART_TEAL}
-              strokeWidth={1.5}
-              dot={false}
-              activeDot={{ r: 3, strokeWidth: 0 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
+      {data.length === 0 ? (
+        <p className="border-t border-line py-10 text-center text-[12px] text-ink-3">
+          No spending history recorded yet.
+        </p>
+      ) : (
+        <div className="h-[280px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart
+              data={data}
+              margin={{ top: 4, right: 8, left: -20, bottom: 0 }}
+            >
+              <CartesianGrid
+                stroke={GRID_COLOR}
+                strokeDasharray="3 3"
+                vertical={false}
+              />
+              <XAxis
+                dataKey="month"
+                tick={{ fill: AXIS_COLOR, fontSize: 10.5 }}
+                axisLine={false}
+                tickLine={false}
+                dy={8}
+              />
+              <YAxis
+                tick={{ fill: AXIS_COLOR, fontSize: 10.5 }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={compactCurrency}
+                width={48}
+              />
+              <Tooltip
+                content={<ChartTooltip />}
+                cursor={{ stroke: CURSOR_COLOR, strokeDasharray: "4 4" }}
+              />
+              <Line
+                type="monotone"
+                dataKey="subscriptions"
+                name="Subscriptions"
+                stroke={CHART_ACCENT}
+                strokeWidth={1.5}
+                dot={false}
+                activeDot={{ r: 3, strokeWidth: 0 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="api"
+                name="API"
+                stroke={CHART_TEAL}
+                strokeWidth={1.5}
+                dot={false}
+                activeDot={{ r: 3, strokeWidth: 0 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </section>
   )
 }
@@ -161,47 +192,48 @@ function MonthlySpendingChart({ data }: { data: SpendingDataPoint[] }) {
 function ProviderSpendingChart({ data }: { data: ProviderSpendingData[] }) {
   const sorted = [...data].sort((a, b) => b.amount - a.amount).slice(0, 6)
   const max = Math.max(...sorted.map((d) => d.amount), 1)
+  const total = sorted.reduce((sum, d) => sum + d.amount, 0)
 
   return (
-    <section className="panel overflow-hidden">
-      <div className="panel-header">
-        <h2 className="panel-title">By provider</h2>
-      </div>
-      <div className="row-divide">
-        {sorted.length === 0 ? (
-          <p className="px-4 py-6 text-[12px] text-ink-3">
-            No provider spend recorded yet.
-          </p>
-        ) : (
-          sorted.map((entry) => (
-            <div
+    <section className="border-t border-line pt-5">
+      <SectionHead
+        title="By provider"
+        meta={`${sorted.length} providers · ${formatCurrency(total, "INR")}`}
+      />
+
+      {sorted.length === 0 ? (
+        <p className="border-t border-line py-8 text-center text-[12px] text-ink-3">
+          No provider spend recorded yet.
+        </p>
+      ) : (
+        <ul className="border-t border-line">
+          {sorted.map((entry) => (
+            <li
               key={entry.provider}
-              className="flex items-center gap-2.5 px-4 py-2.5"
+              className="border-b border-line py-2.5 last:border-b-0"
             >
-              <ProviderIcon slug={entry.providerSlug} size="sm" />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="truncate text-[12px] text-ink-2">
-                    {entry.provider}
-                  </span>
-                  <span className="shrink-0 text-[12px] font-medium text-ink tnum">
-                    {formatCurrency(entry.amount, "INR")}
-                  </span>
-                </div>
-                <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-surface-3">
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${Math.max((entry.amount / max) * 100, 3)}%`,
-                      background: CHART_ACCENT,
-                    }}
-                  />
-                </div>
+              <div className="flex items-center gap-2.5">
+                <ProviderIcon slug={entry.providerSlug} size="sm" />
+                <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-2">
+                  {entry.provider}
+                </span>
+                <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-ink">
+                  {formatCurrency(entry.amount, "INR")}
+                </span>
               </div>
-            </div>
-          ))
-        )}
-      </div>
+              <div className="mt-2 h-px w-full bg-surface-3">
+                <div
+                  className="h-px"
+                  style={{
+                    width: `${Math.max((entry.amount / max) * 100, 2)}%`,
+                    background: CHART_ACCENT,
+                  }}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   )
 }
@@ -221,12 +253,11 @@ function ApiVsSubscriptionSplit({ spending }: { spending: SpendingDataPoint[] })
   ]
 
   return (
-    <section className="panel overflow-hidden">
-      <div className="panel-header">
-        <h2 className="panel-title">Composition</h2>
-      </div>
-      <div className="px-4 py-3.5">
-        <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-surface-3">
+    <section className="border-t border-line pt-5">
+      <SectionHead title="Composition" meta="Six-month allocation" />
+
+      <div className="border-t border-line pt-4">
+        <div className="flex h-1 w-full overflow-hidden rounded-full bg-surface-3">
           <div
             className="h-full"
             style={{ width: `${subsPct}%`, background: CHART_ACCENT }}
@@ -236,22 +267,20 @@ function ApiVsSubscriptionSplit({ spending }: { spending: SpendingDataPoint[] })
             style={{ width: `${apiPct}%`, background: CHART_TEAL }}
           />
         </div>
-        <div className="mt-3 flex items-center justify-between gap-4">
+        <div className="mt-4 space-y-3">
           {rows.map((row) => (
-            <div key={row.name} className="min-w-0">
-              <div className="flex items-center gap-1.5 text-[11px] text-ink-3">
+            <div key={row.name} className="flex items-baseline justify-between gap-4">
+              <span className="flex items-center gap-1.5 text-[12px] text-ink-2">
                 <span
                   className="h-1.5 w-1.5 rounded-full"
                   style={{ background: row.color }}
                 />
                 {row.name}
-              </div>
-              <p className="mt-0.5 text-[12px] font-medium text-ink tnum">
+              </span>
+              <span className="font-mono text-[11.5px] tabular-nums text-ink">
                 {formatCurrency(row.value, "INR")}
-                <span className="ml-1 text-[10.5px] font-normal text-ink-3">
-                  {row.percent}%
-                </span>
-              </p>
+                <span className="ml-2 text-ink-3">{row.percent}%</span>
+              </span>
             </div>
           ))}
         </div>
@@ -272,11 +301,9 @@ export function SpendingCharts({
   providerSpending,
 }: SpendingChartsProps) {
   return (
-    <div className="grid gap-3 lg:grid-cols-3">
-      <div className="lg:col-span-2">
-        <MonthlySpendingChart data={monthlySpending} />
-      </div>
-      <div className="flex flex-col gap-3">
+    <div className="space-y-7">
+      <MonthlySpendingChart data={monthlySpending} />
+      <div className="grid gap-x-10 gap-y-7 md:grid-cols-2">
         <ProviderSpendingChart data={providerSpending} />
         <ApiVsSubscriptionSplit spending={monthlySpending} />
       </div>
@@ -286,41 +313,34 @@ export function SpendingCharts({
 
 export function SpendingChartsSkeleton() {
   return (
-    <div className="grid gap-3 lg:grid-cols-3">
-      <section className="panel overflow-hidden lg:col-span-2">
-        <div className="panel-header">
+    <div className="space-y-7">
+      <section className="border-t border-line pt-5">
+        <div className="flex items-start justify-between pb-5">
           <div className="space-y-2">
             <div className="skeleton h-3.5 w-28" />
-            <div className="skeleton h-2.5 w-44" />
+            <div className="skeleton h-2.5 w-48" />
           </div>
+          <div className="skeleton h-2.5 w-32" />
         </div>
-        <div className="px-4 py-4">
-          <div className="skeleton h-[236px] w-full rounded-md" />
-        </div>
+        <div className="skeleton h-[280px] w-full" />
       </section>
-      <div className="flex flex-col gap-3">
-        <section className="panel overflow-hidden">
-          <div className="panel-header">
-            <div className="skeleton h-3.5 w-20" />
-          </div>
-          <div className="space-y-3 px-4 py-3.5">
-            {Array.from({ length: 5 }).map((_, index) => (
-              <div key={index} className="space-y-1.5">
-                <div className="skeleton h-2.5 w-full" />
-                <div className="skeleton h-1 w-full rounded-full" />
-              </div>
-            ))}
-          </div>
-        </section>
-        <section className="panel overflow-hidden">
-          <div className="panel-header">
-            <div className="skeleton h-3.5 w-24" />
-          </div>
-          <div className="space-y-3 px-4 py-3.5">
-            <div className="skeleton h-1.5 w-full rounded-full" />
-            <div className="skeleton h-6 w-full" />
-          </div>
-        </section>
+      <div className="grid gap-x-10 gap-y-7 md:grid-cols-2">
+        {Array.from({ length: 2 }).map((_, index) => (
+          <section key={index} className="border-t border-line pt-5">
+            <div className="space-y-2 pb-5">
+              <div className="skeleton h-3.5 w-24" />
+              <div className="skeleton h-2.5 w-32" />
+            </div>
+            <div className="space-y-3 border-t border-line pt-4">
+              {Array.from({ length: 4 }).map((__, row) => (
+                <div key={row} className="space-y-2">
+                  <div className="skeleton h-3 w-full" />
+                  <div className="skeleton h-px w-full" />
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
     </div>
   )

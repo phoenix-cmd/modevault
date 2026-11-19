@@ -94,72 +94,75 @@ export function UsageOverview({ subscriptions }: UsageOverviewProps) {
   }
 
   return (
-    <section className="panel overflow-hidden">
-      <div className="panel-header">
+    <section className="border-t border-line pt-5">
+      <div className="flex items-start justify-between gap-4 pb-4">
         <div>
-          <h2 className="panel-title">Usage &amp; quota</h2>
-          <p className="panel-subtitle">
+          <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
+            Usage &amp; quota
+          </h2>
+          <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
             Consumption across {subsWithUsage.length} metered plan
             {subsWithUsage.length === 1 ? "" : "s"}
           </p>
         </div>
       </div>
 
-      <div className="row-divide">
+      <ul className="border-t border-line">
         {subsWithUsage.map((sub) => {
           const metrics = extractUsageMetrics(sub)
           const source = DATA_SOURCE_STYLE[sub.dataSource]
 
           return (
-            <div key={sub.id} className="px-4 py-4 sm:px-5">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <ProviderIcon slug={sub.providerSlug} size="sm" />
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] font-medium text-ink">
-                      {sub.providerName}
-                    </p>
-                    <p className="truncate text-[11.5px] text-ink-3">
-                      {sub.planName}
-                    </p>
-                  </div>
+            <li
+              key={sub.id}
+              className="grid gap-4 border-b border-line py-4 last:border-b-0 sm:grid-cols-[minmax(170px,1fr)_minmax(0,2fr)] sm:gap-8"
+            >
+              <div className="flex min-w-0 items-start gap-2.5">
+                <ProviderIcon slug={sub.providerSlug} size="sm" />
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-medium text-ink">
+                    {sub.providerName}
+                  </p>
+                  <p className="truncate text-[11.5px] text-ink-3">
+                    {sub.planName}
+                  </p>
+                  <span className={cn("badge mt-1.5", source.className)}>
+                    {source.label}
+                  </span>
                 </div>
-                <span className={cn("badge shrink-0", source.className)}>
-                  {source.label}
-                </span>
               </div>
 
-              <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-3.5 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
                 {metrics.map((metric) => {
                   const pct = getUsagePercentage(metric.used, metric.quota)
                   const UnitIcon = UNIT_ICON[metric.unit]
 
                   return (
                     <div key={metric.unit}>
-                      <div className="mb-1.5 flex items-center justify-between gap-3 text-[11.5px]">
-                        <span className="flex items-center gap-1.5 text-ink-3">
+                      <div className="mb-2 flex items-baseline justify-between gap-3">
+                        <span className="flex items-center gap-1.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] text-ink-3">
                           <UnitIcon className="h-3 w-3" strokeWidth={1.8} />
                           {metric.label}
                         </span>
                         <span
                           className={cn(
-                            "font-medium tnum",
+                            "font-mono text-[11.5px] tabular-nums",
                             getUsageColor(pct)
                           )}
                         >
                           {pct}%
                         </span>
                       </div>
-                      <div className="h-1 w-full overflow-hidden rounded-full bg-surface-3">
+                      <div className="h-px w-full overflow-hidden bg-surface-3">
                         <div
                           className={cn(
-                            "h-full rounded-full transition-[width] duration-500 ease-out",
+                            "h-full transition-[width] duration-500 ease-out",
                             getUsageBarColor(pct)
                           )}
                           style={{ width: `${pct}%` }}
                         />
                       </div>
-                      <p className="mt-1.5 text-[10.5px] text-ink-3 tnum">
+                      <p className="mt-1.5 font-mono text-[10px] tabular-nums text-ink-3">
                         {formatNumber(metric.used)} / {formatNumber(metric.quota)}{" "}
                         {metric.unit}
                       </p>
@@ -167,40 +170,38 @@ export function UsageOverview({ subscriptions }: UsageOverviewProps) {
                   )
                 })}
               </div>
-            </div>
+            </li>
           )
         })}
-      </div>
+      </ul>
     </section>
   )
 }
 
 export function UsageOverviewSkeleton() {
   return (
-    <section className="panel overflow-hidden">
-      <div className="panel-header">
-        <div className="space-y-2">
-          <div className="skeleton h-3.5 w-32" />
-          <div className="skeleton h-2.5 w-44" />
-        </div>
+    <section className="border-t border-line pt-5">
+      <div className="space-y-2 pb-4">
+        <div className="skeleton h-3.5 w-32" />
+        <div className="skeleton h-2.5 w-44" />
       </div>
-      {Array.from({ length: 2 }).map((_, index) => (
-        <div key={index} className="border-b border-line px-5 py-4 last:border-b-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="skeleton h-7 w-7 rounded-[6px]" />
-              <div className="space-y-1.5">
-                <div className="skeleton h-3.5 w-28" />
-                <div className="skeleton h-2.5 w-20" />
-              </div>
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div
+          key={index}
+          className="grid gap-4 border-t border-line py-4 sm:grid-cols-[minmax(170px,1fr)_minmax(0,2fr)] sm:gap-8"
+        >
+          <div className="flex items-start gap-2.5">
+            <div className="skeleton h-7 w-7 rounded-[6px]" />
+            <div className="space-y-1.5">
+              <div className="skeleton h-3.5 w-28" />
+              <div className="skeleton h-2.5 w-20" />
             </div>
-            <div className="skeleton h-4 w-14 rounded" />
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-2 gap-x-8 gap-y-4">
             {Array.from({ length: 2 }).map((__, i) => (
               <div key={i} className="space-y-2">
                 <div className="skeleton h-2.5 w-full" />
-                <div className="skeleton h-1 w-full rounded-full" />
+                <div className="skeleton h-px w-full" />
                 <div className="skeleton h-2.5 w-24" />
               </div>
             ))}

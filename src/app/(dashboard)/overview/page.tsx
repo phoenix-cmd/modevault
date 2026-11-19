@@ -2,13 +2,11 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { CalendarDays, Plus } from "lucide-react"
+import { Plus } from "lucide-react"
 import { SummaryCards, SummaryCardsSkeleton } from "@/components/dashboard/summary-cards"
-import { ProviderGrid, ProviderGridSkeleton } from "@/components/dashboard/provider-grid"
 import { UsageOverview, UsageOverviewSkeleton } from "@/components/dashboard/usage-overview"
 import { SpendingCharts, SpendingChartsSkeleton } from "@/components/dashboard/spending-charts"
 import { ActivityFeed, ActivityFeedSkeleton } from "@/components/dashboard/activity-feed"
-import { QuickInsights, QuickInsightsSkeleton } from "@/components/dashboard/quick-insights"
 import {
   SuggestionsCard,
   SuggestionsCardSkeleton,
@@ -23,7 +21,6 @@ import type {
   ActivityItem,
   RawSubscription,
   SubscriptionData,
-  NotificationData,
 } from "@/lib/types"
 
 interface DashboardApiData {
@@ -47,7 +44,6 @@ export default function OverviewPage() {
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [subscriptions, setSubscriptions] = useState<SubscriptionData[]>([])
-  const [notifications, setNotifications] = useState<NotificationData[]>([])
   const [activities, setActivities] = useState<ActivityItem[]>([])
   const [spendingHistory, setSpendingHistory] = useState<SpendingDataPoint[]>([])
   const [providerSpending, setProviderSpending] = useState<ProviderSpendingData[]>([])
@@ -70,17 +66,15 @@ export default function OverviewPage() {
       try {
         setLoading(true)
 
-        const [dashRes, subRes, notifRes, suggestionRes] = await Promise.all([
+        const [dashRes, subRes, suggestionRes] = await Promise.all([
           fetch("/api/dashboard"),
           fetch("/api/subscriptions"),
-          fetch("/api/notifications"),
           fetch("/api/suggestions"),
         ])
 
-        const [dashJson, subJson, notifJson, suggestionJson] = await Promise.all([
+        const [dashJson, subJson, suggestionJson] = await Promise.all([
           dashRes.json(),
           subRes.json(),
-          notifRes.json(),
           suggestionRes.json().catch(() => ({ data: null })),
         ])
 
@@ -180,10 +174,6 @@ export default function OverviewPage() {
           }))
           setSubscriptions(subs)
         }
-
-        if (notifJson.data?.notifications) {
-          setNotifications(notifJson.data.notifications)
-        }
       } catch (err) {
         console.error("Failed to load dashboard:", err)
       } finally {
@@ -195,83 +185,61 @@ export default function OverviewPage() {
   }, [])
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-8 pb-16">
       <PageHeader
-        title="Dashboard"
-        description="A single view of subscription spend, quota consumption and upcoming renewals across your AI stack."
+        eyebrow={`Workspace · ${reportingPeriod}`}
+        title="Overview"
+        description="Spend, quota pressure, and agent activity across your AI stack."
         action={
           <>
             <Link href="/analytics" className="btn-secondary">
               View analytics
             </Link>
             <Link href="/subscriptions" className="btn-primary">
-              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+              <Plus className="h-3.5 w-3.5" strokeWidth={2.2} />
               Add subscription
             </Link>
           </>
         }
       />
 
-      <div className="-mt-2 flex items-center gap-1.5 text-[11.5px] text-ink-3">
-        <CalendarDays className="h-3.5 w-3.5" strokeWidth={1.8} />
-        Reporting period
-        <span className="text-ink-2">·</span>
-        <span className="font-medium text-ink-2">{reportingPeriod}</span>
-      </div>
-
-      {loading || !summary ? <SummaryCardsSkeleton /> : <SummaryCards data={summary} />}
-
-      {loading ? (
-        <SuggestionsCardSkeleton />
+      {loading || !summary ? (
+        <SummaryCardsSkeleton />
       ) : (
-        <SuggestionsCard suggestions={suggestions} />
+        <SummaryCards data={summary} />
       )}
 
-      {loading ? (
-        <SpendingChartsSkeleton />
-      ) : (
-        <SpendingCharts
-          monthlySpending={spendingHistory}
-          providerSpending={providerSpending}
-        />
-      )}
+      <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)]">
+        <div className="min-w-0 space-y-8">
+          {loading ? (
+            <SpendingChartsSkeleton />
+          ) : (
+            <SpendingCharts
+              monthlySpending={spendingHistory}
+              providerSpending={providerSpending}
+            />
+          )}
 
-      <div className="grid items-start gap-3 lg:grid-cols-3">
-        <div className="min-w-0 lg:col-span-2">
           {loading ? (
             <UsageOverviewSkeleton />
           ) : (
             <UsageOverview subscriptions={subscriptions} />
           )}
         </div>
-        <div className="min-w-0">
-          {loading ? (
-            <QuickInsightsSkeleton />
-          ) : (
-            <QuickInsights
-              subscriptions={subscriptions}
-              notifications={notifications}
-              totalProviders={subscriptions.length}
-            />
-          )}
-        </div>
-      </div>
 
-      <div className="grid items-start gap-3 lg:grid-cols-3">
-        <div className="min-w-0 lg:col-span-2">
+        <aside className="min-w-0 space-y-8">
           {loading ? (
-            <ProviderGridSkeleton />
+            <SuggestionsCardSkeleton />
           ) : (
-            <ProviderGrid subscriptions={subscriptions} />
+            <SuggestionsCard suggestions={suggestions} />
           )}
-        </div>
-        <div className="min-w-0">
+
           {loading ? (
             <ActivityFeedSkeleton />
           ) : (
             <ActivityFeed activities={activities} />
           )}
-        </div>
+        </aside>
       </div>
     </div>
   )
