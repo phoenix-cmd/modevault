@@ -1,188 +1,153 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import {
-  AlertTriangle,
-  ArrowRight,
-  CheckCircle2,
-  FileCode2,
-  Lock,
-  RotateCw,
-  ShieldAlert,
-  ShieldCheck,
-  Zap,
-} from "lucide-react"
+import { useEffect, useRef, useState } from "react"
 import { createScrollObserver, animateFadeUp } from "@/lib/animations/reveals"
 
+const BEFORE = `export async function findUserByEmail(email: string) {
+  return db.query(
+    "SELECT * FROM users WHERE email = '" + email + "'"
+  )
+}`
+
+const AFTER = `export async function findUserByEmail(email: string) {
+  return db.query(
+    "SELECT * FROM users WHERE email = $1",
+    [email]
+  )
+}`
+
+const STEPS = [
+  { n: "01", t: "Generated change", d: "Agent proposes code for the requested task." },
+  { n: "02", t: "Checks run", d: "Static analysis and tests inspect the change." },
+  { n: "03", t: "Findings", d: "Issues are reported with location and severity." },
+  { n: "04", t: "Remediation", d: "The change is revised and rechecked." },
+  { n: "05", t: "Review evidence", d: "Results are attached for human approval." },
+]
+
 export function VerificationSection() {
-  const [activeMode, setActiveMode] = useState<"vulnerable" | "remediated">("remediated")
-  const sectionRef = useRef<HTMLElement>(null)
+  const [mode, setMode] = useState<"finding" | "revised">("finding")
+  const ref = useRef<HTMLElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const cleanup = createScrollObserver(sectionRef.current, () => {
-      if (contentRef.current) {
-        animateFadeUp(contentRef.current, 0, 700)
-      }
+    return createScrollObserver(ref.current, () => {
+      if (contentRef.current) animateFadeUp(contentRef.current, 0, 650)
     })
-    return cleanup
   }, [])
 
   return (
-    <section
-      id="verification"
-      ref={sectionRef}
-      className="py-24 px-6 bg-[#F6F4EF] text-[#15140F] border-b border-[#E2DDD3]"
-    >
-      <div ref={contentRef} className="max-w-6xl mx-auto space-y-16">
-        {/* Editorial Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#E2DDD3] pb-10">
-          <div className="space-y-3 max-w-2xl">
-            <div className="flex items-center gap-2 font-mono text-xs font-semibold uppercase tracking-wider text-[#6F6C64]">
-              <span className="text-[#A4610A]">05</span>
-              <span>/</span>
-              <span>Zero-Trust Verification</span>
-            </div>
-            <h2 className="text-[30px] font-display font-medium leading-[1.08] tracking-[-0.03em] sm:text-[46px] text-[#15140F] leading-tight">
-              A completed task is
+    <section id="verification" ref={ref} className="border-b border-[var(--mkt-line)] bg-[var(--mkt-paper)] py-20 sm:py-24">
+      <div ref={contentRef} className="mkt-container">
+        <div className="grid gap-8 border-b border-[var(--mkt-line)] pb-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.75fr)] lg:items-end">
+          <div className="max-w-2xl">
+            <p className="mkt-eyebrow flex items-center gap-3">
+              <span className="text-[var(--mkt-accent)]">05</span>
+              <span className="h-px w-6 bg-[var(--mkt-line-strong)]" aria-hidden />
+              Verification and security
+            </p>
+            <h2 className="mkt-h2 mt-5 text-[2rem] sm:text-[2.6rem]">
+              Treat generated code as
               <br />
-              <span className="text-[#A4610A]">not a verified task.</span>
+              <span className="text-[var(--mkt-ink-2)]">a change that must be checked.</span>
             </h2>
           </div>
-          <p className="text-sm sm:text-base text-[#6F6C64] max-w-md leading-relaxed">
-            LLMs generate plausible code that frequently introduces subtle security holes. MODELVAULT intercepts all agent outputs with AST static taint analysis and automated remediation loops.
+          <p className="mkt-lead max-w-md text-[15px]">
+            Verification combines automated checks with review evidence. Findings
+            should be specific, traceable, and followed by remediation — not hidden
+            behind certainty claims.
           </p>
         </div>
 
-        {/* Verification Lifecycle Walkthrough */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="p-5 rounded-none bg-[#FFFEFB] border border-[#E2DDD3] space-y-3">
-            <span className="font-mono text-[10px] font-bold text-[#6F6C64] uppercase">
-              Step 01
-            </span>
-            <h4 className="font-bold text-sm text-[#15140F]">Agent Generates Code</h4>
-            <p className="text-xs text-[#6F6C64] leading-relaxed">
-              Model synthesizes implementation based on user prompt or ticket requirements.
+        <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+          <div>
+            <p className="mkt-eyebrow">Verification path · example</p>
+            <ol className="mt-4 space-y-0 border-t border-[var(--mkt-line)]">
+              {STEPS.map((s, i) => (
+                <li
+                  key={s.n}
+                  className={`grid grid-cols-[3rem_minmax(0,1fr)] gap-4 py-4 ${
+                    i !== STEPS.length - 1 ? "border-b border-[var(--mkt-line)]" : ""
+                  }`}
+                >
+                  <span className="mkt-mono text-[11px] tracking-[0.1em] text-[var(--mkt-accent)]">{s.n}</span>
+                  <div>
+                    <p className="font-display text-[16px] font-medium tracking-[-0.02em] text-[var(--mkt-ink)]">{s.t}</p>
+                    <p className="mt-1 text-[13px] leading-relaxed text-[var(--mkt-ink-2)]">{s.d}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            <p className="mkt-note mt-5 border-t border-[var(--mkt-line)] pt-4">
+              Example process only. Actual checks depend on repository, tools, and policy.
             </p>
-            <div className="text-[10px] font-mono text-[#6F6C64] pt-2 border-t border-[#E2DDD3]">
-              Output: Candidate Commit
-            </div>
           </div>
 
-          <div className="p-5 rounded-none bg-[#FFFEFB] border border-[#E2DDD3] space-y-3">
-            <span className="font-mono text-[10px] font-bold text-[#A4610A] uppercase">
-              Step 02
-            </span>
-            <h4 className="font-bold text-sm text-[#15140F]">AST Taint Scanner</h4>
-            <p className="text-xs text-[#6F6C64] leading-relaxed">
-              Scans AST trees for CWE vulnerabilities, secret leaks, timing attacks, and unsafe evals.
-            </p>
-            <div className="text-[10px] font-mono text-[#A4610A] pt-2 border-t border-[#E2DDD3] font-semibold">
-              Findings: Flagged & Blocked
-            </div>
-          </div>
-
-          <div className="p-5 rounded-none bg-[#FFFEFB] border border-[#E2DDD3] space-y-3">
-            <span className="font-mono text-[10px] font-bold text-[#6F6C64] uppercase">
-              Step 03
-            </span>
-            <h4 className="font-bold text-sm text-[#15140F]">Auto-Remediation Loop</h4>
-            <p className="text-xs text-[#6F6C64] leading-relaxed">
-              Targeted remediation prompt sends compiler and AST diagnostics back to the model to repair.
-            </p>
-            <div className="text-[10px] font-mono text-[#1F7A4D] pt-2 border-t border-[#E2DDD3] font-semibold">
-              Self-Healed: In 1.2s
-            </div>
-          </div>
-
-          <div className="p-5 rounded-none bg-[#FFFEFB] border border-[#E2DDD3] space-y-3">
-            <span className="font-mono text-[10px] font-bold text-[#1F7A4D] uppercase">
-              Step 04
-            </span>
-            <h4 className="font-bold text-sm text-[#15140F]">Signed Certificate</h4>
-            <p className="text-xs text-[#6F6C64] leading-relaxed">
-              Generates an immutable cryptographic verification receipt before PR merge approval.
-            </p>
-            <div className="text-[10px] font-mono text-[#1F7A4D] pt-2 border-t border-[#E2DDD3] font-semibold">
-              Verified: Ready for Review
-            </div>
-          </div>
-        </div>
-
-        {/* Live Interactive Code Comparison Demonstration */}
-        <div className="rounded-none border border-[#E2DDD3] bg-[#FFFEFB] p-6 space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#E2DDD3] pb-4">
-            <div className="flex items-center gap-3">
-              <ShieldCheck className="h-6 w-6 text-[#1F7A4D]" />
+          <div className="border border-[var(--mkt-line)] bg-[var(--mkt-bg)]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--mkt-line)] px-4 py-3 sm:px-5">
               <div>
-                <h3 className="font-bold text-base text-[#15140F]">
-                  Interactive Verification Sandbox: CWE-89 SQL Injection Check
-                </h3>
-                <p className="text-xs text-[#6F6C64]">
-                  See how MODELVAULT detects and remediates dangerous agent code automatically.
+                <p className="mkt-eyebrow">Finding record · demonstration</p>
+                <p className="mt-1 font-display text-[18px] font-medium tracking-[-0.02em] text-[var(--mkt-ink)]">
+                  Unsanitized query input
+                </p>
+              </div>
+              <div className="flex items-center gap-1 border border-[var(--mkt-line)] bg-[var(--mkt-paper)] p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setMode("finding")}
+                  className={`px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em] ${
+                    mode === "finding" ? "bg-[var(--mkt-bg)] text-[var(--mkt-ink)]" : "text-[var(--mkt-ink-3)]"
+                  }`}
+                >
+                  Finding
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode("revised")}
+                  className={`px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em] ${
+                    mode === "revised" ? "bg-[var(--mkt-bg)] text-[var(--mkt-ink)]" : "text-[var(--mkt-ink-3)]"
+                  }`}
+                >
+                  Revised
+                </button>
+              </div>
+            </div>
+
+            <div className="grid gap-0 lg:grid-cols-[0.72fr_1.28fr]">
+              <div className="border-b border-[var(--mkt-line)] p-4 sm:p-5 lg:border-b-0 lg:border-r">
+                <dl className="space-y-4 text-[13px]">
+                  <div>
+                    <dt className="mkt-eyebrow">Severity</dt>
+                    <dd className="mt-1 font-medium text-[var(--mkt-warning)]">High (example)</dd>
+                  </div>
+                  <div>
+                    <dt className="mkt-eyebrow">Category</dt>
+                    <dd className="mt-1 text-[var(--mkt-ink-2)]">Injection risk / unsafe input handling</dd>
+                  </div>
+                  <div>
+                    <dt className="mkt-eyebrow">Affected file</dt>
+                    <dd className="mkt-mono mt-1 text-[11px] text-[var(--mkt-ink)]">src/db/users.ts</dd>
+                  </div>
+                  <div>
+                    <dt className="mkt-eyebrow">Status</dt>
+                    <dd className={`mt-1 font-medium ${mode === "revised" ? "text-[var(--mkt-success)]" : "text-[var(--mkt-ink-2)]"}`}>
+                      {mode === "revised" ? "Remediated in revised change" : "Reported, awaiting remediation"}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="p-4 sm:p-5">
+                <p className="mkt-eyebrow">{mode === "finding" ? "Flagged snippet" : "Revised snippet"}</p>
+                <pre className="mkt-mono mt-3 overflow-x-auto border border-[var(--mkt-line)] bg-[var(--mkt-paper)] p-4 text-[12px] leading-relaxed text-[var(--mkt-ink)]">
+                  <code>{mode === "finding" ? BEFORE : AFTER}</code>
+                </pre>
+                <p className="mt-4 text-[13px] leading-relaxed text-[var(--mkt-ink-2)]">
+                  {mode === "finding"
+                    ? "The finding identifies direct string interpolation in a query. Evidence should point reviewers to the exact location and suggested remediation."
+                    : "The revised example uses parameterized input. A reviewer can compare the change, rerun checks, and record the outcome."}
                 </p>
               </div>
             </div>
-
-            <div className="flex items-center rounded-lg bg-[#E2DDD3] p-1 border border-[#E2DDD3]">
-              <button
-                onClick={() => setActiveMode("vulnerable")}
-                className={`px-3 py-1.5 rounded-md text-xs font-mono font-medium transition-colors ${
-                  activeMode === "vulnerable"
-                    ? "bg-[#FFFEFB] text-[#A4610A] border border-[#E2DDD3]"
-                    : "text-[#6F6C64] hover:text-[#15140F]"
-                }`}
-              >
-                ⚠ Vulnerable Input
-              </button>
-              <button
-                onClick={() => setActiveMode("remediated")}
-                className={`px-3 py-1.5 rounded-md text-xs font-mono font-medium transition-colors ${
-                  activeMode === "remediated"
-                    ? "bg-[#FFFEFB] text-[#1F7A4D] border border-[#E2DDD3]"
-                    : "text-[#6F6C64] hover:text-[#15140F]"
-                }`}
-              >
-                ✓ Remediated Output
-              </button>
-            </div>
-          </div>
-
-          {/* Code Box */}
-          <div className="rounded-lg bg-[#0D0E10] border border-[#2D3036] p-5 font-mono text-xs leading-relaxed text-[#A5A29A]">
-            {activeMode === "vulnerable" ? (
-              <div className="space-y-2">
-                <div className="text-[#C23B2A] flex items-center gap-2 pb-2 border-b border-[#2D3036]">
-                  <AlertTriangle className="h-4 w-4" />
-                  <span>CWE-89: SQL Injection detected by MODELVAULT AST Scanner</span>
-                </div>
-                <div className="text-[#6F6C64]">// Agent generated unescaped query string</div>
-                <div><span className="text-[#A4610A]">export async function</span> <span className="text-white">findUserByEmail</span>(email: string) {'{'}</div>
-                <div className="pl-4 bg-[#F5A623]/15 text-[#C23B2A] px-2 py-1 rounded border-l-2 border-[#F5A623]">
-                  - return await prisma.$queryRawUnsafe(`SELECT * FROM users WHERE email = &apos;$&#123;email&#125;&apos;`);
-                </div>
-                <div>{'}'}</div>
-                <div className="pt-2 text-[11px] text-[#C23B2A]">
-                  ❌ BLOCKED: Raw string interpolation in SQL query execution. Pipeline halted.
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="text-[#63C08A] flex items-center gap-2 pb-2 border-b border-[#2D3036]">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span>Remediated via Automated AST Correction Loop (1.2s)</span>
-                </div>
-                <div className="text-[#6F6C64]">// Parameterized query with compile-time type safety</div>
-                <div><span className="text-[#A4610A]">export async function</span> <span className="text-white">findUserByEmail</span>(email: string) {'{'}</div>
-                <div className="pl-4 bg-[#63C08A]/15 text-[#63C08A] px-2 py-1 rounded border-l-2 border-[#63C08A]">
-                  + return await prisma.$queryRaw`SELECT * FROM users WHERE email = $&#123;email&#125;`;
-                </div>
-                <div>{'}'}</div>
-                <div className="pt-2 text-[11px] text-[#63C08A]">
-                  ✅ PASSED: SQL parameters safely bound. Cryptographic certificate generated: cert_9024a1.
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>

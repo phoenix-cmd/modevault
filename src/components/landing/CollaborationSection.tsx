@@ -1,118 +1,101 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import {
-  CheckCircle2,
-  FileCheck2,
-  GitPullRequest,
-  Lock,
-  MessageSquare,
-  ShieldCheck,
-  UserCheck,
-  Users,
-} from "lucide-react"
 import { createScrollObserver, animateFadeUp } from "@/lib/animations/reveals"
 
-const PILLARS = [
-  {
-    step: "01",
-    title: "Granular Role-Based Access",
-    description:
-      "Configure team permissions across Admin, Lead Architect, Developer, and Auditor roles. Set maximum per-user spend limits and restrict high-tier models to approved projects.",
-    badge: "RBAC & SPEND CAPS",
-    features: ["Per-user monthly token caps", "Model tier access control", "Workspace isolation"],
-  },
-  {
-    step: "02",
-    title: "Human-in-the-Loop Reviews",
-    description:
-      "Agents prepare complete pull requests with synthetic test suites, but humans maintain final merge authority. Review code in our Monaco diff inspector with inline annotations.",
-    badge: "DIFF INSPECTION",
-    features: ["Side-by-side Monaco diff", "Threaded review comments", "One-click PR merge"],
-  },
-  {
-    step: "03",
-    title: "SOC2-Compliant Audit Trail",
-    description:
-      "Every single agent prompt, token transaction, model completion, and human approval signature is stored in an immutable, exportable compliance log.",
-    badge: "ENTERPRISE COMPLIANCE",
-    features: ["Exportable JSON audit logs", "Cryptographic proof hashes", "Complete prompt lineage"],
-  },
+const MATRIX = [
+  { role: "Owner", propose: "Yes", review: "Yes", approve: "Yes", billing: "Yes", scope: "Organization / workspace" },
+  { role: "Lead", propose: "Yes", review: "Yes", approve: "Yes", billing: "View", scope: "Assigned projects" },
+  { role: "Developer", propose: "Yes", review: "Comment", approve: "No", billing: "No", scope: "Assigned projects" },
+  { role: "Auditor", propose: "No", review: "View", approve: "No", billing: "View", scope: "Read-only access" },
 ]
 
 export function CollaborationSection() {
-  const sectionRef = useRef<HTMLElement>(null)
+  const ref = useRef<HTMLElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const cleanup = createScrollObserver(sectionRef.current, () => {
-      if (contentRef.current) {
-        animateFadeUp(contentRef.current, 0, 700)
-      }
+    return createScrollObserver(ref.current, () => {
+      if (contentRef.current) animateFadeUp(contentRef.current, 0, 650)
     })
-    return cleanup
   }, [])
 
   return (
-    <section
-      id="governance"
-      ref={sectionRef}
-      className="py-24 px-6 bg-[#FFFEFB] text-[#15140F] border-b border-[#E2DDD3]"
-    >
-      <div ref={contentRef} className="max-w-6xl mx-auto space-y-16">
-        {/* Editorial Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#E2DDD3] pb-10">
-          <div className="space-y-3 max-w-2xl">
-            <div className="flex items-center gap-2 font-mono text-xs font-semibold uppercase tracking-wider text-[#6F6C64]">
-              <span className="text-[#A4610A]">07</span>
-              <span>/</span>
-              <span>Governance & Control</span>
-            </div>
-            <h2 className="text-[30px] font-display font-medium leading-[1.08] tracking-[-0.03em] sm:text-[46px] text-[#15140F] leading-tight">
-              Autonomous speed.
+    <section id="governance" ref={ref} className="border-b border-[var(--mkt-line)] bg-[var(--mkt-paper)] py-20 sm:py-24">
+      <div ref={contentRef} className="mkt-container">
+        <div className="grid gap-8 border-b border-[var(--mkt-line)] pb-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.75fr)] lg:items-end">
+          <div className="max-w-2xl">
+            <p className="mkt-eyebrow flex items-center gap-3">
+              <span className="text-[var(--mkt-accent)]">07</span>
+              <span className="h-px w-6 bg-[var(--mkt-line-strong)]" aria-hidden />
+              Team governance
+            </p>
+            <h2 className="mkt-h2 mt-5 text-[2rem] sm:text-[2.6rem]">
+              Permissions, reviews,
               <br />
-              <span className="text-[#6F6C64]">Enterprise control.</span>
+              <span className="text-[var(--mkt-ink-2)]">and accountable delivery.</span>
             </h2>
           </div>
-          <p className="text-sm sm:text-base text-[#6F6C64] max-w-md leading-relaxed">
-            Unleash the full capability of multi-agent software engineering without sacrificing security, governance, or organizational sanity.
+          <p className="mkt-lead max-w-md text-[15px]">
+            Make responsibility explicit: who can dispatch work, who can approve
+            changes, and how decisions are recorded.
           </p>
         </div>
 
-        {/* 3 Pillar Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {PILLARS.map((pillar) => (
-            <div
-              key={pillar.step}
-              className="p-8 rounded-none bg-[#F6F4EF] border border-[#E2DDD3] flex flex-col justify-between space-y-6 hover:border-[#CFC9BE] transition-colors"
-            >
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs font-bold text-[#A4610A]">
-                    {pillar.step}
-                  </span>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#FFFEFB] text-[#6F6C64] border border-[#E2DDD3] uppercase">
-                    {pillar.badge}
-                  </span>
-                </div>
-                <h3 className="text-lg font-bold text-[#15140F]">
-                  {pillar.title}
-                </h3>
-                <p className="text-sm text-[#6F6C64] leading-relaxed">
-                  {pillar.description}
-                </p>
-              </div>
-
-              <div className="pt-4 border-t border-[#E2DDD3] space-y-2">
-                {pillar.features.map((feat, idx) => (
-                  <div key={idx} className="flex items-center gap-2 text-xs font-mono text-[#15140F]">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-[#1F7A4D] shrink-0" />
-                    <span>{feat}</span>
-                  </div>
-                ))}
-              </div>
+        <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+          <div>
+            <div className="flex items-end justify-between gap-4">
+              <p className="mkt-eyebrow">Permission matrix · example</p>
+              <p className="mkt-note">Illustrative roles</p>
             </div>
-          ))}
+            <div className="mt-4 overflow-x-auto border-t border-[var(--mkt-line)]">
+              <table className="w-full min-w-[680px] border-collapse text-left">
+                <thead>
+                  <tr className="border-b border-[var(--mkt-line)] text-[var(--mkt-ink-3)]">
+                    <th className="py-3 pr-4 font-mono text-[10px] font-medium uppercase tracking-[0.12em]">Role</th>
+                    <th className="py-3 pr-4 font-mono text-[10px] font-medium uppercase tracking-[0.12em]">Propose</th>
+                    <th className="py-3 pr-4 font-mono text-[10px] font-medium uppercase tracking-[0.12em]">Review</th>
+                    <th className="py-3 pr-4 font-mono text-[10px] font-medium uppercase tracking-[0.12em]">Approve</th>
+                    <th className="py-3 pr-4 font-mono text-[10px] font-medium uppercase tracking-[0.12em]">Billing</th>
+                    <th className="py-3 font-mono text-[10px] font-medium uppercase tracking-[0.12em]">Scope</th>
+                  </tr>
+                </thead>
+                <tbody className="text-[13px] text-[var(--mkt-ink-2)]">
+                  {MATRIX.map((row) => (
+                    <tr key={row.role} className="border-b border-[var(--mkt-line)]">
+                      <td className="py-3.5 pr-4 font-medium text-[var(--mkt-ink)]">{row.role}</td>
+                      <td className="py-3.5 pr-4">{row.propose}</td>
+                      <td className="py-3.5 pr-4">{row.review}</td>
+                      <td className="py-3.5 pr-4">{row.approve}</td>
+                      <td className="py-3.5 pr-4">{row.billing}</td>
+                      <td className="py-3.5 text-[var(--mkt-ink-3)]">{row.scope}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="space-y-6 lg:pt-7">
+            <div className="border border-[var(--mkt-line)] bg-[var(--mkt-bg)] p-5">
+              <p className="mkt-eyebrow">Review flow · example</p>
+              <ol className="mt-4 space-y-3 text-[13px] text-[var(--mkt-ink-2)]">
+                <li className="flex gap-3"><span className="mkt-mono text-[11px] text-[var(--mkt-accent)]">01</span><span>Agent proposes a change with diff and check results.</span></li>
+                <li className="flex gap-3"><span className="mkt-mono text-[11px] text-[var(--mkt-accent)]">02</span><span>Reviewer leaves comments and requests edits if needed.</span></li>
+                <li className="flex gap-3"><span className="mkt-mono text-[11px] text-[var(--mkt-accent)]">03</span><span>Authorized approver records the decision.</span></li>
+                <li className="flex gap-3"><span className="mkt-mono text-[11px] text-[var(--mkt-accent)]">04</span><span>Merge or delivery follows repository policy.</span></li>
+              </ol>
+            </div>
+
+            <div className="border-t border-[var(--mkt-line)] pt-5">
+              <p className="mkt-eyebrow">Audit records</p>
+              <p className="mt-3 text-[13px] leading-relaxed text-[var(--mkt-ink-2)]">
+                Keep a traceable history of prompts, generated artifacts, checks,
+                review comments, and approvals. Records should describe what happened
+                without overstating certainty.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </section>

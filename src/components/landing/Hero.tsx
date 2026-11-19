@@ -1,17 +1,102 @@
 "use client"
 
-import { useEffect, useRef } from "react"
 import Link from "next/link"
-import { ArrowRight, Bot, Cpu, GitBranch, Layers, ShieldCheck, Terminal, Zap } from "lucide-react"
-import { HeroProductDemo } from "./HeroProductDemo"
+import { useEffect, useRef } from "react"
+import { ArrowRight } from "lucide-react"
 import { animateHeroSequence } from "@/lib/animations/hero"
 
+function OrchestrationGraphic() {
+  return (
+    <figure className="relative w-full overflow-hidden border border-[var(--mkt-line)] bg-[var(--mkt-paper)]">
+      <div className="flex items-center justify-between border-b border-[var(--mkt-line)] px-4 py-2.5">
+        <span className="mkt-eyebrow">Task graph · example</span>
+        <span className="mkt-note text-[var(--mkt-accent)]">Demonstration composition</span>
+      </div>
+      <svg
+        viewBox="0 0 760 420"
+        className="block h-auto w-full"
+        role="img"
+        aria-label="A development request branching into architecture, frontend, backend, testing and verification, then converging into a reviewed software change."
+      >
+        <defs>
+          <pattern id="mkt-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+            <path d="M 24 0 L 0 0 0 24" fill="none" stroke="var(--mkt-line)" strokeWidth="0.75" opacity="0.55" />
+          </pattern>
+        </defs>
+        <rect width="760" height="420" fill="url(#mkt-grid)" />
+
+        {/* connectors */}
+        <g stroke="var(--mkt-line-strong)" strokeWidth="1.25" fill="none" strokeLinecap="round">
+          <path d="M380 70 V108" />
+          <path d="M380 148 V176" />
+          <path d="M380 176 C380 196 250 196 250 224" />
+          <path d="M380 176 C380 196 510 196 510 224" />
+          <path d="M250 264 V292" />
+          <path d="M510 264 V292" />
+          <path d="M250 292 C250 312 380 312 380 332" />
+          <path d="M510 292 C510 312 380 312 380 332" />
+          <path d="M380 372 V392" />
+        </g>
+
+        {/* request */}
+        <g transform="translate(260 28)">
+          <rect width="240" height="42" rx="2" fill="var(--mkt-ink)" />
+          <text x="120" y="18" textAnchor="middle" fontSize="10" fontFamily="var(--font-jetbrains), monospace" letterSpacing="0.12em" fill="#f7f3ec">DEVELOPMENT REQUEST</text>
+          <text x="120" y="33" textAnchor="middle" fontSize="11.5" fontFamily="var(--font-inter), sans-serif" fill="#fffdf8">Add OAuth PKCE verification</text>
+        </g>
+
+        {/* architecture */}
+        <g transform="translate(285 108)">
+          <rect width="190" height="40" rx="2" fill="var(--mkt-paper)" stroke="var(--mkt-accent)" strokeWidth="1.25" />
+          <text x="95" y="17" textAnchor="middle" fontSize="9.5" fontFamily="var(--font-jetbrains), monospace" letterSpacing="0.1em" fill="var(--mkt-accent)">PLANNING</text>
+          <text x="95" y="31" textAnchor="middle" fontSize="12" fontFamily="var(--font-inter), sans-serif" fill="var(--mkt-ink)">Architecture</text>
+        </g>
+
+        {/* frontend/backend */}
+        <g transform="translate(140 224)">
+          <rect width="220" height="40" rx="2" fill="var(--mkt-paper)" stroke="var(--mkt-line-strong)" strokeWidth="1.1" />
+          <text x="110" y="17" textAnchor="middle" fontSize="9.5" fontFamily="var(--font-jetbrains), monospace" letterSpacing="0.1em" fill="var(--mkt-ink-3)">PARALLEL EXECUTION</text>
+          <text x="110" y="31" textAnchor="middle" fontSize="12" fontFamily="var(--font-inter), sans-serif" fill="var(--mkt-ink)">Frontend</text>
+        </g>
+        <g transform="translate(400 224)">
+          <rect width="220" height="40" rx="2" fill="var(--mkt-paper)" stroke="var(--mkt-line-strong)" strokeWidth="1.1" />
+          <text x="110" y="17" textAnchor="middle" fontSize="9.5" fontFamily="var(--font-jetbrains), monospace" letterSpacing="0.1em" fill="var(--mkt-ink-3)">PARALLEL EXECUTION</text>
+          <text x="110" y="31" textAnchor="middle" fontSize="12" fontFamily="var(--font-inter), sans-serif" fill="var(--mkt-ink)">Backend</text>
+        </g>
+
+        {/* integration/testing */}
+        <g transform="translate(285 332)">
+          <rect width="190" height="40" rx="2" fill="var(--mkt-paper)" stroke="var(--mkt-line-strong)" strokeWidth="1.1" />
+          <text x="95" y="17" textAnchor="middle" fontSize="9.5" fontFamily="var(--font-jetbrains), monospace" letterSpacing="0.1em" fill="var(--mkt-ink-3)">INTEGRATION</text>
+          <text x="95" y="31" textAnchor="middle" fontSize="12" fontFamily="var(--font-inter), sans-serif" fill="var(--mkt-ink)">Testing · Verification</text>
+        </g>
+
+        {/* output */}
+        <g transform="translate(250 392)">
+          <rect width="260" height="18" rx="2" fill="var(--mkt-accent-soft)" stroke="var(--mkt-accent-border)" strokeWidth="1" />
+          <text x="130" y="12.5" textAnchor="middle" fontSize="9.5" fontFamily="var(--font-jetbrains), monospace" letterSpacing="0.1em" fill="var(--mkt-accent-strong)">REVIEWED SOFTWARE CHANGE</text>
+        </g>
+
+        {/* annotations */}
+        <g fontSize="10" fontFamily="var(--font-jetbrains), monospace" fill="var(--mkt-ink-3)">
+          <text x="28" y="132">spec → tasks</text>
+          <text x="28" y="248">shared context</text>
+          <text x="28" y="356">checks before merge</text>
+          <line x1="108" y1="128" x2="282" y2="128" stroke="var(--mkt-line)" strokeWidth="0.75" />
+          <line x1="116" y1="244" x2="138" y2="244" stroke="var(--mkt-line)" strokeWidth="0.75" />
+          <line x1="138" y1="352" x2="282" y2="352" stroke="var(--mkt-line)" strokeWidth="0.75" />
+        </g>
+      </svg>
+    </figure>
+  )
+}
+
 export function Hero() {
-  const badgeRef = useRef<HTMLDivElement>(null)
+  const badgeRef = useRef<HTMLParagraphElement>(null)
   const titleRef = useRef<HTMLHeadingElement>(null)
   const subtitleRef = useRef<HTMLParagraphElement>(null)
   const actionsRef = useRef<HTMLDivElement>(null)
-  const statsRef = useRef<HTMLDivElement>(null)
+  const noteRef = useRef<HTMLDivElement>(null)
   const demoRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -20,122 +105,74 @@ export function Hero() {
       title: titleRef.current,
       subtitle: subtitleRef.current,
       actions: actionsRef.current,
-      stats: statsRef.current,
+      stats: noteRef.current,
       demo: demoRef.current,
     })
     return cleanup
   }, [])
 
   return (
-    <section className="relative pt-32 pb-20 px-6 bg-[#08090A] text-white border-b border-[#1E2024] overflow-hidden">
-      {/* Subtle structural grid lines (Rig.ai architectural feel) */}
-      <div
-        className="absolute inset-0 pointer-events-none opacity-[0.035]"
-        style={{
-          backgroundImage:
-            "linear-gradient(to right, #ffffff 1px, transparent 1px), linear-gradient(to bottom, #ffffff 1px, transparent 1px)",
-          backgroundSize: "64px 64px",
-        }}
-      />
+    <section className="border-b border-[var(--mkt-line)] pt-14 pb-16 sm:pt-20 sm:pb-20">
+      <div className="mkt-container">
+        <div className="grid items-start gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.25fr)] lg:gap-14">
+          <div className="max-w-xl">
+            <p ref={badgeRef} className="mkt-eyebrow flex items-center gap-3 text-[var(--mkt-accent)]">
+              <span className="h-px w-8 bg-[var(--mkt-accent-border)]" aria-hidden="true" />
+              MODELVAULT · Engineering workspace
+            </p>
 
-      <div className="relative max-w-6xl mx-auto flex flex-col items-center text-center">
-        {/* Badge */}
-        <div
-          ref={badgeRef}
-          className="inline-flex items-center gap-2 rounded-full border border-[#2D3036] bg-[#16171A] px-3.5 py-1 text-xs font-mono text-[#A5A29A] mb-8"
-        >
-          <span className="h-1.5 w-1.5 rounded-full bg-[#F5A623] animate-pulse" />
-          <span>AUTONOMOUS SOFTWARE DEVELOPMENT SUITE</span>
-          <span className="text-[#6F6C64]">/</span>
-          <span className="text-white">v2.4 READY</span>
-        </div>
+            <h1
+              ref={titleRef}
+              className="mkt-display mt-6 text-[2.75rem] sm:text-[4rem] lg:text-[4.6rem]"
+            >
+              Software development,
+              <br />
+              orchestrated.
+            </h1>
 
-        {/* Headline */}
-        <h1
-          ref={titleRef}
-          className="text-[38px] font-display font-medium leading-[1.04] tracking-[-0.035em] sm:text-[56px] md:text-[64px] text-white max-w-4xl leading-[1.08] mb-6"
-        >
-          Your AI team.
-          <br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-[#F1EFE9] to-[#6F6C64]">
-            One command center.
-          </span>
-        </h1>
+            <p ref={subtitleRef} className="mkt-lead mt-6 max-w-lg text-[1.05rem]">
+              One workspace for intelligent coding agents, collaborative workflows
+              and verifiable software delivery.
+            </p>
 
-        {/* Supporting Copy */}
-        <p
-          ref={subtitleRef}
-          className="text-base sm:text-lg md:text-xl text-[#A5A29A] max-w-2xl leading-relaxed mb-10 font-normal"
-        >
-          Orchestrate intelligent coding agents, automate multi-step development pipelines, and govern subscriptions, API tokens, and code security from one powerful workspace.
-        </p>
+            <div ref={actionsRef} className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <Link href="/overview" className="mkt-btn-primary h-11 px-5">
+                Open the workspace
+                <ArrowRight className="h-4 w-4" strokeWidth={2} />
+              </Link>
+              <a href="#orchestration" className="mkt-btn-secondary h-11 px-5">
+                See how it is composed
+              </a>
+            </div>
 
-        {/* Call to Actions */}
-        <div
-          ref={actionsRef}
-          className="flex flex-col sm:flex-row items-center gap-4 mb-16 w-full sm:w-auto"
-        >
-          <Link
-            href="/overview"
-            className="w-full sm:w-auto flex items-center justify-center gap-2.5 rounded-md bg-[#F5A623] px-7 py-3.5 text-sm font-semibold text-[#08090A] hover:bg-[#D98A12] active:scale-[0.98] transition-all group"
-          >
-            <span>Launch Command Center</span>
-            <ArrowRight className="h-4 w-4 text-[#08090A] group-hover:translate-x-1 transition-transform" />
-          </Link>
-
-          <Link
-            href="#orchestration"
-            className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-md border border-[#2D3036] bg-[#16171A]/70 px-7 py-3.5 text-sm font-medium text-[#C9C5BC] hover:text-white hover:border-[#3A3D44] hover:bg-[#161820] active:scale-[0.98] transition-all"
-          >
-            <span>Explore the Platform</span>
-          </Link>
-        </div>
-
-        {/* Architectural Ticker / Stats Bar */}
-        <div
-          ref={statsRef}
-          className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl border-y border-[#1E2024] py-4 mb-14 text-left"
-        >
-          <div className="px-3 border-r border-[#1E2024] last:border-r-0">
-            <span className="block text-[10px] font-mono uppercase tracking-wider text-[#6F6C64]">
-              Multi-Agent Mesh
-            </span>
-            <span className="text-sm font-semibold text-white">
-              Parallel Orchestration
-            </span>
+            <div
+              ref={noteRef}
+              className="mt-10 grid gap-x-8 gap-y-4 border-t border-[var(--mkt-line)] pt-6 sm:grid-cols-3"
+            >
+              <div>
+                <p className="mkt-eyebrow">Agents</p>
+                <p className="mt-1 text-[13px] leading-relaxed text-[var(--mkt-ink-2)]">
+                  Specialized roles with shared task context.
+                </p>
+              </div>
+              <div>
+                <p className="mkt-eyebrow">Workflows</p>
+                <p className="mt-1 text-[13px] leading-relaxed text-[var(--mkt-ink-2)]">
+                  Defined stages from plan to delivery.
+                </p>
+              </div>
+              <div>
+                <p className="mkt-eyebrow">Verification</p>
+                <p className="mt-1 text-[13px] leading-relaxed text-[var(--mkt-ink-2)]">
+                  Checks and review before changes land.
+                </p>
+              </div>
+            </div>
           </div>
 
-          <div className="px-3 md:border-r border-[#1E2024]">
-            <span className="block text-[10px] font-mono uppercase tracking-wider text-[#6F6C64]">
-              Verification Engine
-            </span>
-            <span className="text-sm font-semibold text-white">
-              Sub-second AST Audit
-            </span>
+          <div ref={demoRef} className="lg:pt-2">
+            <OrchestrationGraphic />
           </div>
-
-          <div className="px-3 border-r border-[#1E2024] last:border-r-0">
-            <span className="block text-[10px] font-mono uppercase tracking-wider text-[#6F6C64]">
-              Resource Intel
-            </span>
-            <span className="text-sm font-semibold text-white">
-              Real-time Token Guard
-            </span>
-          </div>
-
-          <div className="px-3">
-            <span className="block text-[10px] font-mono uppercase tracking-wider text-[#6F6C64]">
-              Git Architecture
-            </span>
-            <span className="text-sm font-semibold text-white">
-              Branch & PR Isolation
-            </span>
-          </div>
-        </div>
-
-        {/* Live Product Demonstration */}
-        <div ref={demoRef} className="w-full">
-          <HeroProductDemo />
         </div>
       </div>
     </section>

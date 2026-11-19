@@ -1,273 +1,230 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import {
-  ArrowRight,
-  Bot,
-  CheckCircle2,
-  Cpu,
-  GitBranch,
-  Layers,
-  Network,
-  RotateCw,
-  ShieldCheck,
-  Terminal,
-  Zap,
-} from "lucide-react"
+import { useEffect, useRef, useState } from "react"
 import { createScrollObserver, animateFadeUp } from "@/lib/animations/reveals"
 
-interface AgentProfile {
+type Stage = {
   id: string
-  name: string
-  badge: string
-  model: string
-  role: string
-  description: string
-  status: "Completed" | "Active" | "Standby"
-  metrics: {
-    tokens: string
-    cost: string
-    latency: string
-    tasksDone: number
-  }
-  recentAction: string
+  label: string
+  mode: string
+  detail: string
+  outputs: string[]
 }
 
-const AGENTS: AgentProfile[] = [
+const STAGES: Stage[] = [
   {
-    id: "orchestrator",
-    name: "Master Orchestrator",
-    badge: "CORE ENGINE",
-    model: "Claude 3.7 Sonnet",
-    role: "System Decomposition & Execution Planner",
-    description:
-      "Ingests user specifications, builds a topological dependency DAG, resolves file collision boundaries, and assigns subtasks to domain agents.",
-    status: "Completed",
-    metrics: {
-      tokens: "2,410 tkn",
-      cost: "$0.0072",
-      latency: "1.6s",
-      tasksDone: 6,
-    },
-    recentAction: "Resolved 4 execution tasks across frontend, backend, and security domains",
-  },
-  {
-    id: "backend",
-    name: "Backend Systems Agent",
-    badge: "SERVICES & API",
-    model: "DeepSeek V3 / GPT-4.5",
-    role: "Database Schemas & Route Synthesis",
-    description:
-      "Implements server-side route handlers, Prisma database queries, transaction rollbacks, and cryptographic session validation.",
-    status: "Active",
-    metrics: {
-      tokens: "5,890 tkn",
-      cost: "$0.0176",
-      latency: "2.8s",
-      tasksDone: 3,
-    },
-    recentAction: "Created src/app/api/auth/oauth/token/route.ts with PKCE verifier",
+    id: "plan",
+    label: "Architecture",
+    mode: "Planning",
+    detail: "Interprets the request, identifies affected areas, and breaks work into dependent tasks.",
+    outputs: ["Task outline", "File boundaries", "Acceptance criteria"],
   },
   {
     id: "frontend",
-    name: "Frontend UI Specialist",
-    badge: "CLIENT & UX",
-    model: "Claude 3.7 Sonnet",
-    role: "Accessible UI Components & State",
-    description:
-      "Synthesizes responsive React 19 components with Tailwind v4, optimistic UI states, keyboard accessible ARIA attributes, and error boundaries.",
-    status: "Completed",
-    metrics: {
-      tokens: "3,720 tkn",
-      cost: "$0.0111",
-      latency: "2.1s",
-      tasksDone: 4,
-    },
-    recentAction: "Exported OAuthCallbackModal.tsx with loading skeletons and error state",
+    label: "Frontend",
+    mode: "Parallel execution",
+    detail: "Implements interface changes and client behaviour against the agreed contract.",
+    outputs: ["UI components", "State and interactions", "Accessibility notes"],
   },
   {
-    id: "security",
-    name: "Security & QA Auditor",
-    badge: "INDEPENDENT GATE",
-    model: "Llama 3.3 70B",
-    role: "AST Static Analysis & Test Generation",
-    description:
-      "Runs automated taint analysis, detects OWASP Top 10 vulnerabilities, enforces zero secret leakage, and writes Vitest suites with 100% path coverage.",
-    status: "Active",
-    metrics: {
-      tokens: "3,150 tkn",
-      cost: "$0.0031",
-      latency: "1.9s",
-      tasksDone: 5,
-    },
-    recentAction: "Generated 5 unit tests in tests/pkce.test.ts • 0 CWE vulnerabilities",
+    id: "backend",
+    label: "Backend",
+    mode: "Parallel execution",
+    detail: "Implements routes, data access, and service logic required by the request.",
+    outputs: ["Handlers / services", "Schema or query changes", "Error handling"],
+  },
+  {
+    id: "test",
+    label: "Testing",
+    mode: "Integration",
+    detail: "Runs checks and validates that the composed changes behave as intended.",
+    outputs: ["Test results", "Regression signals", "Coverage notes"],
+  },
+  {
+    id: "verify",
+    label: "Verification",
+    mode: "Verification",
+    detail: "Surfaces findings, remediation, and evidence for human review before delivery.",
+    outputs: ["Findings summary", "Remediation status", "Review packet"],
   },
 ]
 
-export function AgentOrchestration() {
-  const [selectedAgent, setSelectedAgent] = useState<string>("backend")
-  const sectionRef = useRef<HTMLElement>(null)
-  const contentRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const cleanup = createScrollObserver(sectionRef.current, () => {
-      if (contentRef.current) {
-        animateFadeUp(contentRef.current, 0, 700)
-      }
-    })
-    return cleanup
-  }, [])
-
-  const current = AGENTS.find((a) => a.id === selectedAgent) || AGENTS[1]
+function MeshDiagram({
+  active,
+  onSelect,
+}: {
+  active: string
+  onSelect: (id: string) => void
+}) {
+  const node = (id: string, x: number, y: number, label: string, sub: string) => {
+    const isActive = active === id
+    return (
+      <g
+        key={id}
+        transform={`translate(${x} ${y})`}
+        onClick={() => onSelect(id)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            onSelect(id)
+          }
+        }}
+        tabIndex={0}
+        role="button"
+        aria-pressed={isActive}
+        className="cursor-pointer outline-none"
+      >
+        <rect
+          width="150"
+          height="46"
+          rx="2"
+          fill={isActive ? "var(--mkt-ink)" : "var(--mkt-paper)"}
+          stroke={isActive ? "var(--mkt-ink)" : "var(--mkt-line-strong)"}
+          strokeWidth="1.2"
+        />
+        <text
+          x="12"
+          y="18"
+          fontSize="9.5"
+          fontFamily="var(--font-jetbrains), monospace"
+          letterSpacing="0.1em"
+          fill={isActive ? "#f7f3ec" : "var(--mkt-ink-3)"}
+        >
+          {sub.toUpperCase()}
+        </text>
+        <text
+          x="12"
+          y="34"
+          fontSize="13"
+          fontFamily="var(--font-inter), sans-serif"
+          fill={isActive ? "#fffdf8" : "var(--mkt-ink)"}
+        >
+          {label}
+        </text>
+      </g>
+    )
+  }
 
   return (
-    <section
-      id="orchestration"
-      ref={sectionRef}
-      className="py-24 px-6 bg-[#0D0E10] text-white border-b border-[#1E2024]"
-    >
-      <div ref={contentRef} className="max-w-6xl mx-auto space-y-16">
-        {/* Editorial Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#1E2024] pb-10">
-          <div className="space-y-3 max-w-2xl">
-            <div className="flex items-center gap-2 font-mono text-xs font-semibold uppercase tracking-wider text-[#6F6C64]">
-              <span className="text-[#F5A623]">02</span>
-              <span>/</span>
-              <span>Multi-Agent Architecture</span>
-            </div>
-            <h2 className="text-[30px] font-display font-medium leading-[1.08] tracking-[-0.03em] sm:text-[46px] text-white leading-tight">
-              Autonomous agents.
+    <figure className="border border-[var(--mkt-line)] bg-[var(--mkt-paper)]">
+      <div className="flex items-center justify-between border-b border-[var(--mkt-line)] px-4 py-2.5">
+        <span className="mkt-eyebrow">Execution relationships · example</span>
+        <span className="mkt-note">Select a stage</span>
+      </div>
+      <svg viewBox="0 0 620 360" className="block h-auto w-full" aria-label="Agent relationship diagram">
+        <g stroke="var(--mkt-line-strong)" strokeWidth="1.2" fill="none">
+          <path d="M310 52 V88" />
+          <path d="M310 134 C310 154 170 154 170 178" />
+          <path d="M310 134 C310 154 450 154 450 178" />
+          <path d="M170 224 V250" />
+          <path d="M450 224 V250" />
+          <path d="M170 250 C170 272 310 272 310 292" />
+          <path d="M450 250 C450 272 310 272 310 292" />
+          <path d="M310 338 V352" markerEnd="url(#arr)" />
+        </g>
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--mkt-line-strong)" />
+          </marker>
+        </defs>
+
+        <g transform="translate(235 8)">
+          <rect width="150" height="44" rx="2" fill="var(--mkt-accent-soft)" stroke="var(--mkt-accent-border)" />
+          <text x="75" y="18" textAnchor="middle" fontSize="9.5" fontFamily="var(--font-jetbrains), monospace" letterSpacing="0.1em" fill="var(--mkt-accent-strong)">REQUEST</text>
+          <text x="75" y="33" textAnchor="middle" fontSize="12" fontFamily="var(--font-inter), sans-serif" fill="var(--mkt-ink)">Development task</text>
+        </g>
+
+        {node("plan", 235, 88, "Architecture", "Planning")}
+        {node("frontend", 95, 178, "Frontend", "Parallel")}
+        {node("backend", 375, 178, "Backend", "Parallel")}
+        {node("test", 235, 292, "Testing · Verification", "Integration")}
+
+        <g transform="translate(220 352)" opacity="0.001">
+          <rect width="180" height="1" />
+        </g>
+      </svg>
+      <div className="border-t border-[var(--mkt-line)] px-4 py-2.5 text-[12px] text-[var(--mkt-ink-3)]">
+        Ownership and handoff are explicit; outputs converge before delivery.
+      </div>
+    </figure>
+  )
+}
+
+export function AgentOrchestration() {
+  const [active, setActive] = useState("plan")
+  const ref = useRef<HTMLElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const stage = STAGES.find((s) => s.id === active) || STAGES[0]
+
+  useEffect(() => {
+    return createScrollObserver(ref.current, () => {
+      if (contentRef.current) animateFadeUp(contentRef.current, 0, 650)
+    })
+  }, [])
+
+  return (
+    <section id="orchestration" ref={ref} className="border-b border-[var(--mkt-line)] bg-[var(--mkt-bg)] py-20 sm:py-24">
+      <div ref={contentRef} className="mkt-container">
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:gap-14">
+          <div>
+            <p className="mkt-eyebrow flex items-center gap-3">
+              <span className="text-[var(--mkt-accent)]">02</span>
+              <span className="h-px w-6 bg-[var(--mkt-line-strong)]" aria-hidden />
+              Multi-agent orchestration
+            </p>
+            <h2 className="mkt-h2 mt-5 text-[2rem] sm:text-[2.6rem]">
+              Specialized agents,
               <br />
-              <span className="text-[#A5A29A]">Synchronized output.</span>
+              <span className="text-[var(--mkt-ink-2)]">shared task structure.</span>
             </h2>
-          </div>
-          <p className="text-sm sm:text-base text-[#A5A29A] max-w-md leading-relaxed">
-            Replace chaotic solitary bots with a coordinated multi-agent mesh. Every agent is assigned specialized boundaries, strict budget limits, and direct git integration.
-          </p>
-        </div>
-
-        {/* Interactive Agent Mesh Display */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Agent Selector List (5 cols) */}
-          <div className="lg:col-span-5 space-y-3">
-            <div className="text-[11px] font-mono uppercase tracking-wider text-[#6F6C64] mb-1">
-              Select Agent to Inspect Telemetry:
-            </div>
-            {AGENTS.map((agent) => {
-              const isSelected = agent.id === selectedAgent
-              return (
-                <button
-                  key={agent.id}
-                  onClick={() => setSelectedAgent(agent.id)}
-                  className={`w-full text-left p-4 rounded-none border transition-all ${
-                    isSelected
-                      ? "border-[#F5A623] bg-[#16171A]"
-                      : "border-[#1E2024] bg-[#16171A] hover:bg-[#16171A]"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm text-white">
-                        {agent.name}
-                      </span>
-                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#1F2024] text-[#A5A29A]">
-                        {agent.badge}
-                      </span>
-                    </div>
-                    {agent.status === "Active" ? (
-                      <span className="flex items-center gap-1.5 text-[10px] font-mono text-[#F5A623]">
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#F5A623] animate-ping" />
-                        <span>ACTIVE</span>
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1.5 text-[10px] font-mono text-[#63C08A]">
-                        <CheckCircle2 className="h-3 w-3" />
-                        <span>READY</span>
-                      </span>
-                    )}
-                  </div>
-
-                  <p className="text-xs text-[#A5A29A] line-clamp-1 mb-3">
-                    {agent.role}
-                  </p>
-
-                  <div className="flex items-center justify-between text-[11px] font-mono text-[#6F6C64] pt-2 border-t border-[#1E2024]">
-                    <span>Model: {agent.model.split(" ")[0]}</span>
-                    <span className="text-white font-medium">{agent.metrics.tokens}</span>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-
-          {/* Active Agent Telemetry Monitor (7 cols) */}
-          <div className="lg:col-span-7 rounded-none border border-[#2D3036] bg-[#16171A] p-6 space-y-6">
-            <div className="flex flex-wrap items-center justify-between border-b border-[#1E2024] pb-4 gap-3">
-              <div>
-                <div className="text-[10px] font-mono text-[#F5A623] uppercase tracking-wider">
-                  Agent Telemetry Inspector
-                </div>
-                <h3 className="text-xl font-bold text-white">{current.name}</h3>
-              </div>
-              <div className="flex items-center gap-2 font-mono text-xs text-[#A5A29A] bg-[#1F2024] px-3 py-1.5 rounded-md border border-[#2D3036]">
-                <Cpu className="h-3.5 w-3.5 text-[#F5A623]" />
-                <span>Engine: {current.model}</span>
-              </div>
-            </div>
-
-            <p className="text-sm text-[#C9C5BC] leading-relaxed">
-              {current.description}
+            <p className="mkt-lead mt-5 max-w-md text-[15px]">
+              Represent work as a sequence of responsibilities — planning, parallel
+              implementation, integration, and verification — rather than isolated prompts.
             </p>
 
-            {/* Metrics Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-3 rounded-lg bg-[#0D0E10] border border-[#1E2024]">
-                <span className="block text-[10px] font-mono text-[#6F6C64] uppercase">
-                  Tokens Ingested
-                </span>
-                <span className="text-base font-bold text-white font-mono">
-                  {current.metrics.tokens}
-                </span>
+            <div className="mt-8 border border-[var(--mkt-line)] bg-[var(--mkt-paper)] p-5">
+              <div className="flex items-center justify-between gap-3 border-b border-[var(--mkt-line)] pb-3">
+                <div>
+                  <p className="mkt-eyebrow text-[var(--mkt-accent)]">{stage.mode}</p>
+                  <p className="mt-1 font-display text-[20px] font-medium tracking-[-0.02em] text-[var(--mkt-ink)]">
+                    {stage.label}
+                  </p>
+                </div>
+                <span className="mkt-chip">{stage.id}</span>
               </div>
-              <div className="p-3 rounded-lg bg-[#0D0E10] border border-[#1E2024]">
-                <span className="block text-[10px] font-mono text-[#6F6C64] uppercase">
-                  Cost Allocated
-                </span>
-                <span className="text-base font-bold text-[#63C08A] font-mono">
-                  {current.metrics.cost}
-                </span>
+              <p className="mt-4 text-[14px] leading-relaxed text-[var(--mkt-ink-2)]">{stage.detail}</p>
+              <div className="mt-4 border-t border-[var(--mkt-line)] pt-4">
+                <p className="mkt-eyebrow">Typical outputs</p>
+                <ul className="mt-3 space-y-2">
+                  {stage.outputs.map((o) => (
+                    <li key={o} className="flex items-start gap-2 text-[13px] text-[var(--mkt-ink-2)]">
+                      <span className="mt-[7px] h-px w-3 bg-[var(--mkt-accent)]" aria-hidden />
+                      <span>{o}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <div className="p-3 rounded-lg bg-[#0D0E10] border border-[#1E2024]">
-                <span className="block text-[10px] font-mono text-[#6F6C64] uppercase">
-                  Average Latency
-                </span>
-                <span className="text-base font-bold text-white font-mono">
-                  {current.metrics.latency}
-                </span>
-              </div>
-              <div className="p-3 rounded-lg bg-[#0D0E10] border border-[#1E2024]">
-                <span className="block text-[10px] font-mono text-[#6F6C64] uppercase">
-                  Tasks Verified
-                </span>
-                <span className="text-base font-bold text-white font-mono">
-                  {current.metrics.tasksDone} Done
-                </span>
-              </div>
+              <p className="mkt-note mt-5">Illustrative stage description</p>
             </div>
+          </div>
 
-            {/* Recent Output Terminal Stream */}
-            <div className="rounded-lg bg-[#0A0B0D] border border-[#1E2024] p-4 font-mono text-xs space-y-2">
-              <div className="flex items-center justify-between text-[#6F6C64] text-[10px] pb-2 border-b border-[#1E2024]">
-                <span>AGENT STDOUT STREAM</span>
-                <span>STATUS: VERIFIED</span>
-              </div>
-              <div className="text-[#A5A29A] leading-relaxed">
-                <span className="text-[#F5A623] mr-2">❯</span>
-                {current.recentAction}
-              </div>
-              <div className="text-[#6F6C64] text-[11px]">
-                Payload hash: sha256:7f4c9b8e1a... • Context depth: 14.8k tokens • Isolation: Containerized
-              </div>
+          <div className="lg:pt-8">
+            <MeshDiagram active={active === "test" ? "test" : active === "verify" ? "test" : active} onSelect={setActive} />
+            <div className="mt-3 flex flex-wrap gap-2">
+              {STAGES.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setActive(s.id)}
+                  className={`mkt-chip transition-colors ${
+                    active === s.id
+                      ? "border-[var(--mkt-accent-border)] bg-[var(--mkt-accent-soft)] text-[var(--mkt-accent-strong)]"
+                      : "hover:bg-[var(--mkt-paper-2)]"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
             </div>
           </div>
         </div>
