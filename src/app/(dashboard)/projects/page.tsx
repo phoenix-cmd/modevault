@@ -7,20 +7,14 @@ import {
   FolderGit2,
   Plus,
   Upload,
-  GitBranch,
-  Cpu,
-  Layers,
-  ArrowRight,
-  Terminal,
   CheckCircle2,
   FileCode,
-  Package,
-  ExternalLink,
-  Sparkles,
   Search,
+  X,
 } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
-import { GlassCard } from "@/components/ui/glass-card"
+import { StatBand, StatBandSkeleton } from "@/components/ui/stat-band"
+import { cn } from "@/lib/utils"
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<any[]>([])
@@ -110,215 +104,310 @@ export default function ProjectsPage() {
     }
   }
 
-  const filtered = projects.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    (p.description && p.description.toLowerCase().includes(search.toLowerCase()))
+  const filtered = projects.filter(
+    (p) =>
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      (p.description && p.description.toLowerCase().includes(search.toLowerCase()))
   )
 
+  const executionCount = projects.reduce(
+    (sum, project) => sum + (project.executions?.length || 0),
+    0
+  )
+  const zipCount = projects.filter(
+    (project) => project.sources?.[0]?.type === "zip_upload"
+  ).length
+  const gitCount = projects.length - zipCount
+
   return (
-    <div className="space-y-6 pb-16 max-w-7xl mx-auto">
+    <div className="mx-auto max-w-7xl space-y-7 pb-16">
       <PageHeader
-        title="Projects & Workspaces"
+        eyebrow="Workspace · Repositories"
+        title="Projects"
         description="Unified repositories, persistent cloud sandboxes, and agent worktree contexts."
         action={
-          <button
-            onClick={() => setModalOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-charcoal px-3.5 py-2 text-xs font-semibold text-[#FDFDFD] shadow-sm hover:bg-[#202020] active:scale-[0.98] transition-all"
-          >
-            <Plus className="h-4 w-4 text-accent" />
-            New Project
+          <button onClick={() => setModalOpen(true)} className="btn-primary">
+            <Plus className="h-4 w-4" strokeWidth={2} />
+            New project
           </button>
         }
       />
 
-      {/* Filter / Search Bar */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="relative w-72">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3" />
-          <input
-            type="text"
-            placeholder="Search projects..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-line bg-surface pl-8.5 pr-3 py-1.5 text-xs text-ink placeholder-ink-3 outline-none focus:border-accent/40 shadow-xs"
-          />
-        </div>
-
-        <div className="flex items-center gap-2 text-xs text-ink-2">
-          <span>{projects.length} Total Projects</span>
-          <span className="h-3 w-px bg-line" />
-          <span className="flex items-center gap-1 text-success font-medium">
-            <span className="h-1.5 w-1.5 rounded-full bg-success" />
-            All Sandboxes Ready
-          </span>
-        </div>
-      </div>
-
-      {/* Projects Grid */}
       {loading ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-48 rounded-xl border border-line bg-surface animate-pulse" />
-          ))}
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-line bg-surface p-12 text-center space-y-3">
-          <FolderGit2 className="h-10 w-10 text-ink-3 mx-auto" />
-          <h3 className="text-sm font-semibold text-ink">No projects found</h3>
-          <p className="text-xs text-ink-2 max-w-sm mx-auto">
-            Upload your project ZIP archive or import a Git repository to start orchestrating coding agents.
-          </p>
-          <button
-            onClick={() => setModalOpen(true)}
-            className="rounded-lg bg-charcoal px-4 py-2 text-xs font-semibold text-white hover:bg-[#202020]"
-          >
-            Create Your First Project
-          </button>
-        </div>
+        <StatBandSkeleton columns={4} />
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((proj) => {
-            const env = proj.environments?.[0]
-            const source = proj.sources?.[0]
-            return (
-              <GlassCard
-                key={proj.id}
-                className="flex flex-col justify-between p-5 border-line bg-surface hover:border-line-strong shadow-xs transition-all duration-200"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-2.5">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 text-ink border border-line">
-                        <FileCode className="h-4 w-4 text-accent" />
-                      </span>
-                      <div>
-                        <h3 className="text-[13px] font-semibold text-ink leading-snug">
-                          {proj.name}
-                        </h3>
-                        <p className="text-[11px] text-ink-2">
-                          {proj.framework?.toUpperCase()} • {proj.language}
-                        </p>
-                      </div>
-                    </div>
-
-                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-success-soft text-success border border-success/20">
-                      <span className="h-1.5 w-1.5 rounded-full bg-success" />
-                      Sandbox Active
-                    </span>
-                  </div>
-
-                  <p className="mt-3 text-[12px] text-ink-2 line-clamp-2 leading-relaxed">
-                    {proj.description || "Production-grade project repository attached to MODELVAULT orchestrator."}
-                  </p>
-
-                  <div className="mt-4 pt-3 border-t border-line grid grid-cols-2 gap-2 text-[11px]">
-                    <div>
-                      <span className="text-ink-3 block">Port / Env:</span>
-                      <span className="font-mono text-ink font-medium">
-                        :{env?.runPort || 3000} ({env?.runtime || "node-20"})
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-ink-3 block">Source:</span>
-                      <span className="font-mono text-ink truncate block">
-                        {source?.type === "zip_upload" ? "Archive Upload" : "Git Clone"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-5 pt-3 border-t border-line flex items-center justify-between">
-                  <span className="text-[11px] text-ink-3">
-                    {proj.executions?.length || 0} Executions
-                  </span>
-                  <Link
-                    href={`/agents?projectId=${proj.id}`}
-                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-accent hover:underline"
-                  >
-                    Open in Agent Center
-                    <ArrowRight className="h-3 w-3" />
-                  </Link>
-                </div>
-              </GlassCard>
-            )
-          })}
-        </div>
+        <StatBand
+          columns={4}
+          items={[
+            {
+              label: "Projects",
+              value: String(projects.length),
+              meta: "Attached to this workspace",
+            },
+            {
+              label: "Sandboxes",
+              value: String(projects.length),
+              meta: "Provisioned runtimes",
+            },
+            {
+              label: "Executions",
+              value: String(executionCount),
+              meta: "Recorded agent runs",
+            },
+            {
+              label: "Archive / Git",
+              value: `${zipCount} / ${gitCount}`,
+              meta: "Import source mix",
+            },
+          ]}
+        />
       )}
 
-      {/* New Project Modal (ZIP Upload & Inspection) */}
+      <section className="border-t border-line pt-5">
+        <div className="flex flex-wrap items-end justify-between gap-4 pb-4">
+          <div>
+            <h2 className="panel-title">Repositories</h2>
+            <p className="panel-subtitle">
+              Each project owns its sandbox, branch history, and agent runtime.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3"
+                strokeWidth={1.8}
+              />
+              <input
+                type="text"
+                placeholder="Search projects…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                aria-label="Search projects"
+                className="field field-sm w-64 pl-9"
+              />
+            </div>
+            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">
+              {filtered.length} of {projects.length}
+            </span>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="border-t border-line">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-6 border-b border-line px-3 py-5 last:border-b-0"
+              >
+                <div className="skeleton h-2.5 w-6" />
+                <div className="flex-1 space-y-2">
+                  <div className="skeleton h-3 w-48" />
+                  <div className="skeleton h-2.5 w-72" />
+                </div>
+                <div className="skeleton h-2.5 w-24" />
+              </div>
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="border border-dashed border-line bg-surface px-6 py-16 text-center">
+            <FolderGit2
+              className="mx-auto h-8 w-8 text-ink-3"
+              strokeWidth={1.4}
+            />
+            <h3 className="mt-4 font-display text-[16px] font-medium tracking-[-0.02em] text-ink">
+              No projects found
+            </h3>
+            <p className="mx-auto mt-1.5 max-w-sm text-[12.5px] leading-relaxed text-ink-3">
+              Upload a ZIP archive or import a Git repository to start
+              orchestrating coding agents.
+            </p>
+            <button
+              onClick={() => setModalOpen(true)}
+              className="btn-primary mt-5"
+            >
+              <Plus className="h-4 w-4" strokeWidth={2} />
+              Create your first project
+            </button>
+          </div>
+        ) : (
+          <div>
+            <div className="hidden grid-cols-[2.5rem_minmax(0,1fr)_8rem_9rem_7rem_7rem_2rem] items-center gap-4 border-y border-line bg-surface-2/40 px-3 py-2 font-mono text-[9.5px] uppercase tracking-[0.12em] text-ink-3 md:grid">
+              <span>#</span>
+              <span>Project</span>
+              <span>Stack</span>
+              <span>Runtime</span>
+              <span>Source</span>
+              <span>Runs</span>
+              <span />
+            </div>
+
+            {filtered.map((proj, index) => {
+              const env = proj.environments?.[0]
+              const source = proj.sources?.[0]
+              return (
+                <Link
+                  key={proj.id}
+                  href={`/agents?projectId=${proj.id}`}
+                  className="group grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-4 border-b border-line px-3 py-4 transition-colors duration-150 hover:bg-surface-2/40 md:grid-cols-[2.5rem_minmax(0,1fr)_8rem_9rem_7rem_7rem_2rem]"
+                >
+                  <span className="font-mono text-[10px] tabular-nums text-ink-3">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <FileCode
+                        className="h-3.5 w-3.5 shrink-0 text-accent"
+                        strokeWidth={1.8}
+                      />
+                      <h3 className="truncate text-[13px] font-medium text-ink">
+                        {proj.name}
+                      </h3>
+                    </div>
+                    <p className="mt-1 line-clamp-1 text-[11.5px] text-ink-3">
+                      {proj.description ||
+                        "Production repository attached to the MODELVAULT orchestrator."}
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[9.5px] uppercase tracking-[0.06em] text-ink-3 md:hidden">
+                      <span>
+                        {proj.framework?.toUpperCase() || "UNKNOWN"} ·{" "}
+                        {proj.language || "—"}
+                      </span>
+                      <span>
+                        :{env?.runPort || 3000} ({env?.runtime || "node-20"})
+                      </span>
+                      <span>{proj.executions?.length || 0} runs</span>
+                    </div>
+                  </div>
+
+                  <span className="hidden truncate font-mono text-[10px] uppercase tracking-[0.06em] text-ink-2 md:block">
+                    {proj.framework?.toUpperCase() || "—"}
+                    <span className="block text-ink-3">{proj.language || "—"}</span>
+                  </span>
+
+                  <span className="hidden font-mono text-[10px] text-ink-2 md:block">
+                    :{env?.runPort || 3000}
+                    <span className="block text-ink-3">
+                      {env?.runtime || "node-20"}
+                    </span>
+                  </span>
+
+                  <span className="hidden font-mono text-[10px] uppercase tracking-[0.06em] text-ink-2 md:block">
+                    {source?.type === "zip_upload" ? "Archive" : "Git"}
+                  </span>
+
+                  <span className="hidden font-mono text-[11px] tabular-nums text-ink-2 md:block">
+                    {proj.executions?.length || 0}
+                  </span>
+
+                  <span className="flex justify-end">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3 transition-colors group-hover:text-accent">
+                      Open
+                    </span>
+                  </span>
+                </Link>
+              )
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* New project modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-charcoal/50 backdrop-blur-xs">
+        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div
             ref={dialogRef}
             role="dialog"
             aria-modal="true"
-            className="relative w-full max-w-lg rounded-xl border border-line bg-surface p-6 shadow-2xl"
+            aria-labelledby="new-project-title"
+            className="panel max-h-[90vh] w-full max-w-lg overflow-y-auto shadow-2xl"
           >
-            <h2 className="text-sm font-semibold text-ink pb-3 border-b border-line flex items-center gap-2">
-              <FolderGit2 className="h-4 w-4 text-accent" />
-              Create Project & Ingest Repository
-            </h2>
+            <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
+              <div>
+                <h2
+                  id="new-project-title"
+                  className="font-display text-[16px] font-medium tracking-[-0.02em] text-ink"
+                >
+                  Ingest repository
+                </h2>
+                <p className="mt-1 font-mono text-[9.5px] uppercase tracking-[0.12em] text-ink-3">
+                  New project · sandbox provisioning
+                </p>
+              </div>
+              <button
+                onClick={() => setModalOpen(false)}
+                className="icon-btn -mr-1.5 -mt-1"
+                aria-label="Close new project dialog"
+              >
+                <X className="h-4 w-4" strokeWidth={1.8} />
+              </button>
+            </div>
 
-            <form onSubmit={handleCreateProject} className="mt-4 space-y-4 text-xs">
-              {/* Import Mode Tabs */}
-              <div className="flex rounded-lg border border-line bg-surface-2 p-0.5">
+            <form onSubmit={handleCreateProject} className="space-y-4 p-5">
+              <div className="segmented w-full" role="group" aria-label="Import mode">
                 <button
                   type="button"
                   onClick={() => setImportMode("zip")}
-                  className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition-colors ${
-                    importMode === "zip"
-                      ? "bg-surface text-ink shadow-xs"
-                      : "text-ink-2 hover:text-ink"
-                  }`}
+                  aria-pressed={importMode === "zip"}
+                  className={cn(
+                    "segmented-item flex-1",
+                    importMode === "zip" && "segmented-item-active"
+                  )}
                 >
-                  Upload ZIP Archive
+                  ZIP archive
                 </button>
                 <button
                   type="button"
                   onClick={() => setImportMode("git")}
-                  className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition-colors ${
-                    importMode === "git"
-                      ? "bg-surface text-ink shadow-xs"
-                      : "text-ink-2 hover:text-ink"
-                  }`}
+                  aria-pressed={importMode === "git"}
+                  className={cn(
+                    "segmented-item flex-1",
+                    importMode === "git" && "segmented-item-active"
+                  )}
                 >
-                  Git Repository URL
+                  Git repository
                 </button>
               </div>
 
               <div>
-                <label className="block text-ink font-medium mb-1">
-                  Project Name
+                <label className="label" htmlFor="project-name">
+                  Project name
                 </label>
                 <input
+                  id="project-name"
                   type="text"
                   required
-                  placeholder="e.g. Acme Billing Core"
+                  placeholder="Acme Billing Core"
                   value={projectName}
                   onChange={(e) => setProjectName(e.target.value)}
-                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-xs text-ink outline-none focus:border-accent/40"
+                  className="field"
                 />
               </div>
 
               {importMode === "zip" ? (
                 <div>
-                  <label className="block text-ink font-medium mb-1">
-                    Source ZIP Archive
-                  </label>
-                  <div
+                  <span className="label">Source archive</span>
+                  <button
+                    type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex flex-col items-center justify-center rounded-xl border border-dashed border-line-strong bg-canvas p-6 text-center cursor-pointer hover:border-accent/50 transition-colors"
+                    className="flex w-full flex-col items-center justify-center border border-dashed border-line-strong bg-surface-2/40 px-6 py-8 text-center transition-colors hover:border-accent-line"
                   >
-                    <Upload className="h-6 w-6 text-ink-3 mb-2" />
-                    <p className="text-xs font-semibold text-ink">
-                      {selectedFile ? selectedFile.name : "Click to select .zip project archive"}
-                    </p>
-                    <p className="text-[11px] text-ink-2 mt-0.5">
+                    <Upload
+                      className="mb-2.5 h-5 w-5 text-ink-3"
+                      strokeWidth={1.6}
+                    />
+                    <span className="text-[12.5px] font-medium text-ink">
+                      {selectedFile
+                        ? selectedFile.name
+                        : "Select a .zip project archive"}
+                    </span>
+                    <span className="mt-1 font-mono text-[9.5px] uppercase tracking-[0.08em] text-ink-3">
                       {selectedFile
                         ? `${(selectedFile.size / 1024).toFixed(1)} KB ready for AST inspection`
-                        : "ZIP files containing package.json or requirements.txt"}
-                    </p>
-                  </div>
+                        : "ZIP containing package.json or requirements.txt"}
+                    </span>
+                  </button>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -329,46 +418,47 @@ export default function ProjectsPage() {
                 </div>
               ) : (
                 <div>
-                  <label className="block text-ink font-medium mb-1">
-                    Repository URL (HTTPS / SSH)
+                  <label className="label" htmlFor="repo-url">
+                    Repository URL
                   </label>
                   <input
+                    id="repo-url"
                     type="text"
                     placeholder="https://github.com/org/repo.git"
                     value={repoUrl}
                     onChange={(e) => setRepoUrl(e.target.value)}
-                    className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-xs text-ink outline-none focus:border-accent/40"
+                    className="field font-mono text-[12px]"
                   />
                 </div>
               )}
 
-              {/* Inspection live results */}
               {inspectionResult && (
-                <div className="rounded-lg border border-success/20 bg-success-soft p-3 space-y-1 text-success">
-                  <div className="flex items-center gap-1.5 font-semibold text-xs">
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span>Project Inspected & Verified</span>
+                <div className="border border-success/25 bg-success-soft px-3 py-2.5 text-success">
+                  <div className="flex items-center gap-1.5 text-[12px] font-medium">
+                    <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} />
+                    Project inspected and verified
                   </div>
-                  <p className="text-[11px] text-ink">
-                    Framework: <strong>{inspectionResult.framework}</strong> • Files: <strong>{inspectionResult.fileCount}</strong>
+                  <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-2">
+                    Framework {inspectionResult.framework} ·{" "}
+                    {inspectionResult.fileCount} files
                   </p>
                 </div>
               )}
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-line">
+              <div className="flex items-center justify-end gap-2 border-t border-line pt-4">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="rounded-lg px-3 py-1.5 text-xs font-medium text-ink-2 hover:text-ink"
+                  className="btn-ghost"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={uploading}
-                  className="rounded-lg bg-charcoal px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#202020] disabled:opacity-50"
+                  className="btn-primary"
                 >
-                  {uploading ? "Inspecting & Provisioning..." : "Create & Provision Sandbox"}
+                  {uploading ? "Provisioning…" : "Create and provision"}
                 </button>
               </div>
             </form>
