@@ -13,35 +13,53 @@ import {
   ChevronRight,
   CreditCard,
   LayoutDashboard,
+  LogOut,
   Menu,
   Moon,
   Search,
-  Settings,
   Sun,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { RawSubscription } from "@/lib/types"
 
 const PAGE_META: Record<string, { section: string; title: string }> = {
-  "/overview": { section: "Overview", title: "Dashboard" },
-  "/subscriptions": { section: "Overview", title: "Subscriptions" },
-  "/api-usage": { section: "Overview", title: "API Usage" },
-  "/analytics": { section: "Overview", title: "Analytics" },
-  "/billing": { section: "Management", title: "Billing" },
-  "/calendar": { section: "Management", title: "Renewal Calendar" },
-  "/integrations": { section: "Management", title: "Integrations" },
-  "/settings": { section: "Preferences", title: "Settings" },
+  "/overview": { section: "Workspace", title: "Overview" },
+  "/projects": { section: "Workspace", title: "Projects" },
+  "/agents": { section: "Workspace", title: "Agents" },
+  "/workflows": { section: "Workspace", title: "Workflows" },
+  "/studio": { section: "Workspace", title: "Studio" },
+  "/git": { section: "Workspace", title: "Git" },
+  "/models": { section: "Intelligence", title: "Models" },
+  "/api-usage": { section: "Intelligence", title: "Usage" },
+  "/analytics": { section: "Intelligence", title: "Analytics" },
+  "/subscriptions": { section: "Intelligence", title: "Subscriptions" },
+  "/billing": { section: "Intelligence", title: "Billing" },
+  "/calendar": { section: "Intelligence", title: "Renewals" },
+  "/integrations": { section: "Administration", title: "Integrations" },
+  "/organizations": { section: "Administration", title: "Organizations" },
+  "/permissions": { section: "Administration", title: "Permissions" },
+  "/notifications": { section: "Administration", title: "Notifications" },
+  "/settings": { section: "Administration", title: "Settings" },
 }
 
 const SEARCH_PAGES = [
-  { label: "Dashboard", hint: "Overview", href: "/overview" },
-  { label: "Subscriptions", hint: "Overview", href: "/subscriptions" },
-  { label: "API Usage", hint: "Overview", href: "/api-usage" },
-  { label: "Analytics", hint: "Overview", href: "/analytics" },
-  { label: "Billing", hint: "Management", href: "/billing" },
-  { label: "Renewal Calendar", hint: "Management", href: "/calendar" },
-  { label: "Integrations", hint: "Management", href: "/integrations" },
-  { label: "Settings", hint: "Preferences", href: "/settings" },
+  { label: "Overview", hint: "Workspace", href: "/overview" },
+  { label: "Projects", hint: "Workspace", href: "/projects" },
+  { label: "Agents", hint: "Workspace", href: "/agents" },
+  { label: "Workflows", hint: "Workspace", href: "/workflows" },
+  { label: "Studio", hint: "Workspace", href: "/studio" },
+  { label: "Git", hint: "Workspace", href: "/git" },
+  { label: "Models", hint: "Intelligence", href: "/models" },
+  { label: "Usage", hint: "Intelligence", href: "/api-usage" },
+  { label: "Analytics", hint: "Intelligence", href: "/analytics" },
+  { label: "Subscriptions", hint: "Intelligence", href: "/subscriptions" },
+  { label: "Billing", hint: "Intelligence", href: "/billing" },
+  { label: "Renewals", hint: "Intelligence", href: "/calendar" },
+  { label: "Integrations", hint: "Administration", href: "/integrations" },
+  { label: "Organizations", hint: "Administration", href: "/organizations" },
+  { label: "Permissions", hint: "Administration", href: "/permissions" },
+  { label: "Notifications", hint: "Administration", href: "/notifications" },
+  { label: "Settings", hint: "Administration", href: "/settings" },
 ]
 
 interface NotificationItem {
@@ -82,7 +100,7 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
 
   const meta = PAGE_META[pathname] || { section: "Workspace", title: "Dashboard" }
 
-  const [isDark, setIsDark] = useState(false)
+  const [isDark, setIsDark] = useState(true)
   const [mounted, setMounted] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -347,7 +365,7 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
     : null
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line bg-canvas/85 px-4 backdrop-blur-[8px] sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line bg-canvas px-4 sm:px-6 lg:px-8">
       <div className="flex min-w-0 items-center gap-2">
         <button
           onClick={onMenuOpen}
@@ -357,16 +375,11 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
           <Menu className="h-4.5 w-4.5" />
         </button>
 
-        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5">
-          <span className="hidden text-[12px] text-ink-3 sm:inline">Workspace</span>
-          <ChevronRight
-            className="hidden h-3 w-3 text-ink-3/70 sm:block"
-            strokeWidth={2}
-          />
-          <span className="truncate text-[12.5px] font-medium text-ink-2">
+        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2">
+          <span className="hidden font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-ink-3 sm:inline">
             {meta.section}
           </span>
-          <ChevronRight className="h-3 w-3 shrink-0 text-ink-3/70" strokeWidth={2} />
+          <span className="hidden font-mono text-[10px] text-ink-3/60 sm:inline">/</span>
           <span className="truncate text-[12.5px] font-medium text-ink">
             {meta.title}
           </span>
@@ -376,11 +389,11 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
       <div className="flex items-center gap-1 sm:gap-1.5">
         <button
           onClick={() => setSearchOpen(true)}
-          className="hidden h-8 w-[230px] items-center gap-2 rounded-lg border border-line bg-surface px-2.5 text-left text-[12.5px] text-ink-3 transition-colors hover:border-line-strong md:flex"
+          className="hidden h-8 w-[240px] items-center gap-2 rounded border border-line bg-surface px-2.5 text-left font-mono text-[11px] text-ink-3 transition-colors hover:border-line-strong md:flex"
         >
           <Search className="h-3.5 w-3.5" strokeWidth={1.8} />
           <span className="flex-1">Search</span>
-          <kbd className="rounded border border-line bg-surface-2 px-1 py-0.5 font-sans text-[10px] font-medium text-ink-3">
+          <kbd className="rounded border border-line bg-surface-2 px-1 py-0.5 font-mono text-[9.5px] font-medium text-ink-3">
             ⌘K
           </kbd>
         </button>
@@ -512,23 +525,11 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
 
         <Link
           href="/settings"
-          className="flex items-center gap-2 rounded-lg px-1 py-1 transition-colors hover:bg-surface-2"
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-surface-2 font-mono text-[10px] font-medium text-ink-2 transition-colors hover:border-line-strong hover:text-ink"
+          aria-label="Account settings"
+          title="Account settings"
         >
-          <span className="flex h-7 w-7 items-center justify-center rounded-full border border-line bg-surface-2 text-[10.5px] font-semibold text-ink-2">
-            AK
-          </span>
-          <span className="hidden text-left sm:block">
-            <span className="block text-[12px] font-medium leading-tight text-ink">
-              Alex Kumar
-            </span>
-            <span className="block text-[10.5px] leading-tight text-ink-3">
-              alex@example.com
-            </span>
-          </span>
-          <Settings
-            className="hidden h-3.5 w-3.5 text-ink-3 sm:block"
-            strokeWidth={1.8}
-          />
+          AK
         </Link>
         <button
           type="button"
@@ -536,9 +537,11 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
             await fetch("/api/auth/logout", { method: "POST" })
             window.location.href = "/login"
           }}
-          className="hidden text-[11px] font-medium text-ink-3 hover:text-ink sm:block"
+          className="icon-btn"
+          aria-label="Sign out"
+          title="Sign out"
         >
-          Sign out
+          <LogOut className="h-4 w-4" strokeWidth={1.8} />
         </button>
       </div>
 
