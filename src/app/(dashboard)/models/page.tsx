@@ -1,18 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import {
-  Cpu,
-  Zap,
-  Play,
-  Clock,
-  Coins,
-  Layers,
-  Database,
-  TriangleAlert,
-} from "lucide-react"
+import { Database, Play, TriangleAlert } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
-import { GlassCard } from "@/components/ui/glass-card"
+import { StatBand } from "@/components/ui/stat-band"
 import { formatNumber } from "@/lib/utils"
 
 interface ModelEntry {
@@ -146,8 +137,16 @@ export async function verifyTokenBudget(req: Request) {
   },
 ]
 
+type Tab = "catalog" | "benchmarks" | "calculator"
+
+const TABS: Array<{ id: Tab; label: string }> = [
+  { id: "catalog", label: "Catalog" },
+  { id: "benchmarks", label: "Benchmarks" },
+  { id: "calculator", label: "Cost calculator" },
+]
+
 export default function ModelLibraryPage() {
-  const [activeTab, setActiveTab] = useState<"catalog" | "benchmarks" | "calculator">("benchmarks")
+  const [activeTab, setActiveTab] = useState<Tab>("catalog")
   const [models, setModels] = useState<ModelEntry[]>([])
   const [catalogSource, setCatalogSource] = useState<"loading" | "database" | "fallback">("loading")
   const [selectedBenchmarkModel, setSelectedBenchmarkModel] = useState<string>("claude-3-7-sonnet")
@@ -215,24 +214,25 @@ export default function ModelLibraryPage() {
     models.find((m) => m.id === selectedBenchmarkModel) || models[0] || null
 
   return (
-    <div className="space-y-6 pb-16 max-w-7xl mx-auto">
+    <div className="mx-auto max-w-7xl space-y-7 pb-16">
       <PageHeader
-        title="Model Intelligence & Pricing Matrix"
-        description="Official token unit economics, real-time benchmark test bench, and monthly cost simulation."
+        eyebrow="Intelligence · Model registry"
+        title="Models"
+        description="Token unit economics, latency and throughput across the models available to your workspaces."
       />
 
       {catalogSource !== "loading" && (
         <div
           className={
             catalogSource === "database"
-              ? "flex items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2 text-[11.5px] text-ink-2"
-              : "flex items-center gap-2 rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-[11.5px] text-warning"
+              ? "flex items-center gap-2 border-y border-line py-2.5 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3"
+              : "flex items-center gap-2 border-y border-warning/30 py-2.5 font-mono text-[10px] uppercase tracking-[0.08em] text-warning"
           }
         >
           {catalogSource === "database" ? (
-            <Database className="h-3.5 w-3.5 text-success" />
+            <Database className="h-3.5 w-3.5 shrink-0 text-success" strokeWidth={1.8} />
           ) : (
-            <TriangleAlert className="h-3.5 w-3.5" />
+            <TriangleAlert className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
           )}
           <span>
             {catalogSource === "database"
@@ -243,72 +243,171 @@ export default function ModelLibraryPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-line text-xs font-semibold">
-        <button
-          onClick={() => setActiveTab("benchmarks")}
-          className={`py-2.5 px-4 border-b-2 transition-colors ${
-            activeTab === "benchmarks"
-              ? "border-accent text-ink"
-              : "border-transparent text-ink-2 hover:text-ink"
-          }`}
-        >
-          Interactive Benchmark Test Bench
-        </button>
-        <button
-          onClick={() => setActiveTab("calculator")}
-          className={`py-2.5 px-4 border-b-2 transition-colors ${
-            activeTab === "calculator"
-              ? "border-accent text-ink"
-              : "border-transparent text-ink-2 hover:text-ink"
-          }`}
-        >
-          Unit Economics Calculator
-        </button>
-        <button
-          onClick={() => setActiveTab("catalog")}
-          className={`py-2.5 px-4 border-b-2 transition-colors ${
-            activeTab === "catalog"
-              ? "border-accent text-ink"
-              : "border-transparent text-ink-2 hover:text-ink"
-          }`}
-        >
-          Model Matrix & Specifications
-        </button>
+      <div className="flex flex-wrap gap-6 border-b border-line" role="tablist">
+        {TABS.map((tab) => {
+          const isActive = activeTab === tab.id
+          return (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setActiveTab(tab.id)}
+              className={`-mb-px border-b py-2.5 font-mono text-[10px] font-medium uppercase tracking-[0.14em] transition-colors ${
+                isActive
+                  ? "border-accent text-accent"
+                  : "border-transparent text-ink-3 hover:text-ink"
+              }`}
+            >
+              {tab.label}
+            </button>
+          )
+        })}
       </div>
 
-      {/* Tab 1: Interactive Benchmark Test Bench */}
+      {/* Tab: Catalog */}
+      {activeTab === "catalog" && (
+        <section>
+          {models.length === 0 ? (
+            <div className="border-y border-line py-12 text-center">
+              <p className="text-[13px] font-medium text-ink">
+                {catalogSource === "loading" ? "Loading model catalog…" : "No models available"}
+              </p>
+              <p className="mt-1 text-[12px] text-ink-3">
+                {catalogSource === "loading"
+                  ? "Fetching the model registry."
+                  : "Seed the model catalog to compare pricing and context windows."}
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="hidden overflow-x-auto border-t border-line md:block">
+                <table className="data-table min-w-[860px]">
+                  <thead>
+                    <tr>
+                      <th>Model</th>
+                      <th>Provider</th>
+                      <th className="text-right">Context</th>
+                      <th className="text-right">Input / 1M</th>
+                      <th className="text-right">Output / 1M</th>
+                      <th className="text-right">Cached / 1M</th>
+                      <th className="text-right">Speed</th>
+                      <th className="text-right">Latency</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {models.map((m) => (
+                      <tr key={m.id}>
+                        <td>
+                          <p className="text-[12.5px] font-medium text-ink">{m.name}</p>
+                          <p className="max-w-[280px] truncate text-[11px] text-ink-3">
+                            {m.bestFor}
+                          </p>
+                        </td>
+                        <td className="whitespace-nowrap text-[12px] text-ink-2">
+                          {m.provider}
+                        </td>
+                        <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">
+                          {m.context}
+                        </td>
+                        <td className="text-right font-mono text-[11px] text-ink tabular-nums">
+                          ${m.inputPricePerM.toFixed(2)}
+                        </td>
+                        <td className="text-right font-mono text-[11px] text-ink tabular-nums">
+                          ${m.outputPricePerM.toFixed(2)}
+                        </td>
+                        <td className="text-right font-mono text-[11px] text-ink-3 tabular-nums">
+                          ${m.cachedPricePerM.toFixed(2)}
+                        </td>
+                        <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">
+                          {m.speedTokensPerSec} t/s
+                        </td>
+                        <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">
+                          {m.latencyMs} ms
+                        </td>
+                        <td>
+                          <span className="badge bg-surface-2 text-ink-3">
+                            {m.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <ul className="border-t border-line md:hidden">
+                {models.map((m) => (
+                  <li key={m.id} className="border-b border-line py-4 last:border-b-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-medium text-ink">{m.name}</p>
+                        <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-3">
+                          {m.provider} · {m.context} context
+                        </p>
+                      </div>
+                      <span className="badge shrink-0 bg-surface-2 text-ink-3">
+                        {m.status}
+                      </span>
+                    </div>
+                    <p className="mt-2 line-clamp-2 text-[11.5px] leading-relaxed text-ink-2">
+                      {m.bestFor}
+                    </p>
+                    <div className="mt-3 grid grid-cols-3 gap-3">
+                      {[
+                        ["Input", `$${m.inputPricePerM.toFixed(2)}`],
+                        ["Output", `$${m.outputPricePerM.toFixed(2)}`],
+                        ["Cached", `$${m.cachedPricePerM.toFixed(2)}`],
+                      ].map(([label, value]) => (
+                        <div key={label}>
+                          <p className="metric-label">{label} / 1M</p>
+                          <p className="mt-1 font-mono text-[11px] text-ink tabular-nums">
+                            {value}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </section>
+      )}
+
+      {/* Tab: Benchmarks */}
       {activeTab === "benchmarks" && !activeModel && (
-        <GlassCard className="p-8 border-line bg-surface text-center">
-          <p className="text-sm font-semibold text-ink">
+        <section className="border-y border-line py-12 text-center">
+          <p className="text-[13px] font-medium text-ink">
             {catalogSource === "loading" ? "Loading model catalog…" : "No models available"}
           </p>
-          <p className="mt-1 text-xs text-ink-2">
+          <p className="mt-1 text-[12px] text-ink-3">
             {catalogSource === "loading"
               ? "Fetching the model registry."
               : "Seed the model catalog or add models to run benchmarks."}
           </p>
-        </GlassCard>
+        </section>
       )}
 
       {activeTab === "benchmarks" && activeModel && (
-        <div className="space-y-6">
-          <GlassCard className="p-5 border-line bg-surface shadow-xs space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-line">
-              <div className="flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-charcoal text-white">
-                  <Zap className="h-3.5 w-3.5 text-accent" />
-                </span>
-                <span className="text-xs font-bold uppercase tracking-wider text-ink">
-                  Live Agent Model Test Bench
-                </span>
+        <div className="space-y-8">
+          <section className="border-t border-line pt-5">
+            <div className="flex flex-wrap items-start justify-between gap-4 pb-5">
+              <div>
+                <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
+                  Benchmark preview
+                </h2>
+                <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
+                  Simulated locally · no provider request is sent
+                </p>
               </div>
 
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-ink-2">Target Engine:</span>
+              <label className="flex items-center gap-2 font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-3">
+                Target
                 <select
                   value={selectedBenchmarkModel}
                   onChange={(e) => setSelectedBenchmarkModel(e.target.value)}
-                  className="rounded-lg border border-line bg-surface-2 px-3 py-1 font-semibold text-ink outline-none"
+                  className="select select-sm w-auto font-sans text-[12px] normal-case tracking-normal"
                 >
                   {models.map((m) => (
                     <option key={m.id} value={m.id}>
@@ -316,110 +415,97 @@ export default function ModelLibraryPage() {
                     </option>
                   ))}
                 </select>
-              </div>
+              </label>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 border-t border-line pt-4 sm:flex-row">
               <input
                 type="text"
                 value={testPrompt}
                 onChange={(e) => setTestPrompt(e.target.value)}
-                placeholder="Enter test prompt or pick code refactoring challenge..."
-                className="flex-1 rounded-lg border border-line bg-canvas px-3.5 py-2 text-xs text-ink outline-none focus:border-accent/50 focus:bg-white"
+                placeholder="Enter a test prompt or code refactoring challenge…"
+                className="field flex-1"
               />
               <button
                 onClick={handleRunBenchmark}
                 disabled={benchmarking}
-                className="flex items-center gap-1.5 rounded-lg bg-charcoal px-4 py-2 text-xs font-semibold text-white hover:bg-[#202020] active:scale-[0.98] transition-all disabled:opacity-50"
+                className="btn-primary"
               >
-                <Play className="h-3.5 w-3.5 fill-accent text-accent" />
-                <span>{benchmarking ? "Evaluating..." : "Run Test"}</span>
+                <Play className="h-3 w-3 fill-current" strokeWidth={1.8} />
+                {benchmarking ? "Evaluating…" : "Run preview"}
               </button>
             </div>
-          </GlassCard>
+          </section>
 
-          {/* Benchmark Metrics Comparison Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <GlassCard className="p-4 border-line bg-surface space-y-1">
-              <div className="flex items-center gap-1.5 text-xs text-ink-2">
-                <Clock className="h-3.5 w-3.5 text-accent" />
-                <span>First Token Latency</span>
-              </div>
-              <p className="text-xl font-bold font-mono text-ink">
-                {activeModel.latencyMs} ms
-              </p>
-              <p className="text-[11px] text-success font-medium">99.4% uptime SLA</p>
-            </GlassCard>
+          <StatBand
+            columns={4}
+            items={[
+              {
+                label: "First token",
+                value: `${activeModel.latencyMs} ms`,
+                meta: "Catalog median",
+              },
+              {
+                label: "Throughput",
+                value: `${activeModel.speedTokensPerSec} t/s`,
+                meta: "Peak stream burst",
+              },
+              {
+                label: "Input / 1M",
+                value: `$${activeModel.inputPricePerM.toFixed(2)}`,
+                meta: `Cached $${activeModel.cachedPricePerM.toFixed(2)}`,
+              },
+              {
+                label: "Context",
+                value: activeModel.context,
+                meta: "Token window",
+              },
+            ]}
+          />
 
-            <GlassCard className="p-4 border-line bg-surface space-y-1">
-              <div className="flex items-center gap-1.5 text-xs text-ink-2">
-                <Zap className="h-3.5 w-3.5 text-accent" />
-                <span>Throughput</span>
+          <section className="border-t border-line pt-5">
+            <div className="flex flex-wrap items-baseline justify-between gap-3 pb-4">
+              <div>
+                <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
+                  Reference output
+                </h2>
+                <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
+                  Stored sample · {activeModel.name}
+                </p>
               </div>
-              <p className="text-xl font-bold font-mono text-ink">
-                {activeModel.speedTokensPerSec} tok/sec
-              </p>
-              <p className="text-[11px] text-ink-2">Peak stream burst</p>
-            </GlassCard>
-
-            <GlassCard className="p-4 border-line bg-surface space-y-1">
-              <div className="flex items-center gap-1.5 text-xs text-ink-2">
-                <Coins className="h-3.5 w-3.5 text-accent" />
-                <span>Input / 1M Tokens</span>
-              </div>
-              <p className="text-xl font-bold font-mono text-ink">
-                ${activeModel.inputPricePerM.toFixed(2)}
-              </p>
-              <p className="text-[11px] text-accent font-medium">Cache: ${activeModel.cachedPricePerM.toFixed(2)}</p>
-            </GlassCard>
-
-            <GlassCard className="p-4 border-line bg-surface space-y-1">
-              <div className="flex items-center gap-1.5 text-xs text-ink-2">
-                <Layers className="h-3.5 w-3.5 text-accent" />
-                <span>Context Window</span>
-              </div>
-              <p className="text-xl font-bold font-mono text-ink">
-                {activeModel.context}
-              </p>
-              <p className="text-[11px] text-ink-2">Full repository AST</p>
-            </GlassCard>
-          </div>
-
-          {/* Model Output Inspector */}
-          <GlassCard className="p-5 border-line bg-surface space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-line">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-ink">Model Code Synthesis Output</span>
-                <span className="rounded bg-surface-2 px-2 py-0.5 text-[10px] font-mono font-bold text-ink">
-                  {activeModel.name}
-                </span>
-              </div>
-              <span className="text-[11px] text-success font-medium">0 syntax defects detected</span>
+              <span className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-3">
+                Not a live response
+              </span>
             </div>
 
-            <div className="rounded-xl border border-line bg-charcoal p-4 text-[#FDFDFD] font-mono text-xs overflow-x-auto shadow-inner leading-relaxed">
-              <pre className="text-emerald-400">{activeModel.sampleResponse}</pre>
-            </div>
-          </GlassCard>
+            <pre className="overflow-x-auto border border-line bg-canvas p-4 font-mono text-[11px] leading-relaxed text-ink-2">
+              {activeModel.sampleResponse}
+            </pre>
+          </section>
         </div>
       )}
 
-      {/* Tab 2: Unit Economics Calculator */}
+      {/* Tab: Unit Economics Calculator */}
       {activeTab === "calculator" && (
-        <div className="space-y-6">
-          <GlassCard className="p-6 border-line bg-surface space-y-6">
-            <div>
-              <h3 className="text-sm font-bold text-ink">Monthly AI Development Budget Forecaster</h3>
-              <p className="text-xs text-ink-2 mt-0.5">
-                Simulate monthly expenditure based on anticipated token volumes across coding agents, review pipelines, and test synthesis.
+        <div className="space-y-8">
+          <section className="border-t border-line pt-5">
+            <div className="pb-5">
+              <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
+                Monthly budget forecaster
+              </h2>
+              <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
+                Simulated spend · 75% input / 25% output
               </p>
             </div>
 
-            <div className="space-y-2">
-              <div className="flex justify-between items-center text-xs">
-                <span className="font-semibold text-ink">Monthly Volume:</span>
-                <span className="font-mono text-sm font-bold text-accent">
-                  {monthlyTokensMillions} Million Tokens (~{formatNumber(monthlyTokensMillions * 1000000)})
+            <div className="border-t border-line pt-5">
+              <div className="flex flex-wrap items-baseline justify-between gap-3">
+                <span className="metric-label">Monthly volume</span>
+                <span className="font-mono text-[13px] tabular-nums text-accent">
+                  {monthlyTokensMillions}M tokens
+                  <span className="ml-2 text-ink-3">
+                    ~{formatNumber(monthlyTokensMillions * 1000000)}
+                  </span>
                 </span>
               </div>
               <input
@@ -428,104 +514,58 @@ export default function ModelLibraryPage() {
                 max="100"
                 value={monthlyTokensMillions}
                 onChange={(e) => setMonthlyTokensMillions(Number(e.target.value))}
-                className="w-full accent-accent"
+                className="mt-4 w-full accent-accent"
               />
-              <div className="flex justify-between text-[11px] text-ink-3">
-                <span>1M (Startup team)</span>
-                <span>25M (Growth org)</span>
-                <span>50M (Scale-up)</span>
-                <span>100M (Enterprise fleet)</span>
+              <div className="mt-2 flex justify-between font-mono text-[9px] uppercase tracking-[0.08em] text-ink-3">
+                <span>1M · startup</span>
+                <span className="hidden sm:inline">25M · growth</span>
+                <span className="hidden sm:inline">50M · scale-up</span>
+                <span>100M · enterprise</span>
               </div>
             </div>
+          </section>
 
-            {/* Provider Cost Projection Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4 border-t border-line">
-              {models.map((m) => {
-                // Assume 75% input tokens, 25% output tokens
-                const inputCost = (monthlyTokensMillions * 0.75) * m.inputPricePerM
-                const outputCost = (monthlyTokensMillions * 0.25) * m.outputPricePerM
-                const totalMonth = inputCost + outputCost
+          <div className="grid gap-px border border-line bg-line sm:grid-cols-2 xl:grid-cols-4">
+            {models.map((m) => {
+              // Assume 75% input tokens, 25% output tokens
+              const inputCost = monthlyTokensMillions * 0.75 * m.inputPricePerM
+              const outputCost = monthlyTokensMillions * 0.25 * m.outputPricePerM
+              const totalMonth = inputCost + outputCost
 
-                return (
-                  <div key={m.id} className="rounded-xl border border-line bg-canvas p-4 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-bold text-ink">{m.name}</h4>
-                      <span className="text-[10px] text-ink-2 font-mono">{m.provider}</span>
-                    </div>
-
-                    <p className="text-2xl font-bold font-mono text-ink">
-                      ${totalMonth.toFixed(0)}<span className="text-xs font-normal text-ink-2">/mo</span>
-                    </p>
-
-                    <div className="text-[11px] text-ink-2 space-y-0.5 pt-1 border-t border-line">
-                      <div className="flex justify-between">
-                        <span>Input ({monthlyTokensMillions * 0.75}M):</span>
-                        <span className="font-mono text-ink">${inputCost.toFixed(1)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Output ({monthlyTokensMillions * 0.25}M):</span>
-                        <span className="font-mono text-ink">${outputCost.toFixed(1)}</span>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </GlassCard>
-        </div>
-      )}
-
-      {/* Tab 3: Model Matrix & Specifications */}
-      {activeTab === "catalog" && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {models.map((m) => (
-            <GlassCard
-              key={m.name}
-              className="p-5 border-line bg-surface shadow-xs flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-md bg-charcoal text-white">
-                      <Cpu className="h-3.5 w-3.5 text-accent" />
+              return (
+                <div key={m.id} className="space-y-3 bg-surface p-4">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-[12px] font-medium text-ink">{m.name}</h3>
+                    <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-ink-3">
+                      {m.provider}
                     </span>
-                    <div>
-                      <h3 className="text-xs font-bold text-ink">{m.name}</h3>
-                      <p className="text-[10px] text-ink-2">{m.provider}</p>
+                  </div>
+
+                  <p className="font-mono text-[24px] font-medium leading-none tracking-[-0.045em] text-ink tabular-nums">
+                    ${totalMonth.toFixed(0)}
+                    <span className="ml-1 text-[10px] font-normal tracking-normal text-ink-3">
+                      /mo
+                    </span>
+                  </p>
+
+                  <div className="space-y-1 border-t border-line pt-3 font-mono text-[10px] text-ink-3">
+                    <div className="flex justify-between gap-3">
+                      <span>Input ({monthlyTokensMillions * 0.75}M)</span>
+                      <span className="tabular-nums text-ink-2">
+                        ${inputCost.toFixed(1)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span>Output ({monthlyTokensMillions * 0.25}M)</span>
+                      <span className="tabular-nums text-ink-2">
+                        ${outputCost.toFixed(1)}
+                      </span>
                     </div>
                   </div>
-
-                  <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-surface-2 text-ink">
-                    {m.context} Context
-                  </span>
                 </div>
-
-                <p className="mt-3 text-xs text-ink-2 leading-relaxed">
-                  {m.bestFor}
-                </p>
-
-                <div className="mt-4 pt-3 border-t border-line space-y-1.5 text-[11px]">
-                  <div className="flex justify-between text-ink-2">
-                    <span>Input / 1M:</span>
-                    <span className="font-mono text-ink font-semibold">${m.inputPricePerM.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-ink-2">
-                    <span>Output / 1M:</span>
-                    <span className="font-mono text-success font-semibold">${m.outputPricePerM.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-ink-2">
-                    <span>Prompt Cache / 1M:</span>
-                    <span className="font-mono text-accent font-semibold">${m.cachedPricePerM.toFixed(2)}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 pt-3 border-t border-line flex items-center justify-between text-[11px] text-ink-3">
-                <span>{m.speedTokensPerSec} tok/sec ({m.latencyMs}ms)</span>
-                <span className="text-success font-medium">{m.status}</span>
-              </div>
-            </GlassCard>
-          ))}
+              )
+            })}
+          </div>
         </div>
       )}
     </div>
