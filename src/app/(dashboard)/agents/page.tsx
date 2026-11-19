@@ -4,38 +4,39 @@ import { useEffect, useState, Suspense } from "react"
 import { useModalA11y } from "@/lib/use-modal-a11y"
 import { useSearchParams } from "next/navigation"
 import {
-  Bot,
   Play,
   CheckCircle2,
-  AlertTriangle,
-  Clock,
   Terminal,
   FileCode,
   GitBranch,
-  Cpu,
-  Layers,
   Sparkles,
-  ChevronRight,
-  ShieldCheck,
   Check,
   X,
-  RefreshCw,
-  Eye,
-  Coins,
-  ArrowUpRight,
   MessageSquare,
   Send,
-  Sliders,
   CheckSquare,
 } from "lucide-react"
 import { DiffEditor } from "@monaco-editor/react"
 import { PageHeader } from "@/components/ui/page-header"
-import { GlassCard } from "@/components/ui/glass-card"
-import { formatCurrency, formatNumber } from "@/lib/utils"
+import { StatBand, StatBandSkeleton } from "@/components/ui/stat-band"
+import { cn, formatNumber } from "@/lib/utils"
+
+function executionStatusClass(status: string) {
+  if (status === "completed") return "bg-success-soft text-success"
+  if (status === "awaiting_approval") return "bg-accent-soft text-accent"
+  if (status === "failed") return "bg-danger-soft text-danger"
+  return "bg-surface-2 text-ink-3"
+}
 
 export default function AgentCenterPage() {
   return (
-    <Suspense fallback={<div className="p-12 text-center text-xs text-ink-2">Loading Agent Command Center...</div>}>
+    <Suspense
+      fallback={
+        <div className="p-12 text-center font-mono text-[11px] uppercase tracking-[0.12em] text-ink-3">
+          Loading agent runs…
+        </div>
+      }
+    >
       <AgentCenterContent />
     </Suspense>
   )
@@ -68,6 +69,13 @@ function AgentCenterContent() {
   // Monaco Diff Editor state
   const [diffSideBySide, setDiffSideBySide] = useState(true)
   const [diffTheme, setDiffTheme] = useState<"vs-dark" | "light">("vs-dark")
+
+  useEffect(() => {
+    // Match the editor surface to the active site theme on first mount.
+    setDiffTheme(
+      document.documentElement.classList.contains("dark") ? "vs-dark" : "light"
+    )
+  }, [])
 
   // Line Comments state
   const [comments, setComments] = useState<any[]>([])
@@ -363,41 +371,86 @@ export class ApiClient {
   }
 }`
 
+  const completedCount = executions.filter(
+    (execution) => execution.status === "completed"
+  ).length
+  const awaitingCount = executions.filter(
+    (execution) => execution.status === "awaiting_approval"
+  ).length
+  const recordedTokens = executions.reduce(
+    (sum, execution) => sum + Number(execution.totalTokens || 0),
+    0
+  )
+  const estimatedSpend = executions.reduce(
+    (sum, execution) => sum + Number(execution.estimatedCost || 0),
+    0
+  )
+
   return (
-    <div className="space-y-6 pb-16 max-w-7xl mx-auto">
+    <div className="mx-auto max-w-7xl space-y-7 pb-16">
       <PageHeader
-        title="Agent Command Center"
-        description="Autonomous coding agent execution, live AST mutations, terminal streams, and pull request diff reviews."
+        eyebrow="Operations · Agent runs"
+        title="Agents"
+        description="Dispatch coding work to a single agent or an orchestrated team, then review diffs, telemetry, and spend."
       />
 
+      {loading ? (
+        <StatBandSkeleton columns={4} />
+      ) : (
+        <StatBand
+          columns={4}
+          items={[
+            {
+              label: "Executions",
+              value: String(executions.length),
+              meta: `${completedCount} completed`,
+            },
+            {
+              label: "Awaiting approval",
+              value: String(awaitingCount),
+              meta: awaitingCount > 0 ? "Review required" : "Queue clear",
+              accent: awaitingCount > 0,
+            },
+            {
+              label: "Tokens recorded",
+              value: formatNumber(recordedTokens),
+              meta: "Across recorded runs",
+            },
+            {
+              label: "Estimated spend",
+              value: `$${estimatedSpend.toFixed(2)}`,
+              meta: "Agent runtime cost",
+            },
+          ]}
+        />
+      )}
+
       {actionSuccess && (
-        <div className="rounded-xl border border-success/20 bg-success-soft p-3 text-xs text-success flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4" />
-            <span className="font-semibold">{actionSuccess}</span>
-          </div>
+        <div className="flex items-start gap-2 border border-success/25 bg-success-soft px-3 py-2.5 text-[12px] text-success">
+          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
+          <span className="font-medium">{actionSuccess}</span>
         </div>
       )}
 
-      {/* Top Section: Dispatch Instruction to Agent Team */}
-      <GlassCard className="p-5 border-line bg-surface shadow-xs">
-        <form onSubmit={handleDispatch} className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-line">
-            <div className="flex items-center gap-2">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-charcoal text-white">
-                <Bot className="h-3.5 w-3.5 text-accent" />
-              </span>
-              <span className="text-xs font-bold uppercase tracking-wider text-ink">
-                Dispatch Coding Instruction
-              </span>
+      {/* Dispatch instruction */}
+      <section className="border-t border-line pt-5">
+        <form onSubmit={handleDispatch} className="space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-line pb-4">
+            <div>
+              <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
+                Dispatch instruction
+              </h2>
+              <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
+                Route work to a single agent or an orchestrated team
+              </p>
             </div>
 
-            <div className="flex items-center gap-2 text-xs">
-              {/* Project selector */}
+            <div className="flex flex-wrap items-center gap-2">
               <select
                 value={selectedProject}
                 onChange={(e) => setSelectedProject(e.target.value)}
-                className="rounded-lg border border-line bg-surface-2 px-2.5 py-1 text-xs text-ink outline-none"
+                aria-label="Target project"
+                className="select select-sm w-auto"
               >
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -406,11 +459,11 @@ export class ApiClient {
                 ))}
               </select>
 
-              {/* Agent selector */}
               <select
                 value={selectedAgent}
                 onChange={(e) => setSelectedAgent(e.target.value)}
-                className="rounded-lg border border-line bg-surface-2 px-2.5 py-1 text-xs text-ink outline-none"
+                aria-label="Target agent"
+                className="select select-sm w-auto"
               >
                 <option value="agent_claude_code">Claude Code 3.7 (Architect)</option>
                 <option value="agent_codex">Codex 5.2 (Backend)</option>
@@ -420,340 +473,349 @@ export class ApiClient {
             </div>
           </div>
 
-          <div className="flex flex-wrap sm:flex-nowrap gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <input
               type="text"
               required
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="e.g. Implement atomic idempotency key validation on /api/checkout or fix responsive navbar drawer"
-              className="flex-1 rounded-lg border border-line bg-canvas px-3.5 py-2 text-xs text-ink placeholder-ink-3 outline-none focus:border-accent/50 focus:bg-white"
+              placeholder="Implement atomic idempotency key validation on /api/checkout, or fix the responsive navbar drawer"
+              className="field flex-1"
             />
             <button
               type="button"
               onClick={handlePreviewPlan}
               disabled={generatingPlan || !prompt}
-              className="flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-3.5 py-2 text-xs font-semibold text-ink hover:bg-line transition-colors disabled:opacity-50"
+              className="btn-secondary"
             >
-              <Sparkles className="h-3.5 w-3.5 text-accent" />
-              <span>{generatingPlan ? "Planning..." : "Preview DAG"}</span>
+              <Sparkles className="h-3.5 w-3.5 text-accent" strokeWidth={1.8} />
+              {generatingPlan ? "Planning…" : "Preview DAG"}
             </button>
             <button
               type="submit"
               disabled={dispatching}
-              className="flex items-center gap-1.5 rounded-lg bg-charcoal px-4 py-2 text-xs font-semibold text-white hover:bg-[#202020] active:scale-[0.98] transition-all disabled:opacity-50"
+              className="btn-primary"
             >
-              <Play className="h-3.5 w-3.5 fill-accent text-accent" />
-              <span>{dispatching ? "Executing Plan..." : "Execute"}</span>
+              <Play className="h-3 w-3 fill-current" strokeWidth={1.8} />
+              {dispatching ? "Dispatching…" : "Run execution"}
             </button>
           </div>
         </form>
-      </GlassCard>
+      </section>
 
-      {/* Plan Preview Modal */}
+      {/* Plan preview modal */}
       {showPlanModal && planPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div
             ref={planDialogRef}
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-2xl rounded-2xl border border-line bg-surface p-6 shadow-2xl space-y-4"
+            aria-labelledby="plan-preview-title"
+            className="panel max-h-[90vh] w-full max-w-2xl overflow-y-auto shadow-2xl"
           >
-            <div className="flex items-center justify-between pb-3 border-b border-line">
-              <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-charcoal text-white">
-                  <Sparkles className="h-4 w-4 text-accent" />
-                </span>
-                <div>
-                  <h3 className="text-sm font-bold text-ink">Decomposed Multi-Agent Plan DAG</h3>
-                  <p className="text-[11px] text-ink-2">Target: {planPreview.projectName} • Branch: {planPreview.targetBranch}</p>
-                </div>
+            <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
+              <div>
+                <h3
+                  id="plan-preview-title"
+                  className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink"
+                >
+                  Decomposed plan DAG
+                </h3>
+                <p className="mt-1 font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-3">
+                  {planPreview.projectName} · {planPreview.targetBranch}
+                </p>
               </div>
               <button
                 onClick={() => setShowPlanModal(false)}
-                className="rounded-lg p-1 text-ink-2 hover:bg-surface-2"
+                className="icon-btn -mr-1.5 -mt-1"
+                aria-label="Close plan preview"
               >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4" strokeWidth={1.8} />
               </button>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-xl border border-line bg-canvas p-3 text-center">
-                <p className="text-[10px] text-ink-2 font-semibold uppercase">Est. Tokens</p>
-                <p className="text-base font-bold font-mono text-ink mt-0.5">
-                  {formatNumber(planPreview.metrics.totalEstimatedTokens)}
-                </p>
-              </div>
-              <div className="rounded-xl border border-line bg-canvas p-3 text-center">
-                <p className="text-[10px] text-ink-2 font-semibold uppercase">Est. Cost</p>
-                <p className="text-base font-bold font-mono text-ink mt-0.5">
-                  ${planPreview.metrics.estimatedCost}
-                </p>
-              </div>
-              <div className="rounded-xl border border-line bg-canvas p-3 text-center">
-                <p className="text-[10px] text-ink-2 font-semibold uppercase">Est. Runtime</p>
-                <p className="text-base font-bold font-mono text-ink mt-0.5">
-                  ~{planPreview.metrics.estimatedDurationSec}s
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-              {planPreview.stages.map((stage: any, idx: number) => (
-                <div key={stage.id} className="rounded-lg border border-line bg-surface p-3 space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-ink">{stage.name}</span>
-                    <span className="font-mono text-[11px] text-accent font-medium">{stage.agentName}</span>
-                  </div>
-                  <p className="text-[11px] text-ink-2">{stage.description}</p>
+            <div className="grid grid-cols-3 divide-x divide-line border-b border-line">
+              {[
+                {
+                  label: "Est. tokens",
+                  value: formatNumber(planPreview.metrics.totalEstimatedTokens),
+                },
+                {
+                  label: "Est. cost",
+                  value: `$${planPreview.metrics.estimatedCost}`,
+                },
+                {
+                  label: "Est. runtime",
+                  value: `~${planPreview.metrics.estimatedDurationSec}s`,
+                },
+              ].map((metric) => (
+                <div key={metric.label} className="px-4 py-3">
+                  <p className="metric-label">{metric.label}</p>
+                  <p className="mt-1.5 font-mono text-[17px] font-medium tracking-[-0.03em] text-ink tabular-nums">
+                    {metric.value}
+                  </p>
                 </div>
               ))}
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-line">
+            <ul className="max-h-64 overflow-y-auto">
+              {planPreview.stages.map((stage: any) => (
+                <li
+                  key={stage.id}
+                  className="border-b border-line px-5 py-3 last:border-b-0"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <span className="text-[12.5px] font-medium text-ink">
+                      {stage.name}
+                    </span>
+                    <span className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-accent">
+                      {stage.agentName}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[11.5px] leading-relaxed text-ink-2">
+                    {stage.description}
+                  </p>
+                </li>
+              ))}
+            </ul>
+
+            <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
               <button
                 type="button"
                 onClick={() => setShowPlanModal(false)}
-                className="px-4 py-2 text-xs font-semibold text-ink-2 hover:bg-surface-2 rounded-lg"
+                className="btn-ghost"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={() => handleDispatch()}
-                className="flex items-center gap-1.5 rounded-lg bg-charcoal px-4 py-2 text-xs font-semibold text-white hover:bg-[#202020]"
+                className="btn-primary"
               >
-                <Play className="h-3.5 w-3.5 fill-accent text-accent" />
-                Confirm & Launch Execution
+                <Play className="h-3 w-3 fill-current" strokeWidth={1.8} />
+                Confirm and launch
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Main Workspace Split: Left (Executions List) & Right (Execution Detail & Diff) */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
-        {/* Left: Executions History */}
-        <div className="lg:col-span-4 space-y-3">
-          <div className="flex items-center justify-between text-xs text-ink-2 px-1">
-            <span className="font-semibold text-ink">Recorded Executions</span>
-            <span>{executions.length} runs</span>
+      {/* Executions and selected run */}
+      <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-12">
+        <section className="border-t border-line pt-5 lg:col-span-4">
+          <div className="flex items-baseline justify-between gap-3 pb-4">
+            <div>
+              <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
+                Recorded executions
+              </h2>
+              <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
+                Agent runs in this workspace
+              </p>
+            </div>
+            <span className="font-mono text-[11px] tabular-nums text-ink-3">
+              {String(executions.length).padStart(2, "0")}
+            </span>
           </div>
 
-          <div className="space-y-2">
-            {executions.map((exec) => {
-              const isSelected = selectedExecution?.id === exec.id
-              return (
-                <div
-                  key={exec.id}
-                  onClick={() => setSelectedExecution(exec)}
-                  className={`cursor-pointer rounded-xl border p-3.5 transition-all ${
-                    isSelected
-                      ? "border-ink bg-surface shadow-sm ring-1 ring-ink/5"
-                      : "border-line bg-surface hover:border-line-strong"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-[12.5px] font-semibold text-ink line-clamp-2 leading-snug">
-                      {exec.title}
-                    </p>
+          <div className="border-t border-line">
+            {executions.length === 0 ? (
+              <p className="py-8 text-center text-[12px] text-ink-3">
+                No executions recorded yet.
+              </p>
+            ) : (
+              executions.map((exec) => {
+                const isSelected = selectedExecution?.id === exec.id
+                return (
+                  <button
+                    type="button"
+                    key={exec.id}
+                    onClick={() => setSelectedExecution(exec)}
+                    className={cn(
+                      "relative block w-full border-b border-line px-3 py-3.5 text-left transition-colors last:border-b-0",
+                      isSelected
+                        ? "bg-surface-2"
+                        : "hover:bg-surface-2/50"
+                    )}
+                  >
                     <span
-                      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase shrink-0 ${
-                        exec.status === "completed"
-                          ? "bg-success-soft text-success border border-success/20"
-                          : exec.status === "awaiting_approval"
-                          ? "bg-[rgba(213,34,45,0.08)] text-accent border border-[rgba(213,34,45,0.2)]"
-                          : "bg-surface-2 text-ink-2"
-                      }`}
-                    >
-                      {exec.status.replace("_", " ")}
-                    </span>
-                  </div>
+                      className={cn(
+                        "absolute inset-y-0 left-0 w-px bg-accent transition-opacity",
+                        isSelected ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="line-clamp-2 text-[12.5px] font-medium leading-snug text-ink">
+                        {exec.title}
+                      </p>
+                      <span
+                        className={cn(
+                          "badge shrink-0",
+                          executionStatusClass(exec.status)
+                        )}
+                      >
+                        {exec.status.replace("_", " ")}
+                      </span>
+                    </div>
 
-                  <div className="mt-2.5 flex items-center justify-between text-[11px] text-ink-2">
-                    <span className="flex items-center gap-1 font-mono">
-                      <GitBranch className="h-3 w-3 text-ink-3" />
-                      {exec.targetBranch}
-                    </span>
-                    <span className="font-mono text-ink">
-                      ${exec.estimatedCost?.toFixed(3) || "0.150"}
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
+                    <div className="mt-2 flex items-center justify-between gap-3 font-mono text-[9.5px] text-ink-3">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <GitBranch className="h-3 w-3 shrink-0" strokeWidth={1.8} />
+                        <span className="truncate">{exec.targetBranch}</span>
+                      </span>
+                      <span className="shrink-0 tabular-nums text-ink-2">
+                        ${exec.estimatedCost?.toFixed(3) || "0.150"}
+                      </span>
+                    </div>
+                  </button>
+                )
+              })
+            )}
           </div>
-        </div>
+        </section>
 
-        {/* Right: Selected Execution Workspace */}
         <div className="lg:col-span-8">
           {selectedExecution ? (
-            <GlassCard className="p-0 border-line bg-surface shadow-xs overflow-hidden">
-              {/* Header with Title and Approval Actions */}
-              <div className="p-5 border-b border-line flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-sm font-bold text-ink">
+            <section className="panel overflow-hidden">
+              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-5 py-4">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
                       {selectedExecution.title}
                     </h2>
                     <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                        selectedExecution.status === "completed"
-                          ? "bg-success-soft text-success"
-                          : selectedExecution.status === "awaiting_approval"
-                          ? "bg-[rgba(213,34,45,0.08)] text-accent"
-                          : "bg-surface-2 text-ink-2"
-                      }`}
+                      className={cn(
+                        "badge",
+                        executionStatusClass(selectedExecution.status)
+                      )}
                     >
                       {selectedExecution.status.replace("_", " ")}
                     </span>
                   </div>
-                  <p className="text-[11px] text-ink-2 mt-1 font-mono">
-                    Branch: {selectedExecution.targetBranch} • Tokens: {formatNumber(selectedExecution.totalTokens || 38400)} • Cost: ${selectedExecution.estimatedCost?.toFixed(4) || "0.1850"}
+                  <p className="mt-1.5 font-mono text-[9.5px] uppercase tracking-[0.08em] text-ink-3">
+                    <span className="text-ink-2">{selectedExecution.targetBranch}</span>
+                    <span className="px-1.5">·</span>
+                    {formatNumber(selectedExecution.totalTokens || 38400)} tokens
+                    <span className="px-1.5">·</span>$
+                    {selectedExecution.estimatedCost?.toFixed(4) || "0.1850"}
                   </p>
                 </div>
 
-                {/* Review Approval Controls */}
                 {selectedExecution.status === "awaiting_approval" && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={() => handleApprovalAction("reject")}
-                      className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink-2 hover:bg-surface-2 hover:text-ink"
+                      className="btn-ghost btn-sm"
                     >
                       Reject
                     </button>
                     <button
                       onClick={() => handleApprovalAction("request_revision")}
-                      className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2"
+                      className="btn-secondary btn-sm"
                     >
-                      Request Revision
+                      Request revision
                     </button>
                     <button
                       onClick={() => handleApprovalAction("approve")}
-                      className="flex items-center gap-1.5 rounded-lg bg-charcoal px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#202020] shadow-sm"
+                      className="btn-primary btn-sm"
                     >
-                      <Check className="h-3.5 w-3.5 text-success" />
-                      Approve & Merge
+                      <Check className="h-3.5 w-3.5" strokeWidth={2.2} />
+                      Approve and merge
                     </button>
                   </div>
                 )}
               </div>
 
-              {/* Navigation Tabs */}
-              <div className="flex border-b border-line bg-canvas px-4 text-xs font-semibold">
-                <button
-                  onClick={() => setActiveTab("diff")}
-                  className={`py-3 px-3 border-b-2 transition-colors ${
-                    activeTab === "diff"
-                      ? "border-accent text-ink"
-                      : "border-transparent text-ink-2 hover:text-ink"
-                  }`}
-                >
-                  Monaco Diff Review
-                </button>
-                <button
-                  onClick={() => setActiveTab("comments")}
-                  className={`py-3 px-3 border-b-2 transition-colors flex items-center gap-1.5 ${
-                    activeTab === "comments"
-                      ? "border-accent text-ink"
-                      : "border-transparent text-ink-2 hover:text-ink"
-                  }`}
-                >
-                  <span>Line Comments</span>
-                  {comments.length > 0 && (
-                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-ink text-[9px] text-white">
-                      {comments.length}
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={() => setActiveTab("activity")}
-                  className={`py-3 px-3 border-b-2 transition-colors ${
-                    activeTab === "activity"
-                      ? "border-accent text-ink"
-                      : "border-transparent text-ink-2 hover:text-ink"
-                  }`}
-                >
-                  Agent Activity & Terminal
-                </button>
-                <button
-                  onClick={() => setActiveTab("tasks")}
-                  className={`py-3 px-3 border-b-2 transition-colors ${
-                    activeTab === "tasks"
-                      ? "border-accent text-ink"
-                      : "border-transparent text-ink-2 hover:text-ink"
-                  }`}
-                >
-                  Orchestrated Task Graph
-                </button>
-                <button
-                  onClick={() => setActiveTab("costs")}
-                  className={`py-3 px-3 border-b-2 transition-colors ${
-                    activeTab === "costs"
-                      ? "border-accent text-ink"
-                      : "border-transparent text-ink-2 hover:text-ink"
-                  }`}
-                >
-                  Resource Ledger
-                </button>
+              <div className="flex overflow-x-auto border-b border-line px-2">
+                {[
+                  { id: "diff" as const, label: "Diff review" },
+                  { id: "comments" as const, label: "Comments" },
+                  { id: "activity" as const, label: "Activity" },
+                  { id: "tasks" as const, label: "Task graph" },
+                  { id: "costs" as const, label: "Costs" },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    aria-pressed={activeTab === tab.id}
+                    className={cn(
+                      "-mb-px shrink-0 border-b py-3 px-3 font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] transition-colors",
+                      activeTab === tab.id
+                        ? "border-accent text-accent"
+                        : "border-transparent text-ink-3 hover:text-ink"
+                    )}
+                  >
+                    {tab.label}
+                    {tab.id === "comments" && comments.length > 0 && (
+                      <span className="ml-1.5 tabular-nums text-ink-3">
+                        {comments.length}
+                      </span>
+                    )}
+                  </button>
+                ))}
               </div>
 
-              {/* Tab Contents */}
-              <div className="p-5">
+              <div className="p-4 sm:p-5">
                 {activeTab === "diff" && (
                   <div className="space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-2 pb-2 border-b border-line">
-                      <div className="flex items-center gap-2">
-                        <FileCode className="h-4 w-4 text-accent" />
-                        <span className="font-mono text-ink font-semibold">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <FileCode
+                          className="h-3.5 w-3.5 shrink-0 text-accent"
+                          strokeWidth={1.8}
+                        />
+                        <span className="truncate font-mono text-[10.5px] text-ink">
                           {diffArtifact?.path || "src/lib/services/api-client.ts"}
                         </span>
-                        <span className="text-[11px] text-success font-medium">
-                          +32 additions • -4 deletions
+                        <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.08em] text-success">
+                          +32 / −4
                         </span>
                       </div>
 
-                      {/* Diff Editor Controls */}
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
                           onClick={() => setDiffSideBySide(!diffSideBySide)}
-                          className="rounded-lg border border-line bg-surface-2 px-2.5 py-1 text-[11px] font-semibold text-ink hover:bg-line"
+                          className="btn-secondary btn-sm"
                         >
-                          {diffSideBySide ? "Inline View" : "Side-by-Side"}
+                          {diffSideBySide ? "Inline view" : "Side by side"}
                         </button>
                         <button
-                          onClick={() => setDiffTheme(diffTheme === "vs-dark" ? "light" : "vs-dark")}
-                          className="rounded-lg border border-line bg-surface-2 px-2.5 py-1 text-[11px] font-semibold text-ink hover:bg-line"
+                          onClick={() =>
+                            setDiffTheme(
+                              diffTheme === "vs-dark" ? "light" : "vs-dark"
+                            )
+                          }
+                          className="btn-secondary btn-sm"
                         >
-                          {diffTheme === "vs-dark" ? "Light Mode" : "Dark Mode"}
+                          {diffTheme === "vs-dark" ? "Light editor" : "Dark editor"}
                         </button>
                         <button
                           onClick={() => {
                             setActiveTab("comments")
                             setNewCommentLine(15)
                           }}
-                          className="flex items-center gap-1 rounded-lg bg-charcoal px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#202020]"
+                          className="btn-primary btn-sm"
                         >
-                          <MessageSquare className="h-3 w-3 text-accent" />
-                          Add Review Note
+                          <MessageSquare className="h-3 w-3" strokeWidth={2.2} />
+                          Add note
                         </button>
                       </div>
                     </div>
 
-                    {/* Full Monaco Diff Editor Component */}
-                    <div className="rounded-xl border border-line overflow-hidden shadow-xs">
+                    <div className="overflow-hidden border border-line">
                       <DiffEditor
                         height="440px"
                         language="typescript"
                         original={originalCode}
                         modified={modifiedCode}
                         theme={diffTheme}
+                        keepCurrentOriginalModel
+                        keepCurrentModifiedModel
                         options={{
                           renderSideBySide: diffSideBySide,
                           readOnly: true,
                           minimap: { enabled: false },
                           fontSize: 12.5,
-                          fontFamily: "var(--font-geist-mono), monospace",
+                          fontFamily: "var(--font-jetbrains), monospace",
                           scrollBeyondLastLine: false,
                           smoothScrolling: true,
                         }}
@@ -762,202 +824,295 @@ export class ApiClient {
                   </div>
                 )}
 
-                {/* Line Comments Tab */}
+                {/* Line comments */}
                 {activeTab === "comments" && (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between pb-2 border-b border-line">
-                      <h4 className="text-xs font-semibold text-ink">
-                        Line-Level Review Comments & Directives
+                    <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-3">
+                      <h4 className="font-display text-[14px] font-medium tracking-[-0.02em] text-ink">
+                        Review comments
                       </h4>
-                      <span className="text-xs text-ink-2 font-mono">
-                        {comments.filter((c) => c.status === "open").length} open threads
+                      <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
+                        {comments.filter((c) => c.status === "open").length} open
+                        threads
                       </span>
                     </div>
 
-                    {/* New Comment Box */}
-                    <form onSubmit={handleAddComment} className="rounded-xl border border-line bg-canvas p-3 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-ink">Comment on Line:</span>
+                    <form
+                      onSubmit={handleAddComment}
+                      className="space-y-3 border border-line bg-surface-2/40 p-3"
+                    >
+                      <label className="flex items-center gap-2">
+                        <span className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-3">
+                          Line
+                        </span>
                         <input
                           type="number"
                           min="1"
                           max="100"
                           value={newCommentLine ?? ""}
-                          onChange={(e) => setNewCommentLine(parseInt(e.target.value, 10))}
-                          placeholder="e.g. 18"
-                          className="w-20 rounded-md border border-line bg-white px-2 py-1 text-xs font-mono outline-none"
+                          onChange={(e) =>
+                            setNewCommentLine(parseInt(e.target.value, 10))
+                          }
+                          placeholder="18"
+                          className="field field-sm w-24 font-mono"
                         />
-                      </div>
-                      <div className="flex gap-2">
+                      </label>
+                      <div className="flex flex-col gap-2 sm:flex-row">
                         <input
                           type="text"
                           required
                           value={newCommentText}
                           onChange={(e) => setNewCommentText(e.target.value)}
-                          placeholder="Add suggestion, require guard check, or prompt agent revision..."
-                          className="flex-1 rounded-lg border border-line bg-white px-3 py-1.5 text-xs outline-none"
+                          placeholder="Add a suggestion, require a guard check, or prompt a revision…"
+                          className="field field-sm flex-1"
                         />
                         <button
                           type="submit"
                           disabled={submittingComment || !newCommentText}
-                          className="flex items-center gap-1.5 rounded-lg bg-charcoal px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-[#202020] disabled:opacity-50"
+                          className="btn-primary btn-sm"
                         >
-                          <Send className="h-3 w-3 text-accent" />
+                          <Send className="h-3 w-3" strokeWidth={2.2} />
                           Post
                         </button>
                       </div>
                     </form>
 
-                    {/* Comments List */}
-                    <div className="space-y-2">
+                    <ul className="border-t border-line">
+                      {comments.length === 0 && (
+                        <li className="py-8 text-center text-[12px] text-ink-3">
+                          No review comments on this run yet.
+                        </li>
+                      )}
                       {comments.map((c) => (
-                        <div
+                        <li
                           key={c.id}
-                          className={`rounded-xl border p-3 text-xs space-y-1.5 transition-colors ${
-                            c.status === "resolved"
-                              ? "border-line bg-canvas opacity-60"
-                              : "border-ink/20 bg-white shadow-xs"
-                          }`}
+                          className={cn(
+                            "border-b border-line py-3 last:border-b-0",
+                            c.status === "resolved" && "opacity-60"
+                          )}
                         >
-                          <div className="flex items-center justify-between">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
-                              <span className="font-semibold text-ink">{c.authorName}</span>
-                              <span className="font-mono text-[11px] rounded bg-surface-2 px-1.5 py-0.5 text-ink-2">
+                              <span className="text-[12px] font-medium text-ink">
+                                {c.authorName}
+                              </span>
+                              <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-ink-3">
                                 Line {c.lineNumber}
                               </span>
                             </div>
                             {c.status !== "resolved" ? (
                               <button
                                 onClick={() => handleResolveComment(c.id)}
-                                className="flex items-center gap-1 text-[11px] font-medium text-success hover:underline"
+                                className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.08em] text-success transition-opacity hover:opacity-70"
                               >
-                                <CheckSquare className="h-3 w-3" />
+                                <CheckSquare className="h-3 w-3" strokeWidth={1.8} />
                                 Resolve
                               </button>
                             ) : (
-                              <span className="text-[10px] uppercase font-bold text-success">
+                              <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-success">
                                 Resolved
                               </span>
                             )}
                           </div>
-                          <p className="text-ink leading-relaxed">{c.comment}</p>
-                        </div>
+                          <p className="mt-1.5 text-[12px] leading-relaxed text-ink-2">
+                            {c.comment}
+                          </p>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   </div>
                 )}
 
                 {activeTab === "activity" && (
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-semibold text-ink">
-                      Real-time Execution Telemetry & Terminal Logs
-                    </h4>
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-3">
+                      <h4 className="font-display text-[14px] font-medium tracking-[-0.02em] text-ink">
+                        Execution telemetry
+                      </h4>
+                      <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
+                        {(selectedExecution.events || []).length} events
+                      </span>
+                    </div>
+
                     <div className="space-y-2">
-                      {(selectedExecution.events || []).map((ev: any, i: number) => {
-                        let payload: any = {}
-                        try {
-                          payload = JSON.parse(ev.payloadJson)
-                        } catch (e) {}
+                      {(selectedExecution.events || []).length === 0 && (
+                        <p className="py-6 text-center text-[12px] text-ink-3">
+                          No telemetry has been streamed for this run.
+                        </p>
+                      )}
+                      {(selectedExecution.events || []).map(
+                        (ev: any, i: number) => {
+                          let payload: any = {}
+                          try {
+                            payload = JSON.parse(ev.payloadJson)
+                          } catch {
+                            // Ignore malformed event payloads.
+                          }
 
-                        return (
-                          <div
-                            key={i}
-                            className="rounded-lg border border-line bg-canvas p-3 text-xs space-y-1"
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="font-mono text-[10px] font-bold uppercase text-accent">
-                                {ev.eventType}
-                              </span>
-                              <span className="text-[10px] text-ink-3">
-                                Seq #{ev.seq}
-                              </span>
-                            </div>
-
-                            {ev.eventType === "terminal" ? (
-                              <div className="mt-1 rounded bg-charcoal p-2 text-[11px] font-mono text-zinc-300">
-                                <p className="text-muted-slate">$ {payload.command}</p>
-                                <p className="text-success whitespace-pre-wrap">{payload.output}</p>
+                          return (
+                            <div
+                              key={i}
+                              className="border border-line bg-surface-2/40 p-3"
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="font-mono text-[9px] font-medium uppercase tracking-[0.12em] text-accent">
+                                  {ev.eventType}
+                                </span>
+                                <span className="font-mono text-[9px] tabular-nums text-ink-3">
+                                  SEQ {ev.seq}
+                                </span>
                               </div>
-                            ) : ev.eventType === "file_change" ? (
-                              <p className="text-ink font-mono text-[11px]">
-                                Modified: <strong>{payload.path}</strong> (+{payload.linesAdded}, -{payload.linesRemoved})
-                              </p>
-                            ) : (
-                              <p className="text-ink-2 font-mono text-[11px]">
-                                Payload: {JSON.stringify(payload)}
-                              </p>
-                            )}
-                          </div>
-                        )
-                      })}
+
+                              {ev.eventType === "terminal" ? (
+                                <div className="mt-2 border border-line bg-canvas p-2 font-mono text-[10.5px] leading-relaxed">
+                                  <p className="text-ink-3">$ {payload.command}</p>
+                                  <p className="whitespace-pre-wrap text-success">
+                                    {payload.output}
+                                  </p>
+                                </div>
+                              ) : ev.eventType === "file_change" ? (
+                                <p className="mt-1.5 font-mono text-[10.5px] text-ink-2">
+                                  {payload.path}
+                                  <span className="ml-2 text-success">
+                                    +{payload.linesAdded}
+                                  </span>
+                                  <span className="ml-1 text-danger">
+                                    −{payload.linesRemoved}
+                                  </span>
+                                </p>
+                              ) : (
+                                <p className="mt-1.5 break-all font-mono text-[10.5px] text-ink-2">
+                                  {JSON.stringify(payload)}
+                                </p>
+                              )}
+                            </div>
+                          )
+                        }
+                      )}
                     </div>
                   </div>
                 )}
 
                 {activeTab === "tasks" && (
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-semibold text-ink">
-                      Multi-Agent Task Dependency Graph
-                    </h4>
-                    <div className="space-y-2.5">
-                      {(selectedExecution.tasks || []).map((t: any, i: number) => (
-                        <div
-                          key={t.id}
-                          className="rounded-lg border border-line bg-surface p-3 flex items-center justify-between shadow-xs"
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-2 text-xs font-bold text-ink">
-                              {i + 1}
-                            </span>
-                            <div>
-                              <p className="text-xs font-semibold text-ink">
-                                {t.title}
-                              </p>
-                              <p className="text-[11px] text-ink-2">
-                                Agent: <strong>{t.agentName}</strong> ({t.agentRole})
-                              </p>
-                            </div>
-                          </div>
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-3">
+                      <h4 className="font-display text-[14px] font-medium tracking-[-0.02em] text-ink">
+                        Task dependency graph
+                      </h4>
+                      <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
+                        {(selectedExecution.tasks || []).length} stages
+                      </span>
+                    </div>
 
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
-                              t.status === "completed"
-                                ? "bg-success-soft text-success"
-                                : "bg-surface-2 text-ink-2"
-                            }`}
+                    <ul className="border-t border-line">
+                      {(selectedExecution.tasks || []).length === 0 && (
+                        <li className="py-8 text-center text-[12px] text-ink-3">
+                          No orchestrated tasks recorded for this run.
+                        </li>
+                      )}
+                      {(selectedExecution.tasks || []).map(
+                        (t: any, i: number) => (
+                          <li
+                            key={t.id}
+                            className="flex items-center justify-between gap-3 border-b border-line py-3 last:border-b-0"
                           >
-                            {t.status}
-                          </span>
+                            <div className="flex min-w-0 items-center gap-3">
+                              <span className="font-mono text-[10px] tabular-nums text-ink-3">
+                                {String(i + 1).padStart(2, "0")}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="truncate text-[12.5px] font-medium text-ink">
+                                  {t.title}
+                                </p>
+                                <p className="mt-0.5 truncate font-mono text-[9.5px] uppercase tracking-[0.06em] text-ink-3">
+                                  {t.agentName} · {t.agentRole}
+                                </p>
+                              </div>
+                            </div>
+
+                            <span
+                              className={cn(
+                                "badge shrink-0",
+                                t.status === "completed"
+                                  ? "bg-success-soft text-success"
+                                  : "bg-surface-2 text-ink-3"
+                              )}
+                            >
+                              {t.status}
+                            </span>
+                          </li>
+                        )
+                      )}
+                    </ul>
+                  </div>
+                )}
+
+                {activeTab === "costs" && (
+                  <div className="space-y-4">
+                    <div className="border-b border-line pb-3">
+                      <h4 className="font-display text-[14px] font-medium tracking-[-0.02em] text-ink">
+                        Resource ledger
+                      </h4>
+                      <p className="mt-1 font-mono text-[9.5px] uppercase tracking-[0.14em] text-ink-3">
+                        Token accounting for this execution
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-px border-y border-line bg-line sm:grid-cols-4">
+                      {[
+                        {
+                          label: "Input tokens",
+                          value: formatNumber(
+                            selectedExecution.inputTokens || 28000
+                          ),
+                          meta: "Repository context",
+                        },
+                        {
+                          label: "Output tokens",
+                          value: formatNumber(
+                            selectedExecution.outputTokens || 10400
+                          ),
+                          meta: "Generated code",
+                        },
+                        {
+                          label: "Total tokens",
+                          value: formatNumber(
+                            selectedExecution.totalTokens || 38400
+                          ),
+                          meta: "Billed volume",
+                        },
+                        {
+                          label: "Estimated cost",
+                          value: `$${(
+                            selectedExecution.estimatedCost || 0.185
+                          ).toFixed(4)}`,
+                          meta: "Runtime spend",
+                        },
+                      ].map((metric) => (
+                        <div key={metric.label} className="bg-surface px-4 py-4">
+                          <p className="metric-label">{metric.label}</p>
+                          <p className="mt-2 font-mono text-[20px] font-medium tracking-[-0.04em] tabular-nums text-ink">
+                            {metric.value}
+                          </p>
+                          <p className="mt-1 text-[10.5px] text-ink-3">
+                            {metric.meta}
+                          </p>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
-
-                {activeTab === "costs" && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="rounded-xl border border-line bg-canvas p-4 space-y-1">
-                      <p className="text-xs text-ink-2">Input Token Consumption</p>
-                      <p className="text-xl font-bold font-mono text-ink">
-                        {formatNumber(selectedExecution.inputTokens || 28000)}
-                      </p>
-                      <p className="text-[11px] text-ink-3">Repository AST & Context</p>
-                    </div>
-
-                    <div className="rounded-xl border border-line bg-canvas p-4 space-y-1">
-                      <p className="text-xs text-ink-2">Output Token Generation</p>
-                      <p className="text-xl font-bold font-mono text-ink">
-                        {formatNumber(selectedExecution.outputTokens || 10400)}
-                      </p>
-                      <p className="text-[11px] text-ink-3">Synthesized Source Code & Tests</p>
-                    </div>
-                  </div>
-                )}
               </div>
-            </GlassCard>
+            </section>
           ) : (
-            <div className="rounded-xl border border-dashed border-line bg-surface p-12 text-center text-xs text-ink-2">
-              Select an execution from the left panel to review its code changes and agent telemetry.
+            <div className="border border-dashed border-line bg-surface px-6 py-14 text-center">
+              <p className="text-[12.5px] font-medium text-ink">
+                No execution selected
+              </p>
+              <p className="mt-1 text-[12px] text-ink-3">
+                Choose a run from the list to review its diff, comments, and
+                telemetry.
+              </p>
             </div>
           )}
         </div>

@@ -16,23 +16,58 @@ import {
   MarkerType,
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
-import {
-  Workflow,
-  Play,
-  Save,
-  Plus,
-  ShieldCheck,
-  CheckCircle2,
-  Bot,
-  GitBranch,
-  Terminal,
-  Layers,
-  Sparkles,
-  ArrowRight,
-  Code,
-  CheckSquare,
-} from "lucide-react"
+import { Play, Save, Plus, CheckCircle2, Sparkles } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
+import { StatBand } from "@/components/ui/stat-band"
+import { cn } from "@/lib/utils"
+
+type NodeTone = "default" | "accent" | "success" | "terminal"
+
+function workflowNodeStyle(tone: NodeTone = "default"): React.CSSProperties {
+  const base: React.CSSProperties = {
+    borderRadius: "6px",
+    fontFamily: "var(--font-jetbrains), monospace",
+    fontSize: "11px",
+    fontWeight: 500,
+    padding: "9px 13px",
+    lineHeight: 1.4,
+  }
+
+  if (tone === "accent") {
+    return {
+      ...base,
+      backgroundColor: "var(--mv-accent-soft)",
+      border: "1px solid var(--mv-accent)",
+      color: "var(--mv-accent)",
+    }
+  }
+
+  if (tone === "success") {
+    return {
+      ...base,
+      backgroundColor: "var(--mv-success-soft)",
+      border: "1px solid var(--mv-success)",
+      color: "var(--mv-success)",
+    }
+  }
+
+  if (tone === "terminal") {
+    return {
+      ...base,
+      backgroundColor: "var(--mv-text)",
+      border: "1px solid var(--mv-text)",
+      color: "var(--mv-bg)",
+      fontWeight: 600,
+    }
+  }
+
+  return {
+    ...base,
+    backgroundColor: "var(--mv-surface)",
+    border: "1px solid var(--mv-border)",
+    color: "var(--mv-text)",
+  }
+}
 
 const DEFAULT_TEMPLATES: Record<string, { nodes: Node[]; edges: Edge[] }> = {
   feature_pipeline: {
@@ -41,96 +76,46 @@ const DEFAULT_TEMPLATES: Record<string, { nodes: Node[]; edges: Edge[] }> = {
         id: "1",
         position: { x: 40, y: 160 },
         data: { label: "1. Trigger: Issue Submitted / Prompt" },
-        style: {
-          backgroundColor: "#FFFFFF",
-          border: "1px solid #E8EAED",
-          borderRadius: "10px",
-          fontSize: "12px",
-          fontWeight: 600,
-          color: "#17191C",
-          padding: "10px 14px",
-          boxShadow: "0 1px 3px rgba(16,24,40,0.05)",
-        },
+        style: workflowNodeStyle("default"),
       },
       {
         id: "2",
         position: { x: 300, y: 160 },
         data: { label: "2. Architect: Task Breakdown (Claude Code 3.7)" },
-        style: {
-          backgroundColor: "#FFFFFF",
-          border: "1px solid #D5222D",
-          borderRadius: "10px",
-          fontSize: "12px",
-          fontWeight: 600,
-          color: "#17191C",
-          padding: "10px 14px",
-          boxShadow: "0 2px 6px rgba(213,34,45,0.08)",
-        },
+        style: workflowNodeStyle("accent"),
       },
       {
         id: "3",
         position: { x: 620, y: 70 },
         data: { label: "3A. Frontend Synthesis (Gemini CLI)" },
-        style: {
-          backgroundColor: "#FFFFFF",
-          border: "1px solid #E8EAED",
-          borderRadius: "10px",
-          fontSize: "12px",
-          fontWeight: 500,
-          color: "#17191C",
-          padding: "10px 14px",
-        },
+        style: workflowNodeStyle("default"),
       },
       {
         id: "4",
         position: { x: 620, y: 250 },
         data: { label: "3B. Backend API Implementation (Codex 5.2)" },
-        style: {
-          backgroundColor: "#FFFFFF",
-          border: "1px solid #E8EAED",
-          borderRadius: "10px",
-          fontSize: "12px",
-          fontWeight: 500,
-          color: "#17191C",
-          padding: "10px 14px",
-        },
+        style: workflowNodeStyle("default"),
       },
       {
         id: "5",
         position: { x: 930, y: 160 },
         data: { label: "4. Test & QA Verification (OpenCode Reviewer)" },
-        style: {
-          backgroundColor: "#FFFFFF",
-          border: "1px solid #E8EAED",
-          borderRadius: "10px",
-          fontSize: "12px",
-          fontWeight: 500,
-          color: "#17191C",
-          padding: "10px 14px",
-        },
+        style: workflowNodeStyle("default"),
       },
       {
         id: "6",
         position: { x: 1220, y: 160 },
         data: { label: "5. Human Approval Gate (Merge to Main)" },
-        style: {
-          backgroundColor: "#040404",
-          border: "1px solid #040404",
-          borderRadius: "10px",
-          fontSize: "12px",
-          fontWeight: 600,
-          color: "#FFFFFF",
-          padding: "10px 14px",
-        },
+        style: workflowNodeStyle("terminal"),
       },
     ],
     edges: [
-      { id: "e1-2", source: "1", target: "2", animated: true, markerEnd: { type: MarkerType.ArrowClosed } },
-      { id: "e2-3", source: "2", target: "3", markerEnd: { type: MarkerType.ArrowClosed } },
-      { id: "e2-4", source: "2", target: "4", markerEnd: { type: MarkerType.ArrowClosed } },
-      { id: "e3-5", source: "3", target: "5", markerEnd: { type: MarkerType.ArrowClosed } },
-      { id: "e4-5", source: "4", target: "5", markerEnd: { type: MarkerType.ArrowClosed } },
-      { id: "e5-6", source: "5", target: "6", animated: true, markerEnd: { type: MarkerType.ArrowClosed } },
+      { id: "e1-2", source: "1", target: "2", animated: true },
+      { id: "e2-3", source: "2", target: "3" },
+      { id: "e2-4", source: "2", target: "4" },
+      { id: "e3-5", source: "3", target: "5" },
+      { id: "e4-5", source: "4", target: "5" },
+      { id: "e5-6", source: "5", target: "6", animated: true },
     ],
   },
   pr_security: {
@@ -139,81 +124,53 @@ const DEFAULT_TEMPLATES: Record<string, { nodes: Node[]; edges: Edge[] }> = {
         id: "1",
         position: { x: 50, y: 160 },
         data: { label: "1. Webhook: GitHub PR Opened" },
-        style: {
-          backgroundColor: "#FFFFFF",
-          border: "1px solid #E8EAED",
-          borderRadius: "10px",
-          fontSize: "12px",
-          fontWeight: 600,
-          color: "#17191C",
-          padding: "10px 14px",
-        },
+        style: workflowNodeStyle("default"),
       },
       {
         id: "2",
         position: { x: 340, y: 70 },
         data: { label: "2A. AST Lint & License Compliance" },
-        style: {
-          backgroundColor: "#FFFFFF",
-          border: "1px solid #E8EAED",
-          borderRadius: "10px",
-          fontSize: "12px",
-          fontWeight: 500,
-          color: "#17191C",
-          padding: "10px 14px",
-        },
+        style: workflowNodeStyle("default"),
       },
       {
         id: "3",
         position: { x: 340, y: 250 },
         data: { label: "2B. Security Vulnerability Scan (Claude 3.7)" },
-        style: {
-          backgroundColor: "#FFFFFF",
-          border: "1px solid #D5222D",
-          borderRadius: "10px",
-          fontSize: "12px",
-          fontWeight: 600,
-          color: "#17191C",
-          padding: "10px 14px",
-        },
+        style: workflowNodeStyle("accent"),
       },
       {
         id: "4",
         position: { x: 670, y: 160 },
         data: { label: "3. Human Review Gate (Tech Lead Sign-off)" },
-        style: {
-          backgroundColor: "#FFFFFF",
-          border: "1px solid #1F7A4D",
-          borderRadius: "10px",
-          fontSize: "12px",
-          fontWeight: 600,
-          color: "#1F7A4D",
-          padding: "10px 14px",
-        },
+        style: workflowNodeStyle("success"),
       },
       {
         id: "5",
         position: { x: 980, y: 160 },
         data: { label: "4. Auto-merge & Deploy Sandbox Preview" },
-        style: {
-          backgroundColor: "#040404",
-          border: "1px solid #040404",
-          borderRadius: "10px",
-          fontSize: "12px",
-          fontWeight: 600,
-          color: "#FFFFFF",
-          padding: "10px 14px",
-        },
+        style: workflowNodeStyle("terminal"),
       },
     ],
     edges: [
-      { id: "e1-2", source: "1", target: "2", animated: true, markerEnd: { type: MarkerType.ArrowClosed } },
-      { id: "e1-3", source: "1", target: "3", animated: true, markerEnd: { type: MarkerType.ArrowClosed } },
-      { id: "e2-4", source: "2", target: "4", markerEnd: { type: MarkerType.ArrowClosed } },
-      { id: "e3-4", source: "3", target: "4", markerEnd: { type: MarkerType.ArrowClosed } },
-      { id: "e4-5", source: "4", target: "5", animated: true, markerEnd: { type: MarkerType.ArrowClosed } },
+      { id: "e1-2", source: "1", target: "2", animated: true },
+      { id: "e1-3", source: "1", target: "3", animated: true },
+      { id: "e2-4", source: "2", target: "4" },
+      { id: "e3-4", source: "3", target: "4" },
+      { id: "e4-5", source: "4", target: "5", animated: true },
     ],
   },
+}
+
+// Theme the edges once at module load so arrows stay visible in both themes.
+for (const template of Object.values(DEFAULT_TEMPLATES)) {
+  template.edges = template.edges.map((edge) => ({
+    ...edge,
+    style: { ...edge.style, stroke: "var(--mv-border-strong)" },
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      color: "var(--mv-border-strong)",
+    },
+  }))
 }
 
 export default function WorkflowsPage() {
@@ -225,6 +182,9 @@ export default function WorkflowsPage() {
   const [runningPipeline, setRunningPipeline] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [customPrompt, setCustomPrompt] = useState("")
+  const [validationMessage, setValidationMessage] = useState<string | null>(
+    null
+  )
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -256,15 +216,9 @@ export default function WorkflowsPage() {
             ? `${id}. Security Approval Gate`
             : `${id}. Action: CI/CD Dispatch`,
       },
-      style: {
-        backgroundColor: type === "approval" ? "#040404" : "#FFFFFF",
-        border: type === "approval" ? "1px solid #040404" : "1px solid #E8EAED",
-        borderRadius: "10px",
-        fontSize: "12px",
-        fontWeight: 600,
-        color: type === "approval" ? "#FFFFFF" : "#17191C",
-        padding: "10px 14px",
-      },
+      style: workflowNodeStyle(
+        type === "agent" ? "accent" : type === "approval" ? "terminal" : "default"
+      ),
     }
 
     setNodes((nds) => [...nds, newNode])
@@ -272,10 +226,14 @@ export default function WorkflowsPage() {
 
   const handleSimulate = () => {
     setSimulating(true)
+    setValidationMessage(null)
     setTimeout(() => {
       setSimulating(false)
-      alert(`Workflow DAG validated: ${nodes.length} stages, 0 cyclic dependencies. Topological order verified.`)
-    }, 1000)
+      setValidationMessage(
+        `DAG validated · ${nodes.length} stages · 0 cyclic dependencies · topological order verified`
+      )
+      setTimeout(() => setValidationMessage(null), 4000)
+    }, 700)
   }
 
   const handleRunPipeline = async () => {
@@ -317,86 +275,133 @@ export default function WorkflowsPage() {
     setTimeout(() => setSaveSuccess(false), 2500)
   }
 
+  const approvalGates = nodes.filter((node) =>
+    /approval|review|gate/i.test(String(node.data?.label ?? ""))
+  ).length
+
   return (
-    <div className="space-y-4 pb-16 max-w-7xl mx-auto">
+    <div className="mx-auto max-w-7xl space-y-7 pb-16">
       <PageHeader
-        title="Visual Workflow Automation"
+        eyebrow="Operations · Workflow automation"
+        title="Workflows"
         description="Design reusable multi-agent pipelines, conditional DAGs, parallel worktrees, and manual approval gates."
         action={
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => handleAddNode("agent")}
-              className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2"
+              className="btn-secondary"
             >
-              <Plus className="h-3.5 w-3.5 text-accent" />
-              Add Agent Node
+              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+              Add node
             </button>
             <button
               onClick={handleSimulate}
               disabled={simulating}
-              className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2"
+              className="btn-secondary"
             >
-              <Play className="h-3 w-3 fill-accent text-accent" />
-              {simulating ? "Validating..." : "Simulate"}
+              <Play className="h-3 w-3" strokeWidth={2} />
+              {simulating ? "Validating…" : "Validate DAG"}
             </button>
-            <button
-              onClick={handleSave}
-              className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2"
-            >
-              <Save className="h-3.5 w-3.5" />
-              {saveSuccess ? "Saved ✓" : "Save DAG"}
+            <button onClick={handleSave} className="btn-secondary">
+              <Save className="h-3.5 w-3.5" strokeWidth={1.8} />
+              {saveSuccess ? "Saved" : "Save DAG"}
             </button>
             <button
               onClick={handleRunPipeline}
               disabled={runningPipeline}
-              className="flex items-center gap-1.5 rounded-lg bg-charcoal px-4 py-1.5 text-xs font-semibold text-white hover:bg-[#202020] active:scale-[0.98] transition-all"
+              className="btn-primary"
             >
-              <Sparkles className="h-3.5 w-3.5 text-accent" />
-              {runningPipeline ? "Dispatching..." : "Run Pipeline"}
+              <Sparkles className="h-3.5 w-3.5" strokeWidth={1.8} />
+              {runningPipeline ? "Dispatching…" : "Run pipeline"}
             </button>
           </div>
         }
       />
 
-      {/* Template Selector Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface p-3 shadow-xs">
-        <div className="flex items-center gap-2 text-xs">
-          <span className="font-semibold text-ink">Template:</span>
-          <button
-            onClick={() => handleSelectTemplate("feature_pipeline")}
-            className={`rounded-lg px-3 py-1 text-xs font-semibold transition-colors ${
-              activeTemplate === "feature_pipeline"
-                ? "bg-charcoal text-white"
-                : "bg-surface-2 text-ink-2 hover:text-ink"
-            }`}
-          >
-            Full-Stack Feature Pipeline
-          </button>
-          <button
-            onClick={() => handleSelectTemplate("pr_security")}
-            className={`rounded-lg px-3 py-1 text-xs font-semibold transition-colors ${
+      <StatBand
+        columns={4}
+        items={[
+          {
+            label: "Stages",
+            value: String(nodes.length),
+            meta:
               activeTemplate === "pr_security"
-                ? "bg-charcoal text-white"
-                : "bg-surface-2 text-ink-2 hover:text-ink"
-            }`}
+                ? "PR security blueprint"
+                : "Feature blueprint",
+          },
+          {
+            label: "Connections",
+            value: String(edges.length),
+            meta: "Directed dependencies",
+          },
+          {
+            label: "Approval gates",
+            value: String(approvalGates),
+            meta: approvalGates > 0 ? "Human checkpoints" : "None configured",
+            accent: approvalGates > 0,
+          },
+          {
+            label: "Active template",
+            value: activeTemplate === "pr_security" ? "Security" : "Feature",
+            meta: "Local canvas state",
+          },
+        ]}
+      />
+
+      {validationMessage && (
+        <div className="flex items-start gap-2 border border-success/25 bg-success-soft px-3 py-2.5 text-[11.5px] text-success">
+          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
+          <span className="font-mono uppercase tracking-[0.04em]">
+            {validationMessage}
+          </span>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
+            Template
+          </span>
+          <div
+            className="segmented"
+            role="group"
+            aria-label="Workflow template"
           >
-            PR Auto-Reviewer & Security Gate
-          </button>
+            <button
+              onClick={() => handleSelectTemplate("feature_pipeline")}
+              aria-pressed={activeTemplate === "feature_pipeline"}
+              className={cn(
+                "segmented-item",
+                activeTemplate === "feature_pipeline" &&
+                  "segmented-item-active"
+              )}
+            >
+              Feature pipeline
+            </button>
+            <button
+              onClick={() => handleSelectTemplate("pr_security")}
+              aria-pressed={activeTemplate === "pr_security"}
+              className={cn(
+                "segmented-item",
+                activeTemplate === "pr_security" && "segmented-item-active"
+              )}
+            >
+              PR security
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={customPrompt}
-            onChange={(e) => setCustomPrompt(e.target.value)}
-            placeholder="Custom trigger prompt or Jira ticket..."
-            className="w-64 rounded-lg border border-line bg-canvas px-3 py-1 text-xs text-ink outline-none"
-          />
-        </div>
+        <input
+          type="text"
+          value={customPrompt}
+          onChange={(e) => setCustomPrompt(e.target.value)}
+          placeholder="Custom trigger prompt or ticket reference…"
+          aria-label="Custom workflow trigger prompt"
+          className="field field-sm w-full sm:w-72"
+        />
       </div>
 
-      {/* React Flow Canvas Container */}
-      <div className="h-[680px] w-full rounded-xl border border-line bg-surface shadow-sm overflow-hidden relative">
+      <div className="relative h-[660px] w-full overflow-hidden border border-line bg-surface">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -405,24 +410,27 @@ export default function WorkflowsPage() {
           onConnect={onConnect}
           fitView
         >
-          <Background color="#E8EAED" gap={16} size={1} />
-          <Controls />
+          <Background color="var(--mv-grid)" gap={16} size={1} />
+          <Controls showInteractive={false} />
           <MiniMap
-            nodeColor="#D2D6DC"
-            maskColor="rgba(248, 249, 251, 0.7)"
-            style={{ border: "1px solid #E8EAED", borderRadius: "8px" }}
+            nodeColor="var(--mv-border-strong)"
+            maskColor="transparent"
+            style={{
+              border: "1px solid var(--mv-border)",
+              borderRadius: "6px",
+              backgroundColor: "var(--mv-surface)",
+            }}
           />
         </ReactFlow>
 
-        {/* Floating Canvas Legend */}
-        <div className="absolute top-4 left-4 z-10 rounded-xl border border-line bg-surface/95 backdrop-blur-md p-3.5 text-xs shadow-xs space-y-1">
-          <p className="font-bold text-ink">
+        <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-[300px] border border-line bg-surface p-3">
+          <p className="font-display text-[12.5px] font-medium tracking-[-0.02em] text-ink">
             {activeTemplate === "pr_security"
-              ? "Autonomous PR Security & Review Pipeline"
-              : "Full-Stack Feature Engineering Pipeline"}
+              ? "PR security and review pipeline"
+              : "Full-stack feature pipeline"}
           </p>
-          <p className="text-[11px] text-ink-2">
-            Drag nodes to rearrange • Connect output ports to link dependencies • Click Run Pipeline to execute
+          <p className="mt-1 font-mono text-[9px] uppercase leading-relaxed tracking-[0.08em] text-ink-3">
+            Drag to arrange · connect ports to link dependencies · run to execute
           </p>
         </div>
       </div>

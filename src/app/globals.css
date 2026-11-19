@@ -384,6 +384,90 @@
   }
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   React Flow surface
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.react-flow {
+  background-color: var(--mv-surface);
+  --xy-background-color: var(--mv-surface);
+}
+
+.react-flow__controls {
+  border: 1px solid var(--mv-border);
+  border-radius: 6px;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  width: 26px;
+  height: 26px;
+  background-color: var(--mv-surface);
+  border-bottom: 1px solid var(--mv-border);
+  fill: var(--mv-text-2);
+}
+
+.react-flow__controls-button:hover {
+  background-color: var(--mv-surface-2);
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor;
+  max-width: 11px;
+  max-height: 11px;
+}
+
+.react-flow__minimap {
+  background-color: var(--mv-surface) !important;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.react-flow__attribution {
+  background: transparent;
+  border: 0;
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mv-text-3);
+}
+
+.react-flow__attribution a {
+  color: var(--mv-text-3);
+}
+
+.react-flow__handle {
+  width: 5px;
+  height: 5px;
+  background-color: var(--mv-accent);
+  border: 1px solid var(--mv-surface);
+}
+
+.react-flow__edge-path,
+.react-flow__connection-path {
+  stroke: var(--mv-border-strong);
+  stroke-width: 1.25;
+}
+
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:focus .react-flow__edge-path {
+  stroke: var(--mv-accent);
+}
+
+.react-flow__node {
+  font-family: var(--font-jetbrains), monospace;
+}
+
+.react-flow__node.selectable:focus {
+  outline: none;
+}
+
+.react-flow__node.selected > div {
+  box-shadow: 0 0 0 1px var(--mv-accent);
+}
+
 @keyframes mv-fade-in {
   from {
     opacity: 0;
