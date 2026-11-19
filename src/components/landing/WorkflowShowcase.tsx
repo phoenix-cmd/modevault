@@ -123,34 +123,34 @@ export function WorkflowShowcase() {
     <section
       id="workflows"
       ref={sectionRef}
-      className="py-24 px-6 bg-white text-[#17191C] border-b border-[#E8EAED]"
+      className="py-24 px-6 bg-[#FFFEFB] text-[#15140F] border-b border-[#E2DDD3]"
     >
       <div ref={contentRef} className="max-w-6xl mx-auto space-y-16">
         {/* Editorial Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#E8EAED] pb-10">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#E2DDD3] pb-10">
           <div className="space-y-3 max-w-2xl">
-            <div className="flex items-center gap-2 font-mono text-xs font-semibold uppercase tracking-wider text-[#737982]">
-              <span className="text-[#D5222D]">03</span>
+            <div className="flex items-center gap-2 font-mono text-xs font-semibold uppercase tracking-wider text-[#6F6C64]">
+              <span className="text-[#A4610A]">03</span>
               <span>/</span>
               <span>Pipeline Automation</span>
             </div>
-            <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-[#17191C] leading-tight">
+            <h2 className="text-[30px] font-display font-medium leading-[1.08] tracking-[-0.03em] sm:text-[46px] text-[#15140F] leading-tight">
               Deterministic pipelines for
               <br />
-              <span className="text-[#737982]">non-deterministic models.</span>
+              <span className="text-[#6F6C64]">non-deterministic models.</span>
             </h2>
           </div>
-          <p className="text-sm sm:text-base text-[#5C616B] max-w-md leading-relaxed">
+          <p className="text-sm sm:text-base text-[#6F6C64] max-w-md leading-relaxed">
             Eliminate prompt chaos. Construct multi-stage development workflows with conditional branching, automated healing loops, and mandatory human sign-off gates.
           </p>
         </div>
 
         {/* Visual Pipeline Strip */}
         <div className="space-y-6">
-          <div className="flex items-center justify-between text-xs font-mono text-[#737982]">
+          <div className="flex items-center justify-between text-xs font-mono text-[#6F6C64]">
             <span>PIPELINE EXECUTION GRAPH: PRODUCTION RELEASE</span>
-            <span className="text-[#D5222D] flex items-center gap-1.5 font-semibold">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#D5222D] animate-ping" />
+            <span className="text-[#A4610A] flex items-center gap-1.5 font-semibold">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#F5A623] animate-ping" />
               <span>STEP 4 RUNNING</span>
             </span>
           </div>
@@ -165,48 +165,48 @@ export function WorkflowShowcase() {
                   onClick={() => setSelectedNodeId(node.id)}
                   className={`p-3.5 rounded-lg border text-left transition-all relative flex flex-col justify-between min-h-[140px] ${
                     isSelected
-                      ? "border-[#D5222D] bg-[#F8F9FB] shadow-sm ring-1 ring-[#D5222D]/30"
-                      : "border-[#E8EAED] bg-white hover:border-[#D2D6DC] hover:bg-[#FAFBFD]"
+                      ? "border-[#F5A623] bg-[#F6F4EF] ring-1 ring-[#F5A623]/30"
+                      : "border-[#E2DDD3] bg-[#FFFEFB] hover:border-[#CFC9BE] hover:bg-[#F6F4EF]"
                   }`}
                 >
                   <div className="flex items-center justify-between w-full">
-                    <span className="font-mono text-[10px] font-bold text-[#737982]">
+                    <span className="font-mono text-[10px] font-bold text-[#6F6C64]">
                       {node.step}
                     </span>
                     {node.status === "completed" && (
                       <CheckCircle2 className="h-3.5 w-3.5 text-[#1F7A4D]" />
                     )}
                     {node.status === "running" && (
-                      <RotateCw className="h-3.5 w-3.5 text-[#D5222D] animate-spin" />
+                      <RotateCw className="h-3.5 w-3.5 text-[#A4610A] animate-spin" />
                     )}
                     {node.status === "gate" && (
-                      <span className="text-[9px] font-mono font-bold text-[#A3630A] bg-[#A3630A]/10 px-1.5 py-0.2 rounded border border-[#A3630A]/20">
+                      <span className="text-[9px] font-mono font-bold text-[#8A5A00] bg-[#8A5A00]/10 px-1.5 py-0.2 rounded border border-[#8A5A00]/20">
                         GATE
                       </span>
                     )}
                     {node.status === "queued" && (
-                      <Clock className="h-3.5 w-3.5 text-[#9AA0A8]" />
+                      <Clock className="h-3.5 w-3.5 text-[#6F6C64]" />
                     )}
                   </div>
 
                   <div className="my-2">
-                    <div className="font-bold text-xs text-[#17191C] leading-tight">
+                    <div className="font-bold text-xs text-[#15140F] leading-tight">
                       {node.title}
                     </div>
-                    <div className="text-[10px] text-[#737982] line-clamp-1 mt-0.5">
+                    <div className="text-[10px] text-[#6F6C64] line-clamp-1 mt-0.5">
                       {node.role.split(" ")[0]}
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-[#F2F3F5] text-[10px] font-mono text-[#737982] flex justify-between items-center w-full">
+                  <div className="pt-2 border-t border-[#E2DDD3] text-[10px] font-mono text-[#6F6C64] flex justify-between items-center w-full">
                     <span>{node.duration}</span>
                     <span
                       className={`capitalize ${
                         node.status === "completed"
                           ? "text-[#1F7A4D]"
                           : node.status === "running"
-                          ? "text-[#D5222D] font-semibold"
-                          : "text-[#9AA0A8]"
+                          ? "text-[#A4610A] font-semibold"
+                          : "text-[#6F6C64]"
                       }`}
                     >
                       {node.status}
@@ -218,36 +218,36 @@ export function WorkflowShowcase() {
           </div>
 
           {/* Node Detail Inspector Box */}
-          <div className="p-6 rounded-xl border border-[#E8EAED] bg-[#F8F9FB] space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E8EAED] pb-3">
+          <div className="p-6 rounded-none border border-[#E2DDD3] bg-[#F6F4EF] space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E2DDD3] pb-3">
               <div className="flex items-center gap-2">
-                <span className="font-mono text-xs font-bold text-[#D5222D] bg-[#D5222D]/10 px-2 py-0.5 rounded">
+                <span className="font-mono text-xs font-bold text-[#A4610A] bg-[#F5A623]/10 px-2 py-0.5 rounded">
                   STAGE {activeNode.step}
                 </span>
-                <h4 className="text-base font-bold text-[#17191C]">
+                <h4 className="text-base font-bold text-[#15140F]">
                   {activeNode.title}
                 </h4>
-                <span className="text-xs text-[#737982] font-mono">
+                <span className="text-xs text-[#6F6C64] font-mono">
                   • Agent/Runner: {activeNode.role}
                 </span>
               </div>
-              <div className="text-xs font-mono text-[#737982]">
-                Execution Time: <span className="font-semibold text-[#17191C]">{activeNode.duration}</span>
+              <div className="text-xs font-mono text-[#6F6C64]">
+                Execution Time: <span className="font-semibold text-[#15140F]">{activeNode.duration}</span>
               </div>
             </div>
 
-            <p className="text-sm text-[#5C616B] leading-relaxed">
+            <p className="text-sm text-[#6F6C64] leading-relaxed">
               {activeNode.description}
             </p>
 
             <div className="flex flex-wrap items-center gap-2 pt-2">
-              <span className="text-xs font-mono text-[#737982] mr-2">
+              <span className="text-xs font-mono text-[#6F6C64] mr-2">
                 Guardrail Rules:
               </span>
               {activeNode.rules.map((rule, idx) => (
                 <span
                   key={idx}
-                  className="px-2.5 py-1 rounded bg-white border border-[#E8EAED] text-xs font-mono text-[#17191C] shadow-2xs"
+                  className="px-2.5 py-1 rounded bg-[#FFFEFB] border border-[#E2DDD3] text-xs font-mono text-[#15140F]"
                 >
                   ✓ {rule}
                 </span>

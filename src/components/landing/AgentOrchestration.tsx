@@ -124,24 +124,24 @@ export function AgentOrchestration() {
     <section
       id="orchestration"
       ref={sectionRef}
-      className="py-24 px-6 bg-[#0E1015] text-white border-b border-[#1E222A]"
+      className="py-24 px-6 bg-[#0D0E10] text-white border-b border-[#1E2024]"
     >
       <div ref={contentRef} className="max-w-6xl mx-auto space-y-16">
         {/* Editorial Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#1E222A] pb-10">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#1E2024] pb-10">
           <div className="space-y-3 max-w-2xl">
-            <div className="flex items-center gap-2 font-mono text-xs font-semibold uppercase tracking-wider text-[#737982]">
-              <span className="text-[#D5222D]">02</span>
+            <div className="flex items-center gap-2 font-mono text-xs font-semibold uppercase tracking-wider text-[#6F6C64]">
+              <span className="text-[#F5A623]">02</span>
               <span>/</span>
               <span>Multi-Agent Architecture</span>
             </div>
-            <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-white leading-tight">
+            <h2 className="text-[30px] font-display font-medium leading-[1.08] tracking-[-0.03em] sm:text-[46px] text-white leading-tight">
               Autonomous agents.
               <br />
-              <span className="text-[#8E95A2]">Synchronized output.</span>
+              <span className="text-[#A5A29A]">Synchronized output.</span>
             </h2>
           </div>
-          <p className="text-sm sm:text-base text-[#8E95A2] max-w-md leading-relaxed">
+          <p className="text-sm sm:text-base text-[#A5A29A] max-w-md leading-relaxed">
             Replace chaotic solitary bots with a coordinated multi-agent mesh. Every agent is assigned specialized boundaries, strict budget limits, and direct git integration.
           </p>
         </div>
@@ -150,7 +150,7 @@ export function AgentOrchestration() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Agent Selector List (5 cols) */}
           <div className="lg:col-span-5 space-y-3">
-            <div className="text-[11px] font-mono uppercase tracking-wider text-[#737982] mb-1">
+            <div className="text-[11px] font-mono uppercase tracking-wider text-[#6F6C64] mb-1">
               Select Agent to Inspect Telemetry:
             </div>
             {AGENTS.map((agent) => {
@@ -159,10 +159,10 @@ export function AgentOrchestration() {
                 <button
                   key={agent.id}
                   onClick={() => setSelectedAgent(agent.id)}
-                  className={`w-full text-left p-4 rounded-xl border transition-all ${
+                  className={`w-full text-left p-4 rounded-none border transition-all ${
                     isSelected
-                      ? "border-[#D5222D] bg-[#161822] shadow-md"
-                      : "border-[#1E222A] bg-[#12141A] hover:bg-[#151720]"
+                      ? "border-[#F5A623] bg-[#16171A]"
+                      : "border-[#1E2024] bg-[#16171A] hover:bg-[#16171A]"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
@@ -170,28 +170,28 @@ export function AgentOrchestration() {
                       <span className="font-semibold text-sm text-white">
                         {agent.name}
                       </span>
-                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#1F232B] text-[#A0A6AF]">
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#1F2024] text-[#A5A29A]">
                         {agent.badge}
                       </span>
                     </div>
                     {agent.status === "Active" ? (
-                      <span className="flex items-center gap-1.5 text-[10px] font-mono text-[#D5222D]">
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#D5222D] animate-ping" />
+                      <span className="flex items-center gap-1.5 text-[10px] font-mono text-[#F5A623]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#F5A623] animate-ping" />
                         <span>ACTIVE</span>
                       </span>
                     ) : (
-                      <span className="flex items-center gap-1.5 text-[10px] font-mono text-[#27C93F]">
+                      <span className="flex items-center gap-1.5 text-[10px] font-mono text-[#63C08A]">
                         <CheckCircle2 className="h-3 w-3" />
                         <span>READY</span>
                       </span>
                     )}
                   </div>
 
-                  <p className="text-xs text-[#8E95A2] line-clamp-1 mb-3">
+                  <p className="text-xs text-[#A5A29A] line-clamp-1 mb-3">
                     {agent.role}
                   </p>
 
-                  <div className="flex items-center justify-between text-[11px] font-mono text-[#737982] pt-2 border-t border-[#1E222A]">
+                  <div className="flex items-center justify-between text-[11px] font-mono text-[#6F6C64] pt-2 border-t border-[#1E2024]">
                     <span>Model: {agent.model.split(" ")[0]}</span>
                     <span className="text-white font-medium">{agent.metrics.tokens}</span>
                   </div>
@@ -201,52 +201,52 @@ export function AgentOrchestration() {
           </div>
 
           {/* Active Agent Telemetry Monitor (7 cols) */}
-          <div className="lg:col-span-7 rounded-xl border border-[#2B313D] bg-[#12141A] p-6 space-y-6">
-            <div className="flex flex-wrap items-center justify-between border-b border-[#1E222A] pb-4 gap-3">
+          <div className="lg:col-span-7 rounded-none border border-[#2D3036] bg-[#16171A] p-6 space-y-6">
+            <div className="flex flex-wrap items-center justify-between border-b border-[#1E2024] pb-4 gap-3">
               <div>
-                <div className="text-[10px] font-mono text-[#D5222D] uppercase tracking-wider">
+                <div className="text-[10px] font-mono text-[#F5A623] uppercase tracking-wider">
                   Agent Telemetry Inspector
                 </div>
                 <h3 className="text-xl font-bold text-white">{current.name}</h3>
               </div>
-              <div className="flex items-center gap-2 font-mono text-xs text-[#A0A6AF] bg-[#1A1D26] px-3 py-1.5 rounded-md border border-[#262A34]">
-                <Cpu className="h-3.5 w-3.5 text-[#D5222D]" />
+              <div className="flex items-center gap-2 font-mono text-xs text-[#A5A29A] bg-[#1F2024] px-3 py-1.5 rounded-md border border-[#2D3036]">
+                <Cpu className="h-3.5 w-3.5 text-[#F5A623]" />
                 <span>Engine: {current.model}</span>
               </div>
             </div>
 
-            <p className="text-sm text-[#C2C1C9] leading-relaxed">
+            <p className="text-sm text-[#C9C5BC] leading-relaxed">
               {current.description}
             </p>
 
             {/* Metrics Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-3 rounded-lg bg-[#0E1015] border border-[#1E222A]">
-                <span className="block text-[10px] font-mono text-[#737982] uppercase">
+              <div className="p-3 rounded-lg bg-[#0D0E10] border border-[#1E2024]">
+                <span className="block text-[10px] font-mono text-[#6F6C64] uppercase">
                   Tokens Ingested
                 </span>
                 <span className="text-base font-bold text-white font-mono">
                   {current.metrics.tokens}
                 </span>
               </div>
-              <div className="p-3 rounded-lg bg-[#0E1015] border border-[#1E222A]">
-                <span className="block text-[10px] font-mono text-[#737982] uppercase">
+              <div className="p-3 rounded-lg bg-[#0D0E10] border border-[#1E2024]">
+                <span className="block text-[10px] font-mono text-[#6F6C64] uppercase">
                   Cost Allocated
                 </span>
-                <span className="text-base font-bold text-[#27C93F] font-mono">
+                <span className="text-base font-bold text-[#63C08A] font-mono">
                   {current.metrics.cost}
                 </span>
               </div>
-              <div className="p-3 rounded-lg bg-[#0E1015] border border-[#1E222A]">
-                <span className="block text-[10px] font-mono text-[#737982] uppercase">
+              <div className="p-3 rounded-lg bg-[#0D0E10] border border-[#1E2024]">
+                <span className="block text-[10px] font-mono text-[#6F6C64] uppercase">
                   Average Latency
                 </span>
                 <span className="text-base font-bold text-white font-mono">
                   {current.metrics.latency}
                 </span>
               </div>
-              <div className="p-3 rounded-lg bg-[#0E1015] border border-[#1E222A]">
-                <span className="block text-[10px] font-mono text-[#737982] uppercase">
+              <div className="p-3 rounded-lg bg-[#0D0E10] border border-[#1E2024]">
+                <span className="block text-[10px] font-mono text-[#6F6C64] uppercase">
                   Tasks Verified
                 </span>
                 <span className="text-base font-bold text-white font-mono">
@@ -256,16 +256,16 @@ export function AgentOrchestration() {
             </div>
 
             {/* Recent Output Terminal Stream */}
-            <div className="rounded-lg bg-[#090A0D] border border-[#1E222A] p-4 font-mono text-xs space-y-2">
-              <div className="flex items-center justify-between text-[#737982] text-[10px] pb-2 border-b border-[#1A1D24]">
+            <div className="rounded-lg bg-[#0A0B0D] border border-[#1E2024] p-4 font-mono text-xs space-y-2">
+              <div className="flex items-center justify-between text-[#6F6C64] text-[10px] pb-2 border-b border-[#1E2024]">
                 <span>AGENT STDOUT STREAM</span>
                 <span>STATUS: VERIFIED</span>
               </div>
-              <div className="text-[#A0A6AF] leading-relaxed">
-                <span className="text-[#D5222D] mr-2">❯</span>
+              <div className="text-[#A5A29A] leading-relaxed">
+                <span className="text-[#F5A623] mr-2">❯</span>
                 {current.recentAction}
               </div>
-              <div className="text-[#5C616B] text-[11px]">
+              <div className="text-[#6F6C64] text-[11px]">
                 Payload hash: sha256:7f4c9b8e1a... • Context depth: 14.8k tokens • Isolation: Containerized
               </div>
             </div>

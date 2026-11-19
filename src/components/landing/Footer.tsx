@@ -5,13 +5,13 @@ import { ArrowUpRight, GitBranch, ShieldCheck } from "lucide-react"
 
 export function Footer() {
   return (
-    <footer className="bg-[#050608] text-[#8E95A2] py-16 px-6 border-t border-[#161820]">
+    <footer className="bg-[#050608] text-[#A5A29A] py-16 px-6 border-t border-[#161820]">
       <div className="max-w-7xl mx-auto space-y-12">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-8 pb-12 border-b border-[#161820]">
           {/* Logo & Vision (2 cols) */}
           <div className="col-span-2 space-y-4">
             <Link href="/" className="flex items-center gap-2.5">
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#161920] border border-[#2B313D] text-white">
+              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#16171A] border border-[#2D3036] text-white">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                   <path
                     d="M8 1.75 14 4.5 8 7.25 2 4.5 8 1.75Z"
@@ -36,17 +36,17 @@ export function Footer() {
                 </svg>
               </span>
               <span className="text-sm font-bold tracking-[0.08em] text-white">
-                MODEL<span className="text-[#D5222D]">VAULT</span>
+                MODEL<span className="text-[#F5A623]">VAULT</span>
               </span>
             </Link>
 
-            <p className="text-xs text-[#737982] max-w-sm leading-relaxed">
+            <p className="text-xs text-[#6F6C64] max-w-sm leading-relaxed">
               The AI development command center. Orchestrating autonomous coding agents, visual workflows, and cloud execution with enterprise rigor.
             </p>
 
             <div className="flex items-center gap-2 pt-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#101217] border border-[#1E222A] text-[10px] font-mono text-[#27C93F]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#27C93F] animate-pulse" />
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#0D0E10] border border-[#1E2024] text-[10px] font-mono text-[#63C08A]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#63C08A] animate-pulse" />
                 <span>All Systems Operational (12ms)</span>
               </span>
             </div>
@@ -132,13 +132,13 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <span className="text-[#5C616B]">SOC2 Type II Report</span>
+                <span className="text-[#6F6C64]">SOC2 Type II Report</span>
               </li>
               <li>
-                <span className="text-[#5C616B]">Zero-Data Retention</span>
+                <span className="text-[#6F6C64]">Zero-Data Retention</span>
               </li>
               <li>
-                <span className="text-[#5C616B]">Self-Hosted Runners</span>
+                <span className="text-[#6F6C64]">Self-Hosted Runners</span>
               </li>
               <li>
                 <Link href="/login" className="hover:text-white transition-colors">
@@ -150,7 +150,7 @@ export function Footer() {
         </div>
 
         {/* Bottom Row */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono text-[#5C616B]">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono text-[#6F6C64]">
           <div>
             © 2026 MODELVAULT Technologies Inc. All rights reserved.
           </div>

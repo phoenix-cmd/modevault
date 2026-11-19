@@ -27,7 +27,7 @@ export function Hero() {
   }, [])
 
   return (
-    <section className="relative pt-32 pb-20 px-6 bg-[#08090C] text-white border-b border-[#1E222A] overflow-hidden">
+    <section className="relative pt-32 pb-20 px-6 bg-[#08090A] text-white border-b border-[#1E2024] overflow-hidden">
       {/* Subtle structural grid lines (Rig.ai architectural feel) */}
       <div
         className="absolute inset-0 pointer-events-none opacity-[0.035]"
@@ -42,22 +42,22 @@ export function Hero() {
         {/* Badge */}
         <div
           ref={badgeRef}
-          className="inline-flex items-center gap-2 rounded-full border border-[#262A34] bg-[#12141A] px-3.5 py-1 text-xs font-mono text-[#A0A6AF] mb-8 shadow-xs"
+          className="inline-flex items-center gap-2 rounded-full border border-[#2D3036] bg-[#16171A] px-3.5 py-1 text-xs font-mono text-[#A5A29A] mb-8"
         >
-          <span className="h-1.5 w-1.5 rounded-full bg-[#D5222D] animate-pulse" />
+          <span className="h-1.5 w-1.5 rounded-full bg-[#F5A623] animate-pulse" />
           <span>AUTONOMOUS SOFTWARE DEVELOPMENT SUITE</span>
-          <span className="text-[#5C616B]">/</span>
+          <span className="text-[#6F6C64]">/</span>
           <span className="text-white">v2.4 READY</span>
         </div>
 
         {/* Headline */}
         <h1
           ref={titleRef}
-          className="text-4xl sm:text-6xl md:text-7xl font-bold tracking-tight text-white max-w-4xl leading-[1.08] mb-6"
+          className="text-[38px] font-display font-medium leading-[1.04] tracking-[-0.035em] sm:text-[56px] md:text-[64px] text-white max-w-4xl leading-[1.08] mb-6"
         >
           Your AI team.
           <br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-[#E0E2E8] to-[#8C92A0]">
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-[#F1EFE9] to-[#6F6C64]">
             One command center.
           </span>
         </h1>
@@ -65,7 +65,7 @@ export function Hero() {
         {/* Supporting Copy */}
         <p
           ref={subtitleRef}
-          className="text-base sm:text-lg md:text-xl text-[#8E95A2] max-w-2xl leading-relaxed mb-10 font-normal"
+          className="text-base sm:text-lg md:text-xl text-[#A5A29A] max-w-2xl leading-relaxed mb-10 font-normal"
         >
           Orchestrate intelligent coding agents, automate multi-step development pipelines, and govern subscriptions, API tokens, and code security from one powerful workspace.
         </p>
@@ -77,15 +77,15 @@ export function Hero() {
         >
           <Link
             href="/overview"
-            className="w-full sm:w-auto flex items-center justify-center gap-2.5 rounded-md bg-white px-7 py-3.5 text-sm font-semibold text-[#08090C] hover:bg-[#E8EAED] active:scale-[0.98] transition-all shadow-md group"
+            className="w-full sm:w-auto flex items-center justify-center gap-2.5 rounded-md bg-[#F5A623] px-7 py-3.5 text-sm font-semibold text-[#08090A] hover:bg-[#D98A12] active:scale-[0.98] transition-all group"
           >
             <span>Launch Command Center</span>
-            <ArrowRight className="h-4 w-4 text-[#D5222D] group-hover:translate-x-1 transition-transform" />
+            <ArrowRight className="h-4 w-4 text-[#08090A] group-hover:translate-x-1 transition-transform" />
           </Link>
 
           <Link
             href="#orchestration"
-            className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-md border border-[#2B313D] bg-[#12141A]/70 px-7 py-3.5 text-sm font-medium text-[#C2C1C9] hover:text-white hover:border-[#3E4554] hover:bg-[#161820] active:scale-[0.98] transition-all"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-md border border-[#2D3036] bg-[#16171A]/70 px-7 py-3.5 text-sm font-medium text-[#C9C5BC] hover:text-white hover:border-[#3A3D44] hover:bg-[#161820] active:scale-[0.98] transition-all"
           >
             <span>Explore the Platform</span>
           </Link>
@@ -94,10 +94,10 @@ export function Hero() {
         {/* Architectural Ticker / Stats Bar */}
         <div
           ref={statsRef}
-          className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl border-y border-[#1E222A] py-4 mb-14 text-left"
+          className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl border-y border-[#1E2024] py-4 mb-14 text-left"
         >
-          <div className="px-3 border-r border-[#1E222A] last:border-r-0">
-            <span className="block text-[10px] font-mono uppercase tracking-wider text-[#737982]">
+          <div className="px-3 border-r border-[#1E2024] last:border-r-0">
+            <span className="block text-[10px] font-mono uppercase tracking-wider text-[#6F6C64]">
               Multi-Agent Mesh
             </span>
             <span className="text-sm font-semibold text-white">
@@ -105,8 +105,8 @@ export function Hero() {
             </span>
           </div>
 
-          <div className="px-3 md:border-r border-[#1E222A]">
-            <span className="block text-[10px] font-mono uppercase tracking-wider text-[#737982]">
+          <div className="px-3 md:border-r border-[#1E2024]">
+            <span className="block text-[10px] font-mono uppercase tracking-wider text-[#6F6C64]">
               Verification Engine
             </span>
             <span className="text-sm font-semibold text-white">
@@ -114,8 +114,8 @@ export function Hero() {
             </span>
           </div>
 
-          <div className="px-3 border-r border-[#1E222A] last:border-r-0">
-            <span className="block text-[10px] font-mono uppercase tracking-wider text-[#737982]">
+          <div className="px-3 border-r border-[#1E2024] last:border-r-0">
+            <span className="block text-[10px] font-mono uppercase tracking-wider text-[#6F6C64]">
               Resource Intel
             </span>
             <span className="text-sm font-semibold text-white">
@@ -124,7 +124,7 @@ export function Hero() {
           </div>
 
           <div className="px-3">
-            <span className="block text-[10px] font-mono uppercase tracking-wider text-[#737982]">
+            <span className="block text-[10px] font-mono uppercase tracking-wider text-[#6F6C64]">
               Git Architecture
             </span>
             <span className="text-sm font-semibold text-white">

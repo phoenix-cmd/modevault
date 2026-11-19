@@ -73,30 +73,30 @@ export function HeroProductDemo() {
   }, [])
 
   return (
-    <div className="w-full rounded-xl border border-[#2B313D] bg-[#0E1015] shadow-2xl overflow-hidden text-left">
+    <div className="w-full rounded-none border border-[#2D3036] bg-[#0D0E10] overflow-hidden text-left">
       {/* Window Titlebar */}
-      <div className="flex flex-wrap items-center justify-between border-b border-[#1E222A] bg-[#12141A] px-4 py-2.5 gap-2">
+      <div className="flex flex-wrap items-center justify-between border-b border-[#1E2024] bg-[#16171A] px-4 py-2.5 gap-2">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-[#FF5F56]/80" />
             <span className="h-2.5 w-2.5 rounded-full bg-[#FFBD2E]/80" />
-            <span className="h-2.5 w-2.5 rounded-full bg-[#27C93F]/80" />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#63C08A]/80" />
           </div>
-          <div className="h-3.5 w-px bg-[#26282E]" />
-          <div className="flex items-center gap-2 font-mono text-xs text-[#A0A6AF]">
-            <GitBranch className="h-3.5 w-3.5 text-[#D5222D]" />
+          <div className="h-3.5 w-px bg-[#2D3036]" />
+          <div className="flex items-center gap-2 font-mono text-xs text-[#A5A29A]">
+            <GitBranch className="h-3.5 w-3.5 text-[#F5A623]" />
             <span className="text-white font-medium">modelvault</span>
-            <span className="text-[#5C616B]">/</span>
+            <span className="text-[#6F6C64]">/</span>
             <span>feat/oauth-pkce-verifier</span>
           </div>
         </div>
 
         <div className="flex items-center gap-3 text-[11px] font-mono">
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#1A1D24] text-[#A0A6AF] border border-[#2A2E38]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#27C93F] animate-pulse" />
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#1E2024] text-[#A5A29A] border border-[#2D3036]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#63C08A] animate-pulse" />
             <span>3 AGENTS ACTIVE</span>
           </div>
-          <div className="hidden sm:flex items-center gap-1.5 text-[#737982]">
+          <div className="hidden sm:flex items-center gap-1.5 text-[#6F6C64]">
             <span>BURN:</span>
             <span className="text-white font-medium">4,260 tkn ($0.0134)</span>
           </div>
@@ -106,13 +106,13 @@ export function HeroProductDemo() {
       {/* Main Grid: Left Agent Roster + Right Code/Inspect View */}
       <div className="grid grid-cols-1 lg:grid-cols-12 min-h-[440px]">
         {/* Left Column: Live Agent Coordination (5 cols) */}
-        <div className="lg:col-span-5 border-b lg:border-b-0 lg:border-r border-[#1E222A] bg-[#0B0C10] p-4 flex flex-col justify-between space-y-4">
+        <div className="lg:col-span-5 border-b lg:border-b-0 lg:border-r border-[#1E2024] bg-[#0A0B0D] p-4 flex flex-col justify-between space-y-4">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-[#737982]">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-[#6F6C64]">
                 Active Agent Mesh
               </span>
-              <span className="text-[11px] font-mono text-[#D5222D] flex items-center gap-1">
+              <span className="text-[11px] font-mono text-[#F5A623] flex items-center gap-1">
                 <RotateCw className="h-3 w-3 animate-spin" />
                 <span>Orchestrating</span>
               </span>
@@ -128,8 +128,8 @@ export function HeroProductDemo() {
                     onClick={() => setSelectedAgent(agent.id)}
                     className={`w-full text-left p-3 rounded-lg border transition-all ${
                       isSelected
-                        ? "border-[#D5222D]/60 bg-[#161820] shadow-sm"
-                        : "border-[#1E222A] bg-[#12141A]/60 hover:bg-[#15171F]"
+                        ? "border-[#F5A623]/60 bg-[#161820]"
+                        : "border-[#1E2024] bg-[#16171A]/60 hover:bg-[#16171A]"
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1.5">
@@ -137,35 +137,35 @@ export function HeroProductDemo() {
                         <span className="font-semibold text-xs text-white">
                           {agent.name}
                         </span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#1F232B] text-[#A0A6AF]">
+                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#1F2024] text-[#A5A29A]">
                           {agent.role}
                         </span>
                       </div>
                       {agent.status === "completed" && (
-                        <span className="flex items-center gap-1 text-[10px] font-mono text-[#27C93F]">
+                        <span className="flex items-center gap-1 text-[10px] font-mono text-[#63C08A]">
                           <CheckCircle2 className="h-3 w-3" />
                           <span>DONE</span>
                         </span>
                       )}
                       {agent.status === "running" && (
-                        <span className="flex items-center gap-1 text-[10px] font-mono text-[#D5222D]">
-                          <span className="h-1.5 w-1.5 rounded-full bg-[#D5222D] animate-ping" />
+                        <span className="flex items-center gap-1 text-[10px] font-mono text-[#F5A623]">
+                          <span className="h-1.5 w-1.5 rounded-full bg-[#F5A623] animate-ping" />
                           <span>STREAMING</span>
                         </span>
                       )}
                       {agent.status === "queued" && (
-                        <span className="flex items-center gap-1 text-[10px] font-mono text-[#737982]">
+                        <span className="flex items-center gap-1 text-[10px] font-mono text-[#6F6C64]">
                           <Clock className="h-3 w-3" />
                           <span>QUEUED</span>
                         </span>
                       )}
                     </div>
 
-                    <p className="text-[11px] text-[#A0A6AF] line-clamp-2 leading-relaxed">
+                    <p className="text-[11px] text-[#A5A29A] line-clamp-2 leading-relaxed">
                       {agent.task}
                     </p>
 
-                    <div className="mt-2.5 pt-2 border-t border-[#1E222A] flex items-center justify-between text-[10px] font-mono text-[#5C616B]">
+                    <div className="mt-2.5 pt-2 border-t border-[#1E2024] flex items-center justify-between text-[10px] font-mono text-[#6F6C64]">
                       <span>Model: {agent.model}</span>
                       <span className="text-white/80">{agent.tokens}</span>
                     </div>
@@ -176,28 +176,28 @@ export function HeroProductDemo() {
           </div>
 
           {/* Quick Execution Status Banner */}
-          <div className="p-2.5 rounded-md border border-[#242933] bg-[#12141A] flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2 text-[#A0A6AF]">
-              <ShieldCheck className="h-4 w-4 text-[#27C93F]" />
+          <div className="p-2.5 rounded-md border border-[#2D3036] bg-[#16171A] flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2 text-[#A5A29A]">
+              <ShieldCheck className="h-4 w-4 text-[#63C08A]" />
               <span className="text-[11px] font-mono">AST Gate: Enforced</span>
             </div>
-            <span className="text-[10px] font-mono text-[#27C93F] bg-[#27C93F]/10 px-2 py-0.5 rounded border border-[#27C93F]/20">
+            <span className="text-[10px] font-mono text-[#63C08A] bg-[#63C08A]/10 px-2 py-0.5 rounded border border-[#63C08A]/20">
               0 Violations
             </span>
           </div>
         </div>
 
         {/* Right Column: Code Diff / Live Terminal (7 cols) */}
-        <div className="lg:col-span-7 bg-[#0E1015] flex flex-col justify-between">
+        <div className="lg:col-span-7 bg-[#0D0E10] flex flex-col justify-between">
           {/* Editor Header / Tab Switcher */}
-          <div className="flex items-center justify-between border-b border-[#1E222A] bg-[#12141A] px-4">
+          <div className="flex items-center justify-between border-b border-[#1E2024] bg-[#16171A] px-4">
             <div className="flex items-center space-x-1">
               <button
                 onClick={() => setActiveTab("diff")}
                 className={`flex items-center gap-1.5 py-2.5 px-3 text-xs font-mono border-b-2 transition-colors ${
                   activeTab === "diff"
-                    ? "border-[#D5222D] text-white font-medium bg-[#0E1015]"
-                    : "border-transparent text-[#737982] hover:text-[#A0A6AF]"
+                    ? "border-[#F5A623] text-white font-medium bg-[#0D0E10]"
+                    : "border-transparent text-[#6F6C64] hover:text-[#A5A29A]"
                 }`}
               >
                 <FileCode2 className="h-3.5 w-3.5" />
@@ -208,8 +208,8 @@ export function HeroProductDemo() {
                 onClick={() => setActiveTab("terminal")}
                 className={`flex items-center gap-1.5 py-2.5 px-3 text-xs font-mono border-b-2 transition-colors ${
                   activeTab === "terminal"
-                    ? "border-[#D5222D] text-white font-medium bg-[#0E1015]"
-                    : "border-transparent text-[#737982] hover:text-[#A0A6AF]"
+                    ? "border-[#F5A623] text-white font-medium bg-[#0D0E10]"
+                    : "border-transparent text-[#6F6C64] hover:text-[#A5A29A]"
                 }`}
               >
                 <Terminal className="h-3.5 w-3.5" />
@@ -220,16 +220,16 @@ export function HeroProductDemo() {
                 onClick={() => setActiveTab("security")}
                 className={`flex items-center gap-1.5 py-2.5 px-3 text-xs font-mono border-b-2 transition-colors ${
                   activeTab === "security"
-                    ? "border-[#D5222D] text-white font-medium bg-[#0E1015]"
-                    : "border-transparent text-[#737982] hover:text-[#A0A6AF]"
+                    ? "border-[#F5A623] text-white font-medium bg-[#0D0E10]"
+                    : "border-transparent text-[#6F6C64] hover:text-[#A5A29A]"
                 }`}
               >
-                <ShieldCheck className="h-3.5 w-3.5 text-[#27C93F]" />
+                <ShieldCheck className="h-3.5 w-3.5 text-[#63C08A]" />
                 <span>Verification Report</span>
               </button>
             </div>
 
-            <span className="hidden sm:inline-block text-[10px] font-mono text-[#5C616B]">
+            <span className="hidden sm:inline-block text-[10px] font-mono text-[#6F6C64]">
               TypeScript 5.8 (Strict)
             </span>
           </div>
@@ -238,90 +238,90 @@ export function HeroProductDemo() {
           <div className="p-4 flex-1 font-mono text-xs overflow-x-auto leading-relaxed">
             {activeTab === "diff" && (
               <div className="space-y-1">
-                <div className="text-[#5C616B] text-[11px] pb-2 border-b border-[#1E222A] flex justify-between">
+                <div className="text-[#6F6C64] text-[11px] pb-2 border-b border-[#1E2024] flex justify-between">
                   <span>@@ -14,6 +14,19 @@ export interface PkceChallenge</span>
-                  <span className="text-[#27C93F]">+13 lines added</span>
+                  <span className="text-[#63C08A]">+13 lines added</span>
                 </div>
-                <div className="text-[#737982] pl-2">  method: 'S256' | 'plain';</div>
-                <div className="text-[#737982] pl-2">  createdAt: Date;</div>
-                <div className="text-[#737982] pl-2">{'}'}</div>
-                <div className="bg-[#27C93F]/10 text-[#54E285] px-2 py-0.5 rounded border-l-2 border-[#27C93F]">
+                <div className="text-[#6F6C64] pl-2">  method: 'S256' | 'plain';</div>
+                <div className="text-[#6F6C64] pl-2">  createdAt: Date;</div>
+                <div className="text-[#6F6C64] pl-2">{'}'}</div>
+                <div className="bg-[#63C08A]/10 text-[#63C08A] px-2 py-0.5 rounded border-l-2 border-[#63C08A]">
                   + export async function verifyCodeChallenge(
                 </div>
-                <div className="bg-[#27C93F]/10 text-[#54E285] px-2 py-0.5 rounded border-l-2 border-[#27C93F]">
+                <div className="bg-[#63C08A]/10 text-[#63C08A] px-2 py-0.5 rounded border-l-2 border-[#63C08A]">
                   +   verifier: string,
                 </div>
-                <div className="bg-[#27C93F]/10 text-[#54E285] px-2 py-0.5 rounded border-l-2 border-[#27C93F]">
+                <div className="bg-[#63C08A]/10 text-[#63C08A] px-2 py-0.5 rounded border-l-2 border-[#63C08A]">
                   +   challenge: string
                 </div>
-                <div className="bg-[#27C93F]/10 text-[#54E285] px-2 py-0.5 rounded border-l-2 border-[#27C93F]">
+                <div className="bg-[#63C08A]/10 text-[#63C08A] px-2 py-0.5 rounded border-l-2 border-[#63C08A]">
                   + ): Promise&lt;boolean&gt; {'{'}
                 </div>
-                <div className="bg-[#27C93F]/10 text-[#54E285] px-2 py-0.5 rounded border-l-2 border-[#27C93F]">
+                <div className="bg-[#63C08A]/10 text-[#63C08A] px-2 py-0.5 rounded border-l-2 border-[#63C08A]">
                   +   const raw = new TextEncoder().encode(verifier);
                 </div>
-                <div className="bg-[#27C93F]/10 text-[#54E285] px-2 py-0.5 rounded border-l-2 border-[#27C93F]">
+                <div className="bg-[#63C08A]/10 text-[#63C08A] px-2 py-0.5 rounded border-l-2 border-[#63C08A]">
                   +   const hash = await crypto.subtle.digest(&apos;SHA-256&apos;, raw);
                 </div>
-                <div className="bg-[#27C93F]/10 text-[#54E285] px-2 py-0.5 rounded border-l-2 border-[#27C93F]">
+                <div className="bg-[#63C08A]/10 text-[#63C08A] px-2 py-0.5 rounded border-l-2 border-[#63C08A]">
                   +   const computed = toBase64Url(new Uint8Array(hash));
                 </div>
-                <div className="bg-[#27C93F]/10 text-[#54E285] px-2 py-0.5 rounded border-l-2 border-[#27C93F]">
+                <div className="bg-[#63C08A]/10 text-[#63C08A] px-2 py-0.5 rounded border-l-2 border-[#63C08A]">
                   +   return constantTimeCompare(computed, challenge);
                 </div>
-                <div className="bg-[#27C93F]/10 text-[#54E285] px-2 py-0.5 rounded border-l-2 border-[#27C93F]">
+                <div className="bg-[#63C08A]/10 text-[#63C08A] px-2 py-0.5 rounded border-l-2 border-[#63C08A]">
                   + {'}'}
                 </div>
-                <div className="text-[#737982] pl-2"> </div>
+                <div className="text-[#6F6C64] pl-2"> </div>
               </div>
             )}
 
             {activeTab === "terminal" && (
-              <div className="space-y-1.5 text-[11px] text-[#A0A6AF]">
-                <div className="text-[#5C616B]">[23:14:02.102] ORCHESTRATOR: Execution plan generated (3 tasks)</div>
-                <div className="text-[#5C616B]">[23:14:02.418] TASK_1: ArchitectAgent created schema specs (1.8s)</div>
-                <div className="text-[#54E285]">[23:14:03.110] TASK_2: BackendAgent streamed src/auth/pkce.ts (2,840 tokens)</div>
-                <div className="text-[#E2B755]">[23:14:03.950] TASK_3: AST Security Scanner initialized...</div>
-                <div className="text-[#54E285]">[23:14:04.220] AUDIT: 0 CWE issues detected, constantTimeCompare verified</div>
+              <div className="space-y-1.5 text-[11px] text-[#A5A29A]">
+                <div className="text-[#6F6C64]">[23:14:02.102] ORCHESTRATOR: Execution plan generated (3 tasks)</div>
+                <div className="text-[#6F6C64]">[23:14:02.418] TASK_1: ArchitectAgent created schema specs (1.8s)</div>
+                <div className="text-[#63C08A]">[23:14:03.110] TASK_2: BackendAgent streamed src/auth/pkce.ts (2,840 tokens)</div>
+                <div className="text-[#F5A623]">[23:14:03.950] TASK_3: AST Security Scanner initialized...</div>
+                <div className="text-[#63C08A]">[23:14:04.220] AUDIT: 0 CWE issues detected, constantTimeCompare verified</div>
                 <div className="text-white flex items-center gap-2 pt-2">
-                  <span className="text-[#D5222D]">modelvault&gt;</span>
+                  <span className="text-[#F5A623]">modelvault&gt;</span>
                   <span>ready for review & pull request merge</span>
-                  <span className="h-3 w-1.5 bg-[#D5222D] animate-pulse" />
+                  <span className="h-3 w-1.5 bg-[#F5A623] animate-pulse" />
                 </div>
               </div>
             )}
 
             {activeTab === "security" && (
               <div className="space-y-3">
-                <div className="flex items-center justify-between p-2.5 rounded bg-[#161820] border border-[#2B313D]">
+                <div className="flex items-center justify-between p-2.5 rounded bg-[#161820] border border-[#2D3036]">
                   <div className="flex items-center gap-2">
-                    <ShieldCheck className="h-5 w-5 text-[#27C93F]" />
+                    <ShieldCheck className="h-5 w-5 text-[#63C08A]" />
                     <div>
                       <div className="text-xs font-semibold text-white">Cryptographic Verification Passed</div>
-                      <div className="text-[10px] text-[#737982]">Policy: Strict Enterprise RuleSet v4</div>
+                      <div className="text-[10px] text-[#6F6C64]">Policy: Strict Enterprise RuleSet v4</div>
                     </div>
                   </div>
-                  <span className="text-xs font-mono font-bold text-[#27C93F] bg-[#27C93F]/10 px-2 py-1 rounded">
+                  <span className="text-xs font-mono font-bold text-[#63C08A] bg-[#63C08A]/10 px-2 py-1 rounded">
                     Score 99/100
                   </span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-[11px]">
-                  <div className="p-2 rounded bg-[#12141A] border border-[#1E222A]">
-                    <span className="text-[#737982] block text-[10px]">CWE-330 Entropy Check</span>
-                    <span className="text-[#27C93F] font-semibold">Clean (crypto.subtle)</span>
+                  <div className="p-2 rounded bg-[#16171A] border border-[#1E2024]">
+                    <span className="text-[#6F6C64] block text-[10px]">CWE-330 Entropy Check</span>
+                    <span className="text-[#63C08A] font-semibold">Clean (crypto.subtle)</span>
                   </div>
-                  <div className="p-2 rounded bg-[#12141A] border border-[#1E222A]">
-                    <span className="text-[#737982] block text-[10px]">Timing Attack Defense</span>
-                    <span className="text-[#27C93F] font-semibold">constantTimeCompare()</span>
+                  <div className="p-2 rounded bg-[#16171A] border border-[#1E2024]">
+                    <span className="text-[#6F6C64] block text-[10px]">Timing Attack Defense</span>
+                    <span className="text-[#63C08A] font-semibold">constantTimeCompare()</span>
                   </div>
-                  <div className="p-2 rounded bg-[#12141A] border border-[#1E222A]">
-                    <span className="text-[#737982] block text-[10px]">TypeScript Coverage</span>
+                  <div className="p-2 rounded bg-[#16171A] border border-[#1E2024]">
+                    <span className="text-[#6F6C64] block text-[10px]">TypeScript Coverage</span>
                     <span className="text-white font-semibold">100% Strict</span>
                   </div>
-                  <div className="p-2 rounded bg-[#12141A] border border-[#1E222A]">
-                    <span className="text-[#737982] block text-[10px]">Unit Test Harness</span>
-                    <span className="text-[#27C93F] font-semibold">4 / 4 Passed (14ms)</span>
+                  <div className="p-2 rounded bg-[#16171A] border border-[#1E2024]">
+                    <span className="text-[#6F6C64] block text-[10px]">Unit Test Harness</span>
+                    <span className="text-[#63C08A] font-semibold">4 / 4 Passed (14ms)</span>
                   </div>
                 </div>
               </div>
@@ -329,21 +329,21 @@ export function HeroProductDemo() {
           </div>
 
           {/* Bottom Execution Bar */}
-          <div className="border-t border-[#1E222A] bg-[#12141A] px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2 text-[#737982] font-mono text-[11px]">
-              <span className="h-2 w-2 rounded-full bg-[#27C93F]" />
+          <div className="border-t border-[#1E2024] bg-[#16171A] px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 text-[#6F6C64] font-mono text-[11px]">
+              <span className="h-2 w-2 rounded-full bg-[#63C08A]" />
               <span>Synthesized by Claude 3.7 + DeepSeek V3</span>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setActiveTab("security")}
-                className="px-3 py-1 rounded border border-[#2B313D] text-[11px] font-mono text-[#A0A6AF] hover:text-white hover:bg-[#1A1D24] transition-colors"
+                className="px-3 py-1 rounded border border-[#2D3036] text-[11px] font-mono text-[#A5A29A] hover:text-white hover:bg-[#1E2024] transition-colors"
               >
                 Inspect Audit
               </button>
               <button
                 onClick={() => setActiveTab("diff")}
-                className="px-3 py-1 rounded bg-[#D5222D] text-white text-[11px] font-mono font-medium hover:bg-[#B81C25] transition-colors shadow-xs"
+                className="px-3 py-1 rounded bg-[#F5A623] text-white text-[11px] font-mono font-medium hover:bg-[#D98A12] transition-colors"
               >
                 Approve & Merge
               </button>

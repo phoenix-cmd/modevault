@@ -52,24 +52,24 @@ export function ProblemSection() {
     <section
       id="problem"
       ref={sectionRef}
-      className="py-24 px-6 bg-[#F8F9FB] text-[#17191C] border-b border-[#E8EAED]"
+      className="py-24 px-6 bg-[#F6F4EF] text-[#15140F] border-b border-[#E2DDD3]"
     >
       <div ref={contentRef} className="max-w-6xl mx-auto space-y-16">
         {/* Editorial Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#E8EAED] pb-10">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-[#E2DDD3] pb-10">
           <div className="space-y-3 max-w-2xl">
-            <div className="flex items-center gap-2 font-mono text-xs font-semibold uppercase tracking-wider text-[#737982]">
-              <span className="text-[#D5222D]">01</span>
+            <div className="flex items-center gap-2 font-mono text-xs font-semibold uppercase tracking-wider text-[#6F6C64]">
+              <span className="text-[#A4610A]">01</span>
               <span>/</span>
               <span>The Industry Dilemma</span>
             </div>
-            <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-[#17191C] leading-tight">
+            <h2 className="text-[30px] font-display font-medium leading-[1.08] tracking-[-0.03em] sm:text-[46px] text-[#15140F] leading-tight">
               AI multiplied raw code velocity.
               <br />
-              <span className="text-[#737982]">It multiplied engineering chaos.</span>
+              <span className="text-[#6F6C64]">It multiplied engineering chaos.</span>
             </h2>
           </div>
-          <p className="text-sm sm:text-base text-[#5C616B] max-w-md leading-relaxed">
+          <p className="text-sm sm:text-base text-[#6F6C64] max-w-md leading-relaxed">
             Without a unified command center, autonomous coding agents operate as untracked silos—burning credits, introducing vulnerabilities, and fragmenting developer teams.
           </p>
         </div>
@@ -79,28 +79,28 @@ export function ProblemSection() {
           {PROBLEMS.map((item) => (
             <div
               key={item.code}
-              className="p-8 rounded-xl bg-white border border-[#E8EAED] shadow-xs hover:border-[#D5222D]/40 transition-colors flex flex-col justify-between space-y-6"
+              className="p-8 rounded-none bg-[#FFFEFB] border border-[#E2DDD3] hover:border-[#F5A623]/40 transition-colors flex flex-col justify-between space-y-6"
             >
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs font-bold text-[#D5222D] px-2 py-0.5 rounded bg-[#D5222D]/8 border border-[#D5222D]/20">
+                  <span className="font-mono text-xs font-bold text-[#A4610A] px-2 py-0.5 rounded bg-[#F5A623]/8 border border-[#F5A623]/20">
                     PROBLEM {item.code}
                   </span>
-                  <span className="font-mono text-[10px] tracking-wider text-[#9AA0A8] uppercase">
+                  <span className="font-mono text-[10px] tracking-wider text-[#6F6C64] uppercase">
                     {item.tag}
                   </span>
                 </div>
-                <h3 className="text-lg font-bold text-[#17191C] tracking-tight">
+                <h3 className="text-lg font-bold text-[#15140F] tracking-tight">
                   {item.title}
                 </h3>
-                <p className="text-sm text-[#5C616B] leading-relaxed">
+                <p className="text-sm text-[#6F6C64] leading-relaxed">
                   {item.description}
                 </p>
               </div>
 
-              <div className="pt-4 border-t border-[#F2F3F5] flex items-center justify-between font-mono text-xs text-[#737982]">
+              <div className="pt-4 border-t border-[#E2DDD3] flex items-center justify-between font-mono text-xs text-[#6F6C64]">
                 <span>Status: Unresolved in legacy workflows</span>
-                <span className="text-[#D5222D] font-semibold">Risk: High</span>
+                <span className="text-[#A4610A] font-semibold">Risk: High</span>
               </div>
             </div>
           ))}

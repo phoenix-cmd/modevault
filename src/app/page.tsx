@@ -12,7 +12,7 @@ import { Footer } from "@/components/landing/Footer"
 
 export default function LandingPage() {
   return (
-    <main className="min-h-screen bg-[#08090C] text-white selection:bg-[#D5222D]/20 selection:text-white">
+    <main className="min-h-screen bg-[#08090A] text-white selection:bg-[#F5A623]/20 selection:text-white">
       <Navbar />
       <Hero />
       <ProblemSection />

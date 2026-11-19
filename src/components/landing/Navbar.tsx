@@ -20,14 +20,14 @@ export function Navbar() {
     <header
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-200 ${
         scrolled
-          ? "bg-[#08090C]/90 backdrop-blur-md border-b border-[#1E222A] py-3"
+          ? "bg-[#08090A]/90 backdrop-blur-md border-b border-[#1E2024] py-3"
           : "bg-transparent border-b border-white/[0.06] py-4"
       }`}
     >
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 group">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#161920] border border-[#2B313D] text-white shadow-xs group-hover:border-[#D5222D] transition-colors">
+          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[#16171A] border border-[#2D3036] text-white group-hover:border-[#F5A623] transition-colors">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path
                 d="M8 1.75 14 4.5 8 7.25 2 4.5 8 1.75Z"
@@ -53,16 +53,16 @@ export function Navbar() {
           </span>
           <div className="flex flex-col">
             <span className="text-sm font-bold tracking-[0.08em] text-white">
-              MODEL<span className="text-[#D5222D]">VAULT</span>
+              MODEL<span className="text-[#F5A623]">VAULT</span>
             </span>
-            <span className="text-[9px] font-mono tracking-wider text-[#737982] uppercase leading-none">
+            <span className="text-[9px] font-mono tracking-wider text-[#6F6C64] uppercase leading-none">
               Command Center
             </span>
           </div>
         </Link>
 
         {/* Desktop Navigation */}
-        <nav className="hidden lg:flex items-center gap-7 text-xs font-medium text-[#A0A6AF]">
+        <nav className="hidden lg:flex items-center gap-7 text-xs font-medium text-[#A5A29A]">
           <Link href="#problem" className="hover:text-white transition-colors">
             The Problem
           </Link>
@@ -77,7 +77,7 @@ export function Navbar() {
           </Link>
           <Link href="#verification" className="hover:text-white transition-colors flex items-center gap-1.5">
             <span>Verification</span>
-            <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-[#D5222D]/15 text-[#D5222D] border border-[#D5222D]/30">
+            <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-[#F5A623]/15 text-[#F5A623] border border-[#F5A623]/30">
               AST
             </span>
           </Link>
@@ -93,23 +93,23 @@ export function Navbar() {
         <div className="hidden sm:flex items-center gap-3">
           <Link
             href="/login"
-            className="px-3.5 py-2 text-xs font-semibold text-[#C2C1C9] hover:text-white transition-colors"
+            className="px-3.5 py-2 text-xs font-semibold text-[#C9C5BC] hover:text-white transition-colors"
           >
             Sign In
           </Link>
           <Link
             href="/overview"
-            className="flex items-center gap-2 rounded-md bg-white px-4 py-2 text-xs font-semibold text-[#08090C] hover:bg-[#E8EAED] active:scale-[0.98] transition-all shadow-sm group"
+            className="flex items-center gap-2 rounded-md bg-[#F5A623] px-4 py-2 text-xs font-semibold text-[#08090A] hover:bg-[#D98A12] active:scale-[0.98] transition-all group"
           >
             <span>Launch Command Center</span>
-            <ArrowRight className="h-3.5 w-3.5 text-[#D5222D] group-hover:translate-x-0.5 transition-transform" />
+            <ArrowRight className="h-3.5 w-3.5 text-[#08090A] group-hover:translate-x-0.5 transition-transform" />
           </Link>
         </div>
 
         {/* Mobile Menu Toggle */}
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="lg:hidden p-2 text-[#A0A6AF] hover:text-white rounded-md border border-[#26282E]"
+          className="lg:hidden p-2 text-[#A5A29A] hover:text-white rounded-md border border-[#2D3036]"
           aria-label="Toggle menu"
         >
           {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -118,8 +118,8 @@ export function Navbar() {
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
-        <div className="lg:hidden border-b border-[#1E222A] bg-[#08090C] px-6 py-5 space-y-4">
-          <nav className="flex flex-col space-y-3 text-sm font-medium text-[#A0A6AF]">
+        <div className="lg:hidden border-b border-[#1E2024] bg-[#08090A] px-6 py-5 space-y-4">
+          <nav className="flex flex-col space-y-3 text-sm font-medium text-[#A5A29A]">
             <Link
               href="#problem"
               onClick={() => setMobileMenuOpen(false)}
@@ -170,19 +170,19 @@ export function Navbar() {
               Team Governance
             </Link>
           </nav>
-          <div className="pt-3 border-t border-[#1E222A] flex flex-col gap-2.5">
+          <div className="pt-3 border-t border-[#1E2024] flex flex-col gap-2.5">
             <Link
               href="/login"
-              className="w-full text-center py-2.5 text-xs font-semibold text-[#C2C1C9] hover:text-white border border-[#26282E] rounded-md"
+              className="w-full text-center py-2.5 text-xs font-semibold text-[#C9C5BC] hover:text-white border border-[#2D3036] rounded-md"
             >
               Sign In
             </Link>
             <Link
               href="/overview"
-              className="w-full flex items-center justify-center gap-2 rounded-md bg-white py-2.5 text-xs font-semibold text-[#08090C]"
+              className="w-full flex items-center justify-center gap-2 rounded-md bg-[#F5A623] py-2.5 text-xs font-semibold text-[#08090A]"
             >
               <span>Launch Command Center</span>
-              <ArrowRight className="h-3.5 w-3.5 text-[#D5222D]" />
+              <ArrowRight className="h-3.5 w-3.5 text-[#08090A]" />
             </Link>
           </div>
         </div>
