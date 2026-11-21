@@ -160,144 +160,142 @@ export default function SubscriptionsPage() {
   ]
 
   return (
-    <div className="space-y-7 pb-16">
+    <div className="mx-auto max-w-7xl space-y-8 pb-16">
       <PageHeader
         eyebrow="Intelligence · Portfolio"
         title="Subscriptions"
-        description="Every AI plan and developer account in one portfolio, with live quota and renewal tracking."
+        description="Every AI plan and developer account in one portfolio, with live quota, renewal, and spend tracking."
         action={
-          <button onClick={openCreate} className="btn-primary">
+          <button onClick={openCreate} className="btn-primary btn-sm">
             <Plus className="h-3.5 w-3.5" strokeWidth={2.2} />
             Add subscription
           </button>
         }
       />
 
-      {loading ? (
-        <StatBandSkeleton columns={3} />
-      ) : (
-        <StatBand items={metrics} columns={3} />
-      )}
+      {loading ? <StatBandSkeleton columns={3} /> : <StatBand items={metrics} columns={3} />}
 
-      <div className="flex flex-col gap-3 border-b border-line pb-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="relative min-w-0 flex-1 lg:max-w-sm">
-          <Search
-            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3"
-            strokeWidth={2}
-          />
-          <input
-            type="text"
-            placeholder="Search provider, plan or notes…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="field field-sm pl-8"
-          />
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="select select-sm w-auto"
-            aria-label="Filter by status"
-          >
-            <option value="all">All statuses</option>
-            <option value="active">Active</option>
-            <option value="paused">Paused</option>
-            <option value="trial">Trial</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-
-          <select
-            value={providerFilter}
-            onChange={(e) => setProviderFilter(e.target.value)}
-            className="select select-sm w-auto"
-            aria-label="Filter by provider"
-          >
-            <option value="all">All providers</option>
-            {PROVIDER_LIST.map((p) => (
-              <option key={p.slug} value={p.slug}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="select select-sm w-auto"
-            aria-label="Filter by category"
-          >
-            <option value="all">All categories</option>
-            <option value="consumer">Consumer</option>
-            <option value="api">API account</option>
-          </select>
-
-          <div className="segmented ml-auto lg:ml-0" role="group" aria-label="View mode">
-            <button
-              onClick={() => setViewMode("list")}
-              className={`segmented-item ${
-                viewMode === "list" ? "segmented-item-active" : ""
-              }`}
-              aria-pressed={viewMode === "list"}
-            >
-              <List className="h-3.5 w-3.5" strokeWidth={1.8} />
-              <span className="hidden sm:inline">Table</span>
-            </button>
-            <button
-              onClick={() => setViewMode("grid")}
-              className={`segmented-item ${
-                viewMode === "grid" ? "segmented-item-active" : ""
-              }`}
-              aria-pressed={viewMode === "grid"}
-            >
-              <LayoutGrid className="h-3.5 w-3.5" strokeWidth={1.8} />
-              <span className="hidden sm:inline">Cards</span>
-            </button>
+      <section className="border-t border-line pt-5">
+        <div className="flex flex-col gap-3 border-b border-line pb-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">Subscription register</h2>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">Filter, review, and manage tracked plans, quotas, and renewals.</p>
           </div>
-        </div>
-      </div>
 
-      {loading ? (
-        <div className="panel overflow-hidden">
-          <div className="flex items-center gap-6 border-b border-line bg-surface-2/60 px-4 py-2.5">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="skeleton h-2.5 w-16" />
-            ))}
-          </div>
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-3 border-b border-line px-4 py-3.5 last:border-b-0"
-            >
-              <div className="skeleton h-7 w-7 rounded-[6px]" />
-              <div className="flex-1 space-y-1.5">
-                <div className="skeleton h-3.5 w-32" />
-                <div className="skeleton h-2.5 w-20" />
-              </div>
-              <div className="skeleton hidden h-3.5 w-16 sm:block" />
-              <div className="skeleton h-5 w-14 rounded" />
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="relative min-w-0 flex-1 sm:min-w-[220px]">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3" strokeWidth={2} />
+              <input
+                type="text"
+                placeholder="Search provider, plan or notes…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="field field-sm pl-8"
+              />
             </div>
-          ))}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="select select-sm w-auto" aria-label="Filter by status">
+                <option value="all">All statuses</option>
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+                <option value="trial">Trial</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+
+              <select value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)} className="select select-sm w-auto" aria-label="Filter by provider">
+                <option value="all">All providers</option>
+                {PROVIDER_LIST.map((p) => (
+                  <option key={p.slug} value={p.slug}>{p.name}</option>
+                ))}
+              </select>
+
+              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="select select-sm w-auto" aria-label="Filter by category">
+                <option value="all">All categories</option>
+                <option value="consumer">Consumer</option>
+                <option value="api">API account</option>
+              </select>
+
+              <div className="segmented" role="group" aria-label="View mode">
+                <button
+                  onClick={() => setViewMode("list")}
+                  className={`segmented-item ${viewMode === "list" ? "segmented-item-active" : ""}`}
+                  aria-pressed={viewMode === "list"}
+                >
+                  <List className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  <span className="hidden sm:inline">Table</span>
+                </button>
+                <button
+                  onClick={() => setViewMode("grid")}
+                  className={`segmented-item ${viewMode === "grid" ? "segmented-item-active" : ""}`}
+                  aria-pressed={viewMode === "grid"}
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  <span className="hidden sm:inline">Cards</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-      ) : filtered.length === 0 ? (
-        <EmptyState
-          icon={Layers}
-          title="No subscriptions found"
-          description={
-            hasActiveFilters
-              ? "No AI services match your current filters. Try clearing them or searching for another provider."
-              : "Start monitoring your AI stack by adding your first subscription or API account."
-          }
-          actionLabel="Add subscription"
-          onAction={openCreate}
-        />
-      ) : viewMode === "grid" ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((sub) => (
-            <SubscriptionCard
-              key={sub.id}
-              subscription={sub}
+
+        {loading ? (
+          <div className="border-b border-line">
+            <div className="flex items-center gap-6 border-b border-line bg-surface-2/40 px-2 py-2.5">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="skeleton h-2.5 w-16" />
+              ))}
+            </div>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 border-b border-line py-3.5 last:border-b-0">
+                <div className="skeleton h-7 w-7 rounded-[6px]" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="skeleton h-3.5 w-32" />
+                  <div className="skeleton h-2.5 w-20" />
+                </div>
+                <div className="skeleton hidden h-3.5 w-16 sm:block" />
+                <div className="skeleton h-5 w-14 rounded" />
+              </div>
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="py-8">
+            <EmptyState
+              icon={Layers}
+              title="No subscriptions found"
+              description={
+                hasActiveFilters
+                  ? "No AI services match your current filters. Try clearing them or searching for another provider."
+                  : "Start monitoring your AI stack by adding your first subscription or API account."
+              }
+              actionLabel="Add subscription"
+              onAction={openCreate}
+            />
+          </div>
+        ) : viewMode === "grid" ? (
+          <div className="grid grid-cols-1 gap-3 py-5 sm:grid-cols-2 xl:grid-cols-3">
+            {filtered.map((sub) => (
+              <SubscriptionCard
+                key={sub.id}
+                subscription={sub}
+                onEdit={(s) => {
+                  setEditingSub(s)
+                  setIsFormOpen(true)
+                }}
+                onDelete={(id) => {
+                  setDeletingId(id)
+                  setIsDeleteOpen(true)
+                }}
+                onRecordUsage={(s) => {
+                  setUsageSub(s)
+                  setIsUsageOpen(true)
+                }}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="py-1">
+            <SubscriptionList
+              subscriptions={filtered}
               onEdit={(s) => {
                 setEditingSub(s)
                 setIsFormOpen(true)
@@ -311,25 +309,9 @@ export default function SubscriptionsPage() {
                 setIsUsageOpen(true)
               }}
             />
-          ))}
-        </div>
-      ) : (
-        <SubscriptionList
-          subscriptions={filtered}
-          onEdit={(s) => {
-            setEditingSub(s)
-            setIsFormOpen(true)
-          }}
-          onDelete={(id) => {
-            setDeletingId(id)
-            setIsDeleteOpen(true)
-          }}
-          onRecordUsage={(s) => {
-            setUsageSub(s)
-            setIsUsageOpen(true)
-          }}
-        />
-      )}
+          </div>
+        )}
+      </section>
 
       <SubscriptionForm
         subscription={editingSub}
@@ -353,9 +335,7 @@ export default function SubscriptionsPage() {
 
       <DeleteDialog
         subscriptionId={deletingId}
-        subscriptionName={
-          deletingSub ? `${deletingSub.providerName} ${deletingSub.planName}` : undefined
-        }
+        subscriptionName={deletingSub ? `${deletingSub.providerName} ${deletingSub.planName}` : undefined}
         isOpen={isDeleteOpen}
         onClose={() => {
           setIsDeleteOpen(false)

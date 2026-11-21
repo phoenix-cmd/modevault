@@ -104,33 +104,25 @@ export default function AnalyticsPage() {
     : []
 
   return (
-    <div className="space-y-8 pb-16">
+    <div className="mx-auto max-w-7xl space-y-8 pb-16">
       <PageHeader
         eyebrow="Intelligence · Analysis"
         title="Analytics"
-        description="Spend trends, portfolio composition and optimization signals across your AI stack."
+        description="Spend trends, portfolio composition, optimization signals, and model pricing references across your AI stack."
         action={
           <div className="flex items-center gap-3">
-            <span className="font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-ink-3">
-              Currency
-            </span>
+            <span className="font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-ink-3">Currency</span>
             <div className="segmented" role="group" aria-label="Display currency">
               <button
                 onClick={() => setCurrency("INR")}
-                className={cn(
-                  "segmented-item",
-                  currency === "INR" && "segmented-item-active"
-                )}
+                className={cn("segmented-item", currency === "INR" && "segmented-item-active")}
                 aria-pressed={currency === "INR"}
               >
                 INR ₹
               </button>
               <button
                 onClick={() => setCurrency("USD")}
-                className={cn(
-                  "segmented-item",
-                  currency === "USD" && "segmented-item-active"
-                )}
+                className={cn("segmented-item", currency === "USD" && "segmented-item-active")}
                 aria-pressed={currency === "USD"}
               >
                 USD $
@@ -140,28 +132,17 @@ export default function AnalyticsPage() {
         }
       />
 
-      {loading || !data?.overview ? (
-        <StatBandSkeleton columns={4} />
-      ) : (
-        <StatBand items={metrics} columns={4} />
-      )}
+      {loading || !data?.overview ? <StatBandSkeleton columns={4} /> : <StatBand items={metrics} columns={4} />}
 
       {loading ? (
         <SpendingChartsSkeleton />
       ) : data ? (
-        <SpendingCharts
-          monthlySpending={data.spendingTrends}
-          providerSpending={providerSpending}
-        />
+        <SpendingCharts monthlySpending={data.spendingTrends} providerSpending={providerSpending} />
       ) : null}
 
-      {!loading && data?.insights && (
-        <SmartIntelligenceCards insights={data.insights} />
-      )}
+      {!loading && data?.insights && <SmartIntelligenceCards insights={data.insights} />}
 
-      {!loading && data?.modelComparison && (
-        <ModelComparisonTable models={data.modelComparison} />
-      )}
+      {!loading && data?.modelComparison && <ModelComparisonTable models={data.modelComparison} />}
     </div>
   )
 }

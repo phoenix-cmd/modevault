@@ -120,11 +120,11 @@ export default function ProjectsPage() {
   const gitCount = projects.length - zipCount
 
   return (
-    <div className="mx-auto max-w-7xl space-y-7 pb-16">
+    <div className="mx-auto max-w-7xl space-y-8 pb-16">
       <PageHeader
         eyebrow="Workspace · Repositories"
         title="Projects"
-        description="Unified repositories, persistent cloud sandboxes, and agent worktree contexts."
+        description="Repository register for attached codebases, provisioned sandboxes, and recorded agent execution contexts."
         action={
           <button onClick={() => setModalOpen(true)} className="btn-primary">
             <Plus className="h-4 w-4" strokeWidth={2} />
@@ -139,48 +139,29 @@ export default function ProjectsPage() {
         <StatBand
           columns={4}
           items={[
-            {
-              label: "Projects",
-              value: String(projects.length),
-              meta: "Attached to this workspace",
-            },
-            {
-              label: "Sandboxes",
-              value: String(projects.length),
-              meta: "Provisioned runtimes",
-            },
-            {
-              label: "Executions",
-              value: String(executionCount),
-              meta: "Recorded agent runs",
-            },
-            {
-              label: "Archive / Git",
-              value: `${zipCount} / ${gitCount}`,
-              meta: "Import source mix",
-            },
+            { label: "Projects", value: String(projects.length), meta: "Attached to this workspace" },
+            { label: "Sandboxes", value: String(projects.length), meta: "Provisioned runtimes" },
+            { label: "Executions", value: String(executionCount), meta: "Recorded agent runs" },
+            { label: "Archive / Git", value: `${zipCount} / ${gitCount}`, meta: "Import source mix" },
           ]}
         />
       )}
 
-      <section className="border-t border-line pt-5">
+      <section className="border-t border-line pt-6">
         <div className="flex flex-wrap items-end justify-between gap-4 pb-4">
           <div>
-            <h2 className="panel-title">Repositories</h2>
-            <p className="panel-subtitle">
-              Each project owns its sandbox, branch history, and agent runtime.
+            <h2 className="font-display text-[16px] font-medium tracking-[-0.02em] text-ink">Repository register</h2>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">
+              Each entry links to its agent execution context. Import via ZIP or Git to provision a sandbox.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative">
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3"
-                strokeWidth={1.8}
-              />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3" strokeWidth={1.8} />
               <input
                 type="text"
-                placeholder="Search projects…"
+                placeholder="Search by name or description"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 aria-label="Search projects"
@@ -188,140 +169,121 @@ export default function ProjectsPage() {
               />
             </div>
             <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">
-              {filtered.length} of {projects.length}
+              {filtered.length} shown · {projects.length} total
             </span>
           </div>
         </div>
 
         {loading ? (
-          <div className="border-t border-line">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-6 border-b border-line px-3 py-5 last:border-b-0"
-              >
-                <div className="skeleton h-2.5 w-6" />
-                <div className="flex-1 space-y-2">
+          <div className="border-y border-line">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="grid grid-cols-[2.5rem_minmax(0,1fr)_8rem_9rem_7rem_7rem] items-center gap-4 border-b border-line px-3 py-4 last:border-b-0">
+                <div className="skeleton h-2.5 w-5" />
+                <div className="space-y-2">
                   <div className="skeleton h-3 w-48" />
-                  <div className="skeleton h-2.5 w-72" />
+                  <div className="skeleton h-2.5 w-72 max-w-full" />
                 </div>
-                <div className="skeleton h-2.5 w-24" />
+                <div className="skeleton h-2.5 w-16" />
+                <div className="skeleton h-2.5 w-20" />
+                <div className="skeleton h-2.5 w-12" />
+                <div className="skeleton h-2.5 w-8" />
               </div>
             ))}
           </div>
+        ) : projects.length === 0 ? (
+          <div className="border border-dashed border-line-strong bg-surface/60 px-6 py-14">
+            <div className="mx-auto max-w-xl text-center">
+              <FolderGit2 className="mx-auto h-8 w-8 text-ink-3" strokeWidth={1.4} />
+              <h3 className="mt-4 font-display text-[17px] font-medium tracking-[-0.02em] text-ink">No projects attached</h3>
+              <p className="mt-2 text-[13px] leading-relaxed text-ink-3">
+                Upload a ZIP archive or import a Git repository to provision a sandbox and begin agent runs. Repository records and execution counts will appear in this register.
+              </p>
+              <button onClick={() => setModalOpen(true)} className="btn-primary mt-5">
+                <Plus className="h-4 w-4" strokeWidth={2} />
+                Create first project
+              </button>
+            </div>
+          </div>
         ) : filtered.length === 0 ? (
-          <div className="border border-dashed border-line bg-surface px-6 py-16 text-center">
-            <FolderGit2
-              className="mx-auto h-8 w-8 text-ink-3"
-              strokeWidth={1.4}
-            />
-            <h3 className="mt-4 font-display text-[16px] font-medium tracking-[-0.02em] text-ink">
-              No projects found
-            </h3>
-            <p className="mx-auto mt-1.5 max-w-sm text-[12.5px] leading-relaxed text-ink-3">
-              Upload a ZIP archive or import a Git repository to start
-              orchestrating coding agents.
+          <div className="border border-dashed border-line-strong bg-surface/60 px-6 py-12">
+            <p className="text-[13px] font-medium text-ink">No matching projects</p>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">
+              No repositories match “{search}”. Adjust the search to view existing records.
             </p>
-            <button
-              onClick={() => setModalOpen(true)}
-              className="btn-primary mt-5"
-            >
-              <Plus className="h-4 w-4" strokeWidth={2} />
-              Create your first project
-            </button>
+            <button onClick={() => setSearch("")} className="btn-secondary btn-sm mt-4">Clear search</button>
           </div>
         ) : (
-          <div>
-            <div className="hidden grid-cols-[2.5rem_minmax(0,1fr)_8rem_9rem_7rem_7rem_2rem] items-center gap-4 border-y border-line bg-surface-2/40 px-3 py-2 font-mono text-[9.5px] uppercase tracking-[0.12em] text-ink-3 md:grid">
-              <span>#</span>
-              <span>Project</span>
-              <span>Stack</span>
-              <span>Runtime</span>
-              <span>Source</span>
-              <span>Runs</span>
-              <span />
-            </div>
+          <div className="overflow-x-auto">
+            <div className="min-w-[720px]">
+              <div className="grid grid-cols-[2.5rem_minmax(0,1.4fr)_7.5rem_8.5rem_6.5rem_5.5rem_4.5rem] items-center gap-4 border-y border-line bg-surface-2/30 px-3 py-2 font-mono text-[9.5px] uppercase tracking-[0.12em] text-ink-3">
+                <span>Idx</span>
+                <span>Repository</span>
+                <span>Stack</span>
+                <span>Runtime</span>
+                <span>Source</span>
+                <span className="text-right">Runs</span>
+                <span className="text-right">Action</span>
+              </div>
 
-            {filtered.map((proj, index) => {
-              const env = proj.environments?.[0]
-              const source = proj.sources?.[0]
-              return (
-                <Link
-                  key={proj.id}
-                  href={`/agents?projectId=${proj.id}`}
-                  className="group grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-4 border-b border-line px-3 py-4 transition-colors duration-150 hover:bg-surface-2/40 md:grid-cols-[2.5rem_minmax(0,1fr)_8rem_9rem_7rem_7rem_2rem]"
-                >
-                  <span className="font-mono text-[10px] tabular-nums text-ink-3">
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
+              {filtered.map((proj, index) => {
+                const env = proj.environments?.[0]
+                const source = proj.sources?.[0]
+                return (
+                  <Link
+                    key={proj.id}
+                    href={`/agents?projectId=${proj.id}`}
+                    className="group grid grid-cols-[2.5rem_minmax(0,1.4fr)_7.5rem_8.5rem_6.5rem_5.5rem_4.5rem] items-center gap-4 border-b border-line px-3 py-4 transition-colors duration-150 hover:bg-surface-2/40"
+                  >
+                    <span className="font-mono text-[10px] tabular-nums text-ink-3">{String(index + 1).padStart(2, "0")}</span>
 
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <FileCode
-                        className="h-3.5 w-3.5 shrink-0 text-accent"
-                        strokeWidth={1.8}
-                      />
-                      <h3 className="truncate text-[13px] font-medium text-ink">
-                        {proj.name}
-                      </h3>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <FileCode className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.7} />
+                        <h3 className="truncate text-[13.5px] font-medium tracking-[-0.01em] text-ink">{proj.name}</h3>
+                      </div>
+                      <p className="mt-1 line-clamp-1 text-[12px] text-ink-3">
+                        {proj.description || "Repository attached to this workspace. Open to view agent execution context."}
+                      </p>
                     </div>
-                    <p className="mt-1 line-clamp-1 text-[11.5px] text-ink-3">
-                      {proj.description ||
-                        "Production repository attached to the MODELVAULT orchestrator."}
-                    </p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[9.5px] uppercase tracking-[0.06em] text-ink-3 md:hidden">
-                      <span>
-                        {proj.framework?.toUpperCase() || "UNKNOWN"} ·{" "}
-                        {proj.language || "—"}
-                      </span>
-                      <span>
-                        :{env?.runPort || 3000} ({env?.runtime || "node-20"})
-                      </span>
-                      <span>{proj.executions?.length || 0} runs</span>
-                    </div>
-                  </div>
 
-                  <span className="hidden truncate font-mono text-[10px] uppercase tracking-[0.06em] text-ink-2 md:block">
-                    {proj.framework?.toUpperCase() || "—"}
-                    <span className="block text-ink-3">{proj.language || "—"}</span>
-                  </span>
-
-                  <span className="hidden font-mono text-[10px] text-ink-2 md:block">
-                    :{env?.runPort || 3000}
-                    <span className="block text-ink-3">
-                      {env?.runtime || "node-20"}
+                    <span className="truncate font-mono text-[10px] uppercase tracking-[0.06em] text-ink-2">
+                      {proj.framework?.toUpperCase() || "—"}
+                      <span className="mt-0.5 block normal-case tracking-normal text-ink-3">{proj.language || "—"}</span>
                     </span>
-                  </span>
 
-                  <span className="hidden font-mono text-[10px] uppercase tracking-[0.06em] text-ink-2 md:block">
-                    {source?.type === "zip_upload" ? "Archive" : "Git"}
-                  </span>
+                    <span className="font-mono text-[10px] tabular-nums text-ink-2">
+                      :{env?.runPort || 3000}
+                      <span className="mt-0.5 block text-ink-3">{env?.runtime || "node-20"}</span>
+                    </span>
 
-                  <span className="hidden font-mono text-[11px] tabular-nums text-ink-2 md:block">
-                    {proj.executions?.length || 0}
-                  </span>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-2">
+                      {source?.type === "zip_upload" ? "Archive" : "Git"}
+                    </span>
 
-                  <span className="flex justify-end">
-                    <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3 transition-colors group-hover:text-accent">
+                    <span className="text-right font-mono text-[11px] tabular-nums text-ink">
+                      {proj.executions?.length || 0}
+                    </span>
+
+                    <span className="text-right font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3 transition-colors group-hover:text-accent">
                       Open
                     </span>
-                  </span>
-                </Link>
-              )
-            })}
+                  </Link>
+                )
+              })}
+            </div>
           </div>
         )}
       </section>
 
       {/* New project modal */}
       {modalOpen && (
-        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[1px] animate-fade-in">
           <div
             ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="new-project-title"
-            className="panel max-h-[90vh] w-full max-w-lg overflow-y-auto shadow-2xl"
+            className="panel max-h-[90vh] w-full max-w-lg overflow-y-auto shadow-float"
           >
             <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
               <div>

@@ -184,16 +184,21 @@ export default function OverviewPage() {
     fetchData()
   }, [])
 
+  const trackedProviders = new Set(subscriptions.map((s) => s.providerId || s.providerName)).size
+  const meteredSubscriptions = subscriptions.filter(
+    (s) => (s.quotaMessages ?? 0) > 0 || (s.quotaRequests ?? 0) > 0 || (s.quotaTokens ?? 0) > 0 || (s.quotaCredits ?? 0) > 0
+  ).length
+
   return (
-    <div className="space-y-8 pb-16">
+    <div className="mx-auto max-w-7xl space-y-8 pb-16">
       <PageHeader
         eyebrow={`Workspace · ${reportingPeriod}`}
         title="Overview"
-        description="Spend, quota pressure, and agent activity across your AI stack."
+        description="Operational summary of spend, resource quotas, and recorded activity across connected providers and subscriptions."
         action={
           <>
             <Link href="/analytics" className="btn-secondary">
-              View analytics
+              Open analytics
             </Link>
             <Link href="/subscriptions" className="btn-primary">
               <Plus className="h-3.5 w-3.5" strokeWidth={2.2} />
@@ -209,38 +214,85 @@ export default function OverviewPage() {
         <SummaryCards data={summary} />
       )}
 
-      <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)]">
-        <div className="min-w-0 space-y-8">
-          {loading ? (
-            <SpendingChartsSkeleton />
-          ) : (
-            <SpendingCharts
-              monthlySpending={spendingHistory}
-              providerSpending={providerSpending}
+      <div className="grid gap-8 border-t border-line pt-8 lg:grid-cols-[minmax(0,1.7fr)_minmax(320px,1fr)]">
+        <div className="min-w-0 space-y-10">
+          <section aria-label="Spend and allocation">
+            <SectionLabel
+              title="Spend & allocation"
+              meta="Recorded billing and provider distribution"
             />
-          )}
+            {loading ? (
+              <SpendingChartsSkeleton />
+            ) : spendingHistory.length === 0 && providerSpending.length === 0 ? (
+              <EmptyPanel message="No spending history is recorded yet. Add subscriptions or usage records to populate trend and provider allocation." />
+            ) : (
+              <SpendingCharts
+                monthlySpending={spendingHistory}
+                providerSpending={providerSpending}
+              />
+            )}
+          </section>
 
-          {loading ? (
-            <UsageOverviewSkeleton />
-          ) : (
-            <UsageOverview subscriptions={subscriptions} />
-          )}
+          <section aria-label="Resource quotas">
+            <SectionLabel
+              title="Resource quotas"
+              meta={
+                loading
+                  ? "Metered subscription usage"
+                  : `${meteredSubscriptions} metered of ${subscriptions.length} tracked subscriptions · ${trackedProviders} providers`
+              }
+            />
+            {loading ? (
+              <UsageOverviewSkeleton />
+            ) : subscriptions.length === 0 ? (
+              <EmptyPanel message="No subscriptions are tracked yet. Quota pressure and consumption will appear here once plans with limits are added." />
+            ) : (
+              <UsageOverview subscriptions={subscriptions} />
+            )}
+          </section>
         </div>
 
-        <aside className="min-w-0 space-y-8">
-          {loading ? (
-            <SuggestionsCardSkeleton />
-          ) : (
-            <SuggestionsCard suggestions={suggestions} />
-          )}
+        <aside className="min-w-0 space-y-10 lg:border-l lg:border-line lg:pl-8">
+          <section aria-label="Recommendations">
+            <SectionLabel title="Recommendations" meta="Signals from live records" />
+            {loading ? (
+              <SuggestionsCardSkeleton />
+            ) : (
+              <SuggestionsCard suggestions={suggestions} />
+            )}
+          </section>
 
-          {loading ? (
-            <ActivityFeedSkeleton />
-          ) : (
-            <ActivityFeed activities={activities} />
-          )}
+          <section aria-label="Development activity">
+            <SectionLabel title="Development activity" meta="Recent recorded events" />
+            {loading ? (
+              <ActivityFeedSkeleton />
+            ) : activities.length === 0 ? (
+              <EmptyPanel message="No recent activity recorded yet. Sync, billing, and usage events will appear in this timeline." />
+            ) : (
+              <ActivityFeed activities={activities} />
+            )}
+          </section>
         </aside>
       </div>
+    </div>
+  )
+}
+
+function SectionLabel({ title, meta }: { title: string; meta: string }) {
+  return (
+    <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+      <h2 className="font-display text-[16px] font-medium tracking-[-0.02em] text-ink">
+        {title}
+      </h2>
+      <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">{meta}</p>
+    </div>
+  )
+}
+
+function EmptyPanel({ message }: { message: string }) {
+  return (
+    <div className="border-t border-line py-8">
+      <p className="max-w-2xl text-[13px] leading-relaxed text-ink-3">{message}</p>
     </div>
   )
 }

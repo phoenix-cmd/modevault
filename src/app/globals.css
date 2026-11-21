@@ -3,104 +3,167 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   MODELVAULT — Design tokens
-   Light is the primary experience. Dark is a secondary, system-consistent theme.
+   MODELVAULT — Application design tokens (Engineering Editorial)
+   Light is the default experience. Dark is an optional, thoughtfully redesigned theme.
+   Marketing surfaces remain scoped under .mkt and are not modified.
    ───────────────────────────────────────────────────────────────────────────── */
 
 :root {
   color-scheme: light;
 
-  --mv-bg: #f6f4ef;
-  --mv-surface: #fffefb;
-  --mv-surface-2: #efece5;
-  --mv-surface-3: #e4e0d7;
+  /* Authenticated app surfaces (light editorial) */
+  --mv-bg: #f7f3ec;            /* main background: warm ivory */
+  --mv-surface: #ffffff;       /* main content surfaces */
+  --mv-surface-2: #f1ede6;     /* secondary surfaces: warm neutral */
+  --mv-surface-3: #e9e3da;     /* tertiary / controls */
+  --mv-sidebar: #f4efe6;       /* slightly warmer paper tone */
 
-  --mv-border: #e2ddd3;
-  --mv-border-strong: #c9c3b7;
+  --mv-border: #e6e0d6;        /* fine neutral borders */
+  --mv-border-strong: #d6cfc3; /* low-contrast but clear dividers */
 
-  --mv-text: #15140f;
-  --mv-text-2: #6d685e;
-  --mv-text-3: #857f74;
+  --mv-text: #191919;          /* primary: deep ink */
+  --mv-text-2: #68645f;        /* secondary: charcoal grey */
+  --mv-text-3: #969087;        /* tertiary: muted stone */
 
-  /* Editorial & Brand Palette */
-  --mv-charcoal: #0a0b0d;
-  --mv-neutral-dark: #403a3c;
-  --mv-soft-grey: #c2c1c9;
-  --mv-secondary-grey: #5c5c5c;
-  --mv-muted-slate: #6e7891;
+  /* Brand / accent: burnt orange */
+  --mv-accent: #b45309;
+  --mv-accent-hover: #92400e;
+  --mv-accent-ink: #fffdf8;
+  --mv-accent-soft: rgba(180, 83, 9, 0.08);
+  --mv-accent-border: rgba(180, 83, 9, 0.24);
 
-  /* Signature Accent: Amber */
-  --mv-accent: #a4610a;
-  --mv-accent-hover: #8a5108;
-  --mv-accent-ink: #fffefb;
-  --mv-accent-soft: rgba(164, 97, 10, 0.08);
-  --mv-accent-border: rgba(164, 97, 10, 0.25);
+  /* Status (muted, restrained) */
+  --mv-success: #3f7a5a;
+  --mv-success-soft: rgba(63, 122, 90, 0.1);
+  --mv-warning: #9a6700;
+  --mv-warning-soft: rgba(154, 103, 0, 0.1);
+  --mv-danger: #b42318;
+  --mv-danger-soft: rgba(180, 35, 24, 0.1);
+  --mv-info: #5b6472;          /* slate for neutral/info states */
+  --mv-info-soft: rgba(91, 100, 114, 0.1);
 
-  --mv-success: #1f7a4d;
-  --mv-success-soft: #eaf4ee;
-  --mv-warning: #8a5a00;
-  --mv-warning-soft: #f8f0dd;
-  --mv-danger: #c23b2a;
-  --mv-danger-soft: rgba(194, 59, 42, 0.08);
-  --mv-info: #1f5bb5;
-  --mv-info-soft: #eaf0fa;
+  --mv-ring: rgba(180, 83, 9, 0.22);
+  --mv-glass: rgba(255, 255, 255, 0.92);
 
-  --mv-ring: rgba(164, 97, 10, 0.22);
-  --mv-glass: rgba(255, 254, 251, 0.92);
-
-  --mv-chart-1: #a4610a;
-  --mv-chart-2: #2f7f74;
-  --mv-chart-3: #a34b3d;
-  --mv-chart-4: #4c5566;
-  --mv-grid: rgba(109, 104, 94, 0.16);
+  --mv-chart-1: #b45309;
+  --mv-chart-2: #4f7663;
+  --mv-chart-3: #8b5e55;
+  --mv-chart-4: #6b7280;
+  --mv-grid: rgba(104, 100, 95, 0.14);
 
   --mv-shadow-card: none;
   --mv-shadow-panel: none;
-  --mv-shadow-float: 0 24px 64px -24px rgba(20, 18, 12, 0.28), 0 2px 8px rgba(20, 18, 12, 0.06);
+  --mv-shadow-float: 0 20px 48px -20px rgba(25, 25, 25, 0.18), 0 2px 8px rgba(25, 25, 25, 0.06);
+
+  /* Independent app token namespace */
+  --app-bg: var(--mv-bg);
+  --app-surface: var(--mv-surface);
+  --app-surface-2: var(--mv-surface-2);
+  --app-surface-3: var(--mv-surface-3);
+  --app-sidebar: var(--mv-sidebar);
+  --app-border: var(--mv-border);
+  --app-border-strong: var(--mv-border-strong);
+  --app-text: var(--mv-text);
+  --app-text-2: var(--mv-text-2);
+  --app-text-3: var(--mv-text-3);
+  --app-accent: var(--mv-accent);
+  --app-accent-hover: var(--mv-accent-hover);
+  --app-accent-ink: var(--mv-accent-ink);
+  --app-accent-soft: var(--mv-accent-soft);
+  --app-accent-border: var(--mv-accent-border);
+  --app-success: var(--mv-success);
+  --app-warning: var(--mv-warning);
+  --app-danger: var(--mv-danger);
+  --app-info: var(--mv-info);
 }
 
 .dark {
   color-scheme: dark;
 
-  --mv-bg: #08090a;
-  --mv-surface: #0d0e10;
-  --mv-surface-2: #131417;
-  --mv-surface-3: #1a1c20;
+  /* Editorial dark: warm, restrained instrument panel */
+  --mv-bg: #141311;
+  --mv-surface: #1c1a17;
+  --mv-surface-2: #23201c;
+  --mv-surface-3: #2b2722;
+  --mv-sidebar: #181613;
 
-  --mv-border: #1e2024;
-  --mv-border-strong: #2d3036;
+  --mv-border: #2e2a25;
+  --mv-border-strong: #3b362f;
 
-  --mv-text: #f1efe9;
-  --mv-text-2: #a5a09a;
-  --mv-text-3: #77736c;
+  --mv-text: #f1ede6;
+  --mv-text-2: #b8b1a7;
+  --mv-text-3: #8d867c;
 
-  --mv-accent: #f5a623;
-  --mv-accent-hover: #ffb84d;
-  --mv-accent-ink: #0a0b0d;
-  --mv-accent-soft: rgba(245, 166, 35, 0.1);
-  --mv-accent-border: rgba(245, 166, 35, 0.26);
+  --mv-accent: #d97706;
+  --mv-accent-hover: #e08a1e;
+  --mv-accent-ink: #141311;
+  --mv-accent-soft: rgba(217, 119, 6, 0.12);
+  --mv-accent-border: rgba(217, 119, 6, 0.28);
 
-  --mv-success: #63c08a;
-  --mv-success-soft: rgba(99, 192, 138, 0.1);
-  --mv-warning: #e3b341;
-  --mv-warning-soft: rgba(227, 179, 65, 0.1);
-  --mv-danger: #ef6a57;
-  --mv-danger-soft: rgba(239, 106, 87, 0.1);
-  --mv-info: #79a7ff;
-  --mv-info-soft: rgba(121, 167, 255, 0.1);
+  --mv-success: #6a9f7e;
+  --mv-success-soft: rgba(106, 159, 126, 0.12);
+  --mv-warning: #d4a24c;
+  --mv-warning-soft: rgba(212, 162, 76, 0.12);
+  --mv-danger: #d46a5e;
+  --mv-danger-soft: rgba(212, 106, 94, 0.12);
+  --mv-info: #97a0ab;
+  --mv-info-soft: rgba(151, 160, 171, 0.12);
 
-  --mv-ring: rgba(245, 166, 35, 0.28);
-  --mv-glass: rgba(13, 14, 16, 0.9);
+  --mv-ring: rgba(217, 119, 6, 0.26);
+  --mv-glass: rgba(28, 26, 23, 0.92);
 
-  --mv-chart-1: #f5a623;
-  --mv-chart-2: #58b3a4;
-  --mv-chart-3: #e07a5f;
-  --mv-chart-4: #9aa0aa;
-  --mv-grid: rgba(165, 160, 154, 0.1);
+  --mv-chart-1: #d97706;
+  --mv-chart-2: #6f9b84;
+  --mv-chart-3: #c08474;
+  --mv-chart-4: #9aa3ad;
+  --mv-grid: rgba(184, 177, 167, 0.12);
 
   --mv-shadow-card: none;
   --mv-shadow-panel: none;
-  --mv-shadow-float: 0 28px 72px -24px rgba(0, 0, 0, 0.8), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --mv-shadow-float: 0 24px 64px -24px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.35);
+
+  --app-bg: var(--mv-bg);
+  --app-surface: var(--mv-surface);
+  --app-surface-2: var(--mv-surface-2);
+  --app-surface-3: var(--mv-surface-3);
+  --app-sidebar: var(--mv-sidebar);
+  --app-border: var(--mv-border);
+  --app-border-strong: var(--mv-border-strong);
+  --app-text: var(--mv-text);
+  --app-text-2: var(--mv-text-2);
+  --app-text-3: var(--mv-text-3);
+  --app-accent: var(--mv-accent);
+  --app-accent-hover: var(--mv-accent-hover);
+  --app-accent-ink: var(--mv-accent-ink);
+  --app-accent-soft: var(--mv-accent-soft);
+  --app-accent-border: var(--mv-accent-border);
+  --app-success: var(--mv-success);
+  --app-warning: var(--mv-warning);
+  --app-danger: var(--mv-danger);
+  --app-info: var(--mv-info);
+}
+
+/* Explicit authenticated-app scope (independent namespace anchor) */
+[data-app="vault"] {
+  --app-bg: var(--mv-bg);
+  --app-surface: var(--mv-surface);
+  --app-surface-2: var(--mv-surface-2);
+  --app-surface-3: var(--mv-surface-3);
+  --app-sidebar: var(--mv-sidebar);
+  --app-border: var(--mv-border);
+  --app-border-strong: var(--mv-border-strong);
+  --app-text: var(--mv-text);
+  --app-text-2: var(--mv-text-2);
+  --app-text-3: var(--mv-text-3);
+  --app-accent: var(--mv-accent);
+  --app-accent-hover: var(--mv-accent-hover);
+  --app-accent-ink: var(--mv-accent-ink);
+  --app-accent-soft: var(--mv-accent-soft);
+  --app-accent-border: var(--mv-accent-border);
+  --app-success: var(--mv-success);
+  --app-warning: var(--mv-warning);
+  --app-danger: var(--mv-danger);
+  --app-info: var(--mv-info);
 }
 
 @theme inline {
@@ -115,6 +178,7 @@
   --color-surface: var(--mv-surface);
   --color-surface-2: var(--mv-surface-2);
   --color-surface-3: var(--mv-surface-3);
+  --color-sidebar: var(--mv-sidebar);
 
   --color-line: var(--mv-border);
   --color-line-strong: var(--mv-border-strong);

@@ -70,21 +70,18 @@ export function ApiRecordsTable({ records }: ApiRecordsTableProps) {
   const visible = filtered.slice(0, 50)
 
   return (
-    <section className="panel overflow-hidden">
-      <div className="flex flex-col gap-3 border-b border-line px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+    <section className="border-t border-line pt-5">
+      <div className="flex flex-col gap-3 border-b border-line pb-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h2 className="panel-title">Usage log</h2>
-          <p className="panel-subtitle">
+          <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">Usage log</h2>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">
             {filtered.length} record{filtered.length === 1 ? "" : "s"} in range
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-0 flex-1 sm:min-w-[200px] sm:flex-none">
-            <Search
-              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3"
-              strokeWidth={2}
-            />
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3" strokeWidth={2} />
             <input
               type="text"
               placeholder="Filter by model or provider…"
@@ -94,47 +91,30 @@ export function ApiRecordsTable({ records }: ApiRecordsTableProps) {
             />
           </div>
 
-          <select
-            value={providerFilter}
-            onChange={(e) => setProviderFilter(e.target.value)}
-            className="select select-sm w-auto"
-            aria-label="Filter by provider"
-          >
+          <select value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)} className="select select-sm w-auto" aria-label="Filter by provider">
             <option value="all">All providers</option>
             {providers.map(([slug, name]) => (
-              <option key={slug} value={slug}>
-                {name}
-              </option>
+              <option key={slug} value={slug}>{name}</option>
             ))}
           </select>
 
-          <select
-            value={range}
-            onChange={(e) => setRange(e.target.value)}
-            className="select select-sm w-auto"
-            aria-label="Filter by date range"
-          >
+          <select value={range} onChange={(e) => setRange(e.target.value)} className="select select-sm w-auto" aria-label="Filter by date range">
             {RANGE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
+              <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
         </div>
       </div>
 
       {visible.length === 0 ? (
-        <div className="px-4 py-12 text-center">
+        <div className="border-b border-line py-12">
           <p className="text-[13px] font-medium text-ink">No records found</p>
-          <p className="mt-1 text-[12px] text-ink-3">
-            Try widening the date range or clearing filters.
-          </p>
+          <p className="mt-1 text-[12px] leading-relaxed text-ink-3">Try widening the date range or clearing filters.</p>
         </div>
       ) : (
         <>
-          {/* Desktop table */}
-          <div className="hidden md:block">
-            <table className="data-table">
+          <div className="hidden overflow-x-auto md:block">
+            <table className="data-table min-w-[920px]">
               <thead>
                 <tr>
                   <th>Date</th>
@@ -151,60 +131,32 @@ export function ApiRecordsTable({ records }: ApiRecordsTableProps) {
               <tbody>
                 {visible.map((record) => (
                   <tr key={record.id}>
-                    <td className="whitespace-nowrap font-mono text-[10.5px] text-ink-3 tabular-nums">
-                      {formatDate(record.date)}
-                    </td>
+                    <td className="whitespace-nowrap font-mono text-[10.5px] text-ink-3 tabular-nums">{formatDate(record.date)}</td>
                     <td>
-                      <p className="font-mono text-[11.5px] text-ink">
-                        {record.model || "—"}
-                      </p>
-                      <p className="text-[10.5px] text-ink-3">
-                        {record.apiAccount?.provider?.name || "Provider"}
-                      </p>
+                      <p className="font-mono text-[11.5px] text-ink">{record.model || "—"}</p>
+                      <p className="text-[10.5px] text-ink-3">{record.apiAccount?.provider?.name || "Provider"}</p>
                     </td>
-                    <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">
-                      {formatNumber(record.inputTokens)}
-                    </td>
-                    <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">
-                      {formatNumber(record.outputTokens)}
-                    </td>
-                    <td className="text-right font-mono text-[11px] text-ink-3 tabular-nums">
-                      {record.cachedTokens > 0
-                        ? formatNumber(record.cachedTokens)
-                        : "—"}
-                    </td>
-                    <td className="text-right font-mono text-[11px] font-medium text-ink tabular-nums">
-                      {formatNumber(record.totalTokens)}
-                    </td>
-                    <td className="text-right font-mono text-[11px] text-ink tabular-nums">
-                      {formatCost(record.cost, record.currency)}
-                    </td>
-                    <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">
-                      {record.requestCount}
-                    </td>
-                    <td>
-                      <span className="badge bg-surface-2 text-ink-3">
-                        {record.dataSource.replace("_", " ")}
-                      </span>
-                    </td>
+                    <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">{formatNumber(record.inputTokens)}</td>
+                    <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">{formatNumber(record.outputTokens)}</td>
+                    <td className="text-right font-mono text-[11px] text-ink-3 tabular-nums">{record.cachedTokens > 0 ? formatNumber(record.cachedTokens) : "—"}</td>
+                    <td className="text-right font-mono text-[11px] font-medium text-ink tabular-nums">{formatNumber(record.totalTokens)}</td>
+                    <td className="text-right font-mono text-[11px] text-ink tabular-nums">{formatCost(record.cost, record.currency)}</td>
+                    <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">{record.requestCount}</td>
+                    <td><span className="badge bg-surface-2 text-ink-3">{record.dataSource.replace("_", " ")}</span></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          {/* Mobile list */}
-          <div className="row-divide md:hidden">
+          <div className="border-t border-line md:hidden">
             {visible.map((record) => (
-              <div key={record.id} className="px-4 py-3.5">
+              <div key={record.id} className="border-b border-line py-3.5 last:border-b-0">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate font-mono text-[11.5px] text-ink">
-                      {record.model || "—"}
-                    </p>
+                    <p className="truncate font-mono text-[11.5px] text-ink">{record.model || "—"}</p>
                     <p className="mt-0.5 text-[10.5px] text-ink-3">
-                      {record.apiAccount?.provider?.name || "Provider"} ·{" "}
-                      {formatDate(record.date)}
+                      {record.apiAccount?.provider?.name || "Provider"} · {formatDate(record.date)}
                     </p>
                   </div>
                   <span className="shrink-0 font-mono text-[11.5px] font-medium text-ink tabular-nums">
@@ -213,30 +165,19 @@ export function ApiRecordsTable({ records }: ApiRecordsTableProps) {
                 </div>
 
                 <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[10px] text-ink-3 tabular-nums">
-                  <span>
-                    Total <span className="text-ink-2">{formatNumber(record.totalTokens)}</span>
-                  </span>
-                  <span>
-                    In <span className="text-ink-2">{formatNumber(record.inputTokens)}</span>
-                  </span>
-                  <span>
-                    Out <span className="text-ink-2">{formatNumber(record.outputTokens)}</span>
-                  </span>
-                  <span>
-                    Req <span className="text-ink-2">{record.requestCount}</span>
-                  </span>
-                  <span className="badge ml-auto bg-surface-2 text-ink-3">
-                    {record.dataSource.replace("_", " ")}
-                  </span>
+                  <span>Total <span className="text-ink-2">{formatNumber(record.totalTokens)}</span></span>
+                  <span>In <span className="text-ink-2">{formatNumber(record.inputTokens)}</span></span>
+                  <span>Out <span className="text-ink-2">{formatNumber(record.outputTokens)}</span></span>
+                  <span>Req <span className="text-ink-2">{record.requestCount}</span></span>
+                  <span className="badge ml-auto bg-surface-2 text-ink-3">{record.dataSource.replace("_", " ")}</span>
                 </div>
               </div>
             ))}
           </div>
 
           {filtered.length > visible.length && (
-            <div className="border-t border-line px-4 py-2.5 text-center text-[11px] text-ink-3">
-              Showing {visible.length} of {filtered.length} records — refine
-              filters to narrow results.
+            <div className="border-b border-line py-2.5 text-center text-[11px] text-ink-3">
+              Showing {visible.length} of {filtered.length} records — refine filters to narrow results.
             </div>
           )}
         </>

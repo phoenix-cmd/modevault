@@ -31,7 +31,7 @@ export function SubscriptionCard({
   const monthly = getMonthlyEquivalent(sub.price, sub.billingCycle)
 
   return (
-    <div className="panel relative flex flex-col p-5">
+    <div className="relative flex flex-col border border-line bg-surface p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <ProviderIcon slug={sub.providerSlug} size="md" />

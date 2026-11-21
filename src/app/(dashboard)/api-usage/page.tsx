@@ -105,22 +105,15 @@ export default function ApiUsagePage() {
     : []
 
   return (
-    <div className="space-y-7 pb-16">
+    <div className="mx-auto max-w-7xl space-y-8 pb-16">
       <PageHeader
         eyebrow="Intelligence · Developer APIs"
         title="Usage"
-        description="Token throughput, prepaid credit reserves and per-model unit economics across your developer APIs."
+        description="Token throughput, prepaid credit reserves, and per-model unit economics across your developer API accounts."
         action={
           <>
-            <button
-              onClick={fetchData}
-              disabled={loading}
-              className="btn-secondary"
-            >
-              <RefreshCw
-                className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
-                strokeWidth={1.8}
-              />
+            <button onClick={fetchData} disabled={loading} className="btn-secondary btn-sm">
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} strokeWidth={1.8} />
               Refresh
             </button>
             <button
@@ -128,7 +121,7 @@ export default function ApiUsagePage() {
                 setSelectedAccountId(null)
                 setModalOpen(true)
               }}
-              className="btn-primary"
+              className="btn-primary btn-sm"
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={2.2} />
               Log usage
@@ -137,33 +130,26 @@ export default function ApiUsagePage() {
         }
       />
 
-      {loading || !summary ? (
-        <StatBandSkeleton columns={4} />
-      ) : (
-        <StatBand items={metrics} columns={4} />
-      )}
+      {loading || !summary ? <StatBandSkeleton columns={4} /> : <StatBand items={metrics} columns={4} />}
 
       {loading ? (
-        <section className="panel overflow-hidden">
-          <div className="panel-header">
-            <div className="space-y-2">
-              <div className="skeleton h-3.5 w-32" />
-              <div className="skeleton h-2.5 w-52" />
-            </div>
+        <section className="border-t border-line pt-5">
+          <div className="space-y-2 pb-4">
+            <div className="skeleton h-3.5 w-40" />
+            <div className="skeleton h-2.5 w-64" />
           </div>
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div
-              key={index}
-              className="flex items-center gap-3 border-b border-line px-4 py-3.5 last:border-b-0"
-            >
-              <div className="skeleton h-7 w-7 rounded-[6px]" />
-              <div className="flex-1 space-y-1.5">
-                <div className="skeleton h-3.5 w-32" />
-                <div className="skeleton h-2.5 w-20" />
+          <div className="border-t border-line">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="flex items-center gap-3 border-b border-line py-3.5 last:border-b-0">
+                <div className="skeleton h-7 w-7 rounded-[6px]" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="skeleton h-3.5 w-32" />
+                  <div className="skeleton h-2.5 w-20" />
+                </div>
+                <div className="skeleton h-4 w-16" />
               </div>
-              <div className="skeleton h-4 w-16" />
-            </div>
-          ))}
+            ))}
+          </div>
         </section>
       ) : (
         <ApiAccountsCards
@@ -176,30 +162,25 @@ export default function ApiUsagePage() {
       )}
 
       {loading ? (
-        <div className="grid gap-3 lg:grid-cols-3">
-          <div className="panel px-4 py-4 lg:col-span-2">
+        <section className="grid gap-8 border-t border-line pt-5 lg:grid-cols-3">
+          <div className="lg:col-span-2">
             <div className="skeleton mb-4 h-3.5 w-36" />
-            <div className="skeleton h-[236px] w-full rounded-md" />
+            <div className="skeleton h-[236px] w-full" />
           </div>
-          <div className="panel px-4 py-4">
+          <div>
             <div className="skeleton mb-4 h-3.5 w-28" />
             <div className="space-y-3">
               {Array.from({ length: 5 }).map((_, index) => (
                 <div key={index} className="space-y-1.5">
                   <div className="skeleton h-3 w-full" />
-                  <div className="skeleton h-1 w-full rounded-full" />
+                  <div className="skeleton h-1 w-full" />
                 </div>
               ))}
             </div>
           </div>
-        </div>
+        </section>
       ) : (
-        summary && (
-          <ApiTokenChart
-            dailyTrend={summary.dailyTrend}
-            byModel={summary.byModel}
-          />
-        )
+        summary && <ApiTokenChart dailyTrend={summary.dailyTrend} byModel={summary.byModel} />
       )}
 
       <ApiRecordsTable records={records} />

@@ -16,22 +16,17 @@ interface ModelComparisonTableProps {
 
 export function ModelComparisonTable({ models }: ModelComparisonTableProps) {
   return (
-    <section className="panel overflow-hidden">
-      <div className="panel-header">
+    <section className="border-t border-line pt-5">
+      <div className="flex flex-wrap items-end justify-between gap-3 pb-4">
         <div>
-          <h2 className="panel-title">Model pricing</h2>
-          <p className="panel-subtitle">
-            Official benchmark rates per million tokens
-          </p>
+          <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">Model pricing</h2>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">Reference benchmark rates per million tokens.</p>
         </div>
-        <span className="hidden font-mono text-[9.5px] uppercase tracking-[0.12em] text-ink-3 sm:block">
-          USD · per 1M tokens
-        </span>
+        <span className="hidden font-mono text-[9.5px] uppercase tracking-[0.12em] text-ink-3 sm:block">USD · per 1M tokens</span>
       </div>
 
-      {/* Desktop table */}
-      <div className="hidden md:block">
-        <table className="data-table">
+      <div className="hidden overflow-x-auto border-t border-line md:block">
+        <table className="data-table min-w-[760px]">
           <thead>
             <tr>
               <th>Provider</th>
@@ -46,72 +41,43 @@ export function ModelComparisonTable({ models }: ModelComparisonTableProps) {
           <tbody>
             {models.map((model, index) => (
               <tr key={`${model.provider}-${model.model}-${index}`}>
-                <td className="whitespace-nowrap font-medium text-ink">
-                  {model.provider}
-                </td>
-                <td className="whitespace-nowrap font-mono text-[11.5px] text-ink-2">
-                  {model.model}
-                </td>
-                <td className="whitespace-nowrap font-mono text-[11px] text-ink-3 tabular-nums">
-                  {model.context}
-                </td>
-                <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">
-                  {model.inputPerM}
-                </td>
-                <td className="text-right font-mono text-[11px] font-medium text-ink tabular-nums">
-                  {model.outputPerM}
-                </td>
-                <td className="hidden text-right font-mono text-[11px] text-ink-3 tabular-nums lg:table-cell">
-                  {model.cachedPerM}
-                </td>
-                <td className="hidden max-w-[220px] truncate text-ink-3 xl:table-cell">
-                  {model.bestFor}
-                </td>
+                <td className="whitespace-nowrap font-medium text-ink">{model.provider}</td>
+                <td className="whitespace-nowrap font-mono text-[11.5px] text-ink-2">{model.model}</td>
+                <td className="whitespace-nowrap font-mono text-[11px] text-ink-3 tabular-nums">{model.context}</td>
+                <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">{model.inputPerM}</td>
+                <td className="text-right font-mono text-[11px] font-medium text-ink tabular-nums">{model.outputPerM}</td>
+                <td className="hidden text-right font-mono text-[11px] text-ink-3 tabular-nums lg:table-cell">{model.cachedPerM}</td>
+                <td className="hidden max-w-[220px] truncate text-ink-3 xl:table-cell">{model.bestFor}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* Mobile list */}
-      <div className="row-divide md:hidden">
+      <div className="border-t border-line md:hidden">
         {models.map((model, index) => (
-          <div key={`${model.provider}-${model.model}-${index}`} className="px-4 py-3.5">
+          <div key={`${model.provider}-${model.model}-${index}`} className="border-b border-line py-3.5 last:border-b-0">
             <div className="flex items-baseline justify-between gap-3">
               <div className="min-w-0">
-                <p className="font-mono text-[11.5px] text-ink">
-                  {model.model}
-                </p>
-                <p className="mt-0.5 text-[10.5px] text-ink-3">
-                  {model.provider} · {model.context} context
-                </p>
+                <p className="font-mono text-[11.5px] text-ink">{model.model}</p>
+                <p className="mt-0.5 text-[10.5px] text-ink-3">{model.provider} · {model.context} context</p>
               </div>
             </div>
             <div className="mt-2.5 grid grid-cols-3 gap-3">
               <div>
                 <p className="metric-label">Input</p>
-                <p className="mt-1 font-mono text-[11px] text-ink-2 tabular-nums">
-                  {model.inputPerM}
-                </p>
+                <p className="mt-1 font-mono text-[11px] text-ink-2 tabular-nums">{model.inputPerM}</p>
               </div>
               <div>
                 <p className="metric-label">Output</p>
-                <p className="mt-1 font-mono text-[11px] font-medium text-ink tabular-nums">
-                  {model.outputPerM}
-                </p>
+                <p className="mt-1 font-mono text-[11px] font-medium text-ink tabular-nums">{model.outputPerM}</p>
               </div>
               <div>
                 <p className="metric-label">Cached</p>
-                <p className="mt-1 font-mono text-[11px] text-ink-2 tabular-nums">
-                  {model.cachedPerM}
-                </p>
+                <p className="mt-1 font-mono text-[11px] text-ink-2 tabular-nums">{model.cachedPerM}</p>
               </div>
             </div>
-            {model.bestFor && (
-              <p className="mt-2 line-clamp-2 text-[10.5px] text-ink-3">
-                {model.bestFor}
-              </p>
-            )}
+            {model.bestFor && <p className="mt-2 line-clamp-2 text-[10.5px] text-ink-3">{model.bestFor}</p>}
           </div>
         ))}
       </div>

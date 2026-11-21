@@ -11,11 +11,13 @@ import {
   Bell,
   Check,
   ChevronRight,
+  Command,
   CreditCard,
   LayoutDashboard,
   LogOut,
   Menu,
   Moon,
+  Plus,
   Search,
   Sun,
 } from "lucide-react"
@@ -25,41 +27,41 @@ import type { RawSubscription } from "@/lib/types"
 const PAGE_META: Record<string, { section: string; title: string }> = {
   "/overview": { section: "Workspace", title: "Overview" },
   "/projects": { section: "Workspace", title: "Projects" },
-  "/agents": { section: "Workspace", title: "Agents" },
-  "/workflows": { section: "Workspace", title: "Workflows" },
-  "/studio": { section: "Workspace", title: "Studio" },
-  "/git": { section: "Workspace", title: "Git" },
-  "/models": { section: "Intelligence", title: "Models" },
-  "/api-usage": { section: "Intelligence", title: "Usage" },
-  "/analytics": { section: "Intelligence", title: "Analytics" },
-  "/subscriptions": { section: "Intelligence", title: "Subscriptions" },
-  "/billing": { section: "Intelligence", title: "Billing" },
-  "/calendar": { section: "Intelligence", title: "Renewals" },
-  "/integrations": { section: "Administration", title: "Integrations" },
-  "/organizations": { section: "Administration", title: "Organizations" },
-  "/permissions": { section: "Administration", title: "Permissions" },
-  "/notifications": { section: "Administration", title: "Notifications" },
-  "/settings": { section: "Administration", title: "Settings" },
+  "/agents": { section: "Workspace", title: "Agent Center" },
+  "/workflows": { section: "Workspace", title: "Workflow Builder" },
+  "/studio": { section: "Workspace", title: "Development Studio" },
+  "/git": { section: "Workspace", title: "Git Control" },
+  "/models": { section: "AI Intelligence", title: "Model Library" },
+  "/api-usage": { section: "AI Intelligence", title: "Usage & Limits" },
+  "/analytics": { section: "AI Intelligence", title: "Analytics" },
+  "/subscriptions": { section: "AI Intelligence", title: "Subscriptions & Billing" },
+  "/billing": { section: "AI Intelligence", title: "Billing" },
+  "/calendar": { section: "AI Intelligence", title: "Renewals" },
+  "/integrations": { section: "Management", title: "Integrations" },
+  "/organizations": { section: "Management", title: "Organizations" },
+  "/permissions": { section: "Management", title: "Permissions" },
+  "/notifications": { section: "Management", title: "Notifications" },
+  "/settings": { section: "Management", title: "Settings" },
 }
 
 const SEARCH_PAGES = [
   { label: "Overview", hint: "Workspace", href: "/overview" },
   { label: "Projects", hint: "Workspace", href: "/projects" },
-  { label: "Agents", hint: "Workspace", href: "/agents" },
-  { label: "Workflows", hint: "Workspace", href: "/workflows" },
-  { label: "Studio", hint: "Workspace", href: "/studio" },
-  { label: "Git", hint: "Workspace", href: "/git" },
-  { label: "Models", hint: "Intelligence", href: "/models" },
-  { label: "Usage", hint: "Intelligence", href: "/api-usage" },
-  { label: "Analytics", hint: "Intelligence", href: "/analytics" },
-  { label: "Subscriptions", hint: "Intelligence", href: "/subscriptions" },
-  { label: "Billing", hint: "Intelligence", href: "/billing" },
-  { label: "Renewals", hint: "Intelligence", href: "/calendar" },
-  { label: "Integrations", hint: "Administration", href: "/integrations" },
-  { label: "Organizations", hint: "Administration", href: "/organizations" },
-  { label: "Permissions", hint: "Administration", href: "/permissions" },
-  { label: "Notifications", hint: "Administration", href: "/notifications" },
-  { label: "Settings", hint: "Administration", href: "/settings" },
+  { label: "Agent Center", hint: "Workspace", href: "/agents" },
+  { label: "Workflow Builder", hint: "Workspace", href: "/workflows" },
+  { label: "Development Studio", hint: "Workspace", href: "/studio" },
+  { label: "Git Control", hint: "Workspace", href: "/git" },
+  { label: "Model Library", hint: "AI Intelligence", href: "/models" },
+  { label: "Usage & Limits", hint: "AI Intelligence", href: "/api-usage" },
+  { label: "Analytics", hint: "AI Intelligence", href: "/analytics" },
+  { label: "Subscriptions & Billing", hint: "AI Intelligence", href: "/subscriptions" },
+  { label: "Billing", hint: "AI Intelligence", href: "/billing" },
+  { label: "Renewals", hint: "AI Intelligence", href: "/calendar" },
+  { label: "Integrations", hint: "Management", href: "/integrations" },
+  { label: "Organizations", hint: "Management", href: "/organizations" },
+  { label: "Permissions", hint: "Management", href: "/permissions" },
+  { label: "Notifications", hint: "Management", href: "/notifications" },
+  { label: "Settings", hint: "Management", href: "/settings" },
 ]
 
 interface NotificationItem {
@@ -94,13 +96,19 @@ function timeAgo(value: string) {
   })
 }
 
-export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
+export function Header({
+  onMenuOpen,
+}: {
+  onMenuOpen: () => void
+  sidebarCollapsed?: boolean
+  onToggleSidebar?: () => void
+}) {
   const pathname = usePathname()
   const router = useRouter()
 
   const meta = PAGE_META[pathname] || { section: "Workspace", title: "Dashboard" }
 
-  const [isDark, setIsDark] = useState(true)
+  const [isDark, setIsDark] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -271,7 +279,7 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="fixed inset-0 z-[80] flex items-start justify-center bg-black/25 px-4 pt-[12vh] backdrop-blur-[2px] dark:bg-black/55"
+              className="fixed inset-0 z-[80] flex items-start justify-center bg-ink/20 px-4 pt-[12vh] backdrop-blur-[2px] dark:bg-black/55"
               onMouseDown={(event) => {
                 if (event.target === event.currentTarget) setSearchOpen(false)
               }}
@@ -281,7 +289,7 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -4, scale: 0.99 }}
                 transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                className="glass-panel w-full max-w-[560px] overflow-hidden rounded-xl"
+                className="glass-panel w-full max-w-[560px] overflow-hidden rounded-lg shadow-float"
                 role="dialog"
                 aria-modal="true"
                 aria-label="Search MODELVAULT"
@@ -296,12 +304,9 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
                     placeholder="Search pages, providers, and plans…"
                     className="h-5 flex-1 bg-transparent text-[13.5px] text-ink outline-none placeholder:text-ink-3"
                   />
-                  <button
-                    onClick={() => setSearchOpen(false)}
-                    className="rounded border border-line px-1.5 py-0.5 text-[10px] font-medium text-ink-3 hover:text-ink-2"
-                  >
+                  <kbd className="rounded border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] font-medium text-ink-3">
                     ESC
-                  </button>
+                  </kbd>
                 </div>
 
                 <div className="max-h-[52vh] overflow-y-auto p-1.5">
@@ -311,7 +316,7 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
                     </p>
                   ) : (
                     <>
-                      <p className="px-2.5 pb-1 pt-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-3">
+                      <p className="px-2.5 pb-1 pt-2 font-mono text-[10px] font-medium uppercase tracking-[0.12em] text-ink-3">
                         Navigate
                       </p>
                       {results.map((result, index) => (
@@ -329,19 +334,19 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
                           {result.kind === "page" ? (
                             <LayoutDashboard
                               className="h-4 w-4 shrink-0 text-ink-3"
-                              strokeWidth={1.8}
+                              strokeWidth={1.6}
                             />
                           ) : (
                             <CreditCard
                               className="h-4 w-4 shrink-0 text-ink-3"
-                              strokeWidth={1.8}
+                              strokeWidth={1.6}
                             />
                           )}
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-[13px] font-medium text-ink">
                               {result.label}
                             </span>
-                            <span className="block truncate text-[11.5px] text-ink-3">
+                            <span className="block truncate font-mono text-[10.5px] uppercase tracking-[0.06em] text-ink-3">
                               {result.hint}
                             </span>
                           </span>
@@ -352,9 +357,9 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
                   )}
                 </div>
 
-                <div className="flex items-center justify-between border-t border-line px-4 py-2 text-[10.5px] text-ink-3">
-                  <span>Navigate with ↑ ↓ · Enter to open</span>
-                  <span className="font-medium">MODELVAULT Search</span>
+                <div className="flex items-center justify-between border-t border-line px-4 py-2 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
+                  <span>↑ ↓ navigate · Enter open</span>
+                  <span className="inline-flex items-center gap-1"><Command className="h-3 w-3" />K</span>
                 </div>
               </motion.div>
             </motion.div>
@@ -365,22 +370,22 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
     : null
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line bg-canvas px-4 sm:px-6 lg:px-8">
-      <div className="flex min-w-0 items-center gap-2">
+    <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line bg-canvas/95 px-4 backdrop-blur-sm sm:px-6 lg:px-8">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
         <button
           onClick={onMenuOpen}
           className="icon-btn -ml-1 lg:hidden"
           aria-label="Open navigation"
         >
-          <Menu className="h-4.5 w-4.5" />
+          <Menu className="h-4 w-4" strokeWidth={1.8} />
         </button>
 
-        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2">
+        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 sm:gap-2">
           <span className="hidden font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-ink-3 sm:inline">
             {meta.section}
           </span>
-          <span className="hidden font-mono text-[10px] text-ink-3/60 sm:inline">/</span>
-          <span className="truncate text-[12.5px] font-medium text-ink">
+          <ChevronRight className="hidden h-3 w-3 text-ink-3/50 sm:inline" strokeWidth={1.8} />
+          <span className="truncate font-display text-[14px] font-medium tracking-[-0.02em] text-ink sm:text-[15px]">
             {meta.title}
           </span>
         </nav>
@@ -389,7 +394,7 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
       <div className="flex items-center gap-1 sm:gap-1.5">
         <button
           onClick={() => setSearchOpen(true)}
-          className="hidden h-8 w-[240px] items-center gap-2 rounded border border-line bg-surface px-2.5 text-left font-mono text-[11px] text-ink-3 transition-colors hover:border-line-strong md:flex"
+          className="hidden h-8 w-[220px] items-center gap-2 rounded border border-line bg-surface px-2.5 text-left text-[12px] text-ink-3 transition-colors hover:border-line-strong hover:text-ink-2 md:flex lg:w-[260px]"
         >
           <Search className="h-3.5 w-3.5" strokeWidth={1.8} />
           <span className="flex-1">Search</span>
@@ -402,9 +407,27 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
           onClick={() => setSearchOpen(true)}
           className="icon-btn md:hidden"
           aria-label="Search"
+          title="Search (⌘K)"
         >
-          <Search className="h-4.5 w-4.5" />
+          <Search className="h-4 w-4" strokeWidth={1.8} />
         </button>
+
+        <Link
+          href="/agents"
+          className="hidden h-8 items-center gap-1.5 rounded-md bg-accent px-2.5 text-[12px] font-medium text-accent-ink transition-colors hover:bg-accent-hover sm:inline-flex"
+          title="Quick create"
+        >
+          <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+          <span>Quick create</span>
+        </Link>
+        <Link
+          href="/agents"
+          className="icon-btn sm:hidden"
+          aria-label="Quick create"
+          title="Quick create"
+        >
+          <Plus className="h-4 w-4" strokeWidth={2} />
+        </Link>
 
         <button
           onClick={toggleTheme}
@@ -413,9 +436,9 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
           title={isDark ? "Light theme" : "Dark theme"}
         >
           {isDark ? (
-            <Sun className="h-4.5 w-4.5" strokeWidth={1.8} />
+            <Sun className="h-4 w-4" strokeWidth={1.8} />
           ) : (
-            <Moon className="h-4.5 w-4.5" strokeWidth={1.8} />
+            <Moon className="h-4 w-4" strokeWidth={1.8} />
           )}
         </button>
 
@@ -426,7 +449,7 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
             aria-label="Notifications"
             aria-expanded={notificationsOpen}
           >
-            <Bell className="h-4.5 w-4.5" strokeWidth={1.8} />
+            <Bell className="h-4 w-4" strokeWidth={1.8} />
             {unreadCount > 0 && (
               <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-accent ring-2 ring-canvas" />
             )}
@@ -444,13 +467,13 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -3, scale: 0.99 }}
                   transition={{ duration: 0.14 }}
-                  className="glass-panel absolute right-0 top-[calc(100%+8px)] z-50 w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl"
+                  className="glass-panel absolute right-0 top-[calc(100%+8px)] z-50 w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg shadow-float"
                 >
                   <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-[13px] font-semibold text-ink">Notifications</h3>
+                      <h3 className="text-[13px] font-medium text-ink">Notifications</h3>
                       {unreadCount > 0 && (
-                        <span className="rounded bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold text-accent tnum">
+                        <span className="rounded bg-accent-soft px-1.5 py-0.5 font-mono text-[10px] font-medium text-accent tnum">
                           {unreadCount}
                         </span>
                       )}
@@ -477,7 +500,7 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
                           key={item.id}
                           className={cn(
                             "flex gap-2.5 border-b border-line px-4 py-3 last:border-b-0",
-                            !item.isRead && "bg-accent-soft/40"
+                            !item.isRead && "bg-accent-soft/30"
                           )}
                         >
                           <span
@@ -497,7 +520,7 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
                             <p className="mt-0.5 line-clamp-2 text-[11.5px] leading-relaxed text-ink-2">
                               {item.message}
                             </p>
-                            <p className="mt-1 text-[10.5px] text-ink-3">
+                            <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.04em] text-ink-3">
                               {timeAgo(item.createdAt)}
                             </p>
                           </div>
@@ -508,11 +531,11 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
 
                   <div className="border-t border-line px-4 py-2">
                     <Link
-                      href="/settings"
+                      href="/notifications"
                       onClick={() => setNotificationsOpen(false)}
                       className="text-[11.5px] font-medium text-ink-2 transition-colors hover:text-ink"
                     >
-                      Notification preferences
+                      Open notifications
                     </Link>
                   </div>
                 </motion.div>
@@ -521,13 +544,13 @@ export function Header({ onMenuOpen }: { onMenuOpen: () => void }) {
           </AnimatePresence>
         </div>
 
-        <div className="mx-1 hidden h-5 w-px bg-line sm:block" />
+        <div className="mx-0.5 hidden h-5 w-px bg-line sm:block" />
 
         <Link
           href="/settings"
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-surface-2 font-mono text-[10px] font-medium text-ink-2 transition-colors hover:border-line-strong hover:text-ink"
-          aria-label="Account settings"
-          title="Account settings"
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-surface font-mono text-[10px] font-medium text-ink-2 transition-colors hover:border-line-strong hover:text-ink"
+          aria-label="User profile"
+          title="User profile"
         >
           AK
         </Link>

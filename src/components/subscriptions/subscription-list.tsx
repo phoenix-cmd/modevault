@@ -207,172 +207,96 @@ export function SubscriptionList({
 
   return (
     <>
-      {/* Desktop table */}
-      <div className="panel hidden overflow-hidden md:block">
-        <div className="overflow-x-auto">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <SortHeader
-                  label="Provider"
-                  column="provider"
-                  sortKey={sortKey}
-                  sortDir={sortDir}
-                  onSort={toggleSort}
-                />
-                <th>Plan</th>
-                <th>Billing</th>
-                <SortHeader
-                  label="Monthly eq."
-                  column="monthly"
-                  align="right"
-                  sortKey={sortKey}
-                  sortDir={sortDir}
-                  onSort={toggleSort}
-                />
-                <SortHeader
-                  label="Usage remaining"
-                  column="usage"
-                  sortKey={sortKey}
-                  sortDir={sortDir}
-                  onSort={toggleSort}
-                />
-                <SortHeader
-                  label="Next renewal"
-                  column="renewal"
-                  sortKey={sortKey}
-                  sortDir={sortDir}
-                  onSort={toggleSort}
-                />
-                <th>Status</th>
-                <th className="text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((sub) => {
-                const monthly = getMonthlyEquivalent(sub.price, sub.billingCycle)
-                return (
-                  <tr key={sub.id}>
-                    <td>
-                      <div className="flex items-center gap-2.5">
-                        <ProviderIcon slug={sub.providerSlug} size="sm" />
-                        <div className="min-w-0">
-                          <p className="truncate text-[13px] font-medium text-ink">
-                            {sub.providerName}
-                          </p>
-                          <p className="text-[11px] capitalize text-ink-3">
-                            {sub.type} · {sub.dataSource.replace("_", " ")}
-                          </p>
-                        </div>
+      <div className="hidden overflow-x-auto border-t border-line md:block">
+        <table className="data-table min-w-[980px]">
+          <thead>
+            <tr>
+              <SortHeader label="Provider" column="provider" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <th>Plan</th>
+              <th>Billing</th>
+              <SortHeader label="Monthly eq." column="monthly" align="right" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortHeader label="Usage remaining" column="usage" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortHeader label="Next renewal" column="renewal" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <th>Status</th>
+              <th className="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((sub) => {
+              const monthly = getMonthlyEquivalent(sub.price, sub.billingCycle)
+              return (
+                <tr key={sub.id}>
+                  <td>
+                    <div className="flex items-center gap-2.5">
+                      <ProviderIcon slug={sub.providerSlug} size="sm" />
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-medium text-ink">{sub.providerName}</p>
+                        <p className="text-[11px] capitalize text-ink-3">{sub.type} · {sub.dataSource.replace("_", " ")}</p>
                       </div>
-                    </td>
-                    <td className="max-w-[180px]">
-                      <p className="truncate text-ink-2">{sub.planName}</p>
-                    </td>
-                    <td className="whitespace-nowrap capitalize text-ink-2">
-                      {sub.billingCycle}
-                    </td>
-                    <td className="whitespace-nowrap text-right">
-                      <p className="font-mono text-[12px] text-ink tabular-nums">
-                        {formatCurrency(monthly, sub.currency)}
+                    </div>
+                  </td>
+                  <td className="max-w-[180px]"><p className="truncate text-ink-2">{sub.planName}</p></td>
+                  <td className="whitespace-nowrap capitalize text-ink-2">{sub.billingCycle}</td>
+                  <td className="whitespace-nowrap text-right">
+                    <p className="font-mono text-[12px] text-ink tabular-nums">{formatCurrency(monthly, sub.currency)}</p>
+                    {sub.billingCycle !== "monthly" && (
+                      <p className="font-mono text-[10px] text-ink-3 tabular-nums">
+                        {formatCurrency(sub.price, sub.currency)} / {sub.billingCycle === "yearly" ? "yr" : "cycle"}
                       </p>
-                      {sub.billingCycle !== "monthly" && (
-                        <p className="font-mono text-[10px] text-ink-3 tabular-nums">
-                          {formatCurrency(sub.price, sub.currency)} /{" "}
-                          {sub.billingCycle === "yearly" ? "yr" : "cycle"}
-                        </p>
-                      )}
-                    </td>
-                    <td>
-                      <UsageRemaining subscription={sub} />
-                    </td>
-                    <td className="whitespace-nowrap">
-                      {sub.renewalDate ? (
-                        <>
-                          <p className="text-ink-2">
-                            {formatRelativeDate(sub.renewalDate)}
-                          </p>
-                          <p className="text-[11px] text-ink-3">
-                            {formatDate(sub.renewalDate)}
-                          </p>
-                        </>
-                      ) : (
-                        <span className="text-ink-3">—</span>
-                      )}
-                    </td>
-                    <td>
-                      <StatusBadge
-                        status={sub.status}
-                        pulse={sub.status === "active"}
-                      />
-                    </td>
-                    <td>
-                      <Actions
-                        subscription={sub}
-                        onEdit={onEdit}
-                        onDelete={onDelete}
-                        onRecordUsage={onRecordUsage}
-                      />
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                    )}
+                  </td>
+                  <td><UsageRemaining subscription={sub} /></td>
+                  <td className="whitespace-nowrap">
+                    {sub.renewalDate ? (
+                      <>
+                        <p className="text-ink-2">{formatRelativeDate(sub.renewalDate)}</p>
+                        <p className="text-[11px] text-ink-3">{formatDate(sub.renewalDate)}</p>
+                      </>
+                    ) : (
+                      <span className="text-ink-3">—</span>
+                    )}
+                  </td>
+                  <td><StatusBadge status={sub.status} pulse={sub.status === "active"} /></td>
+                  <td><Actions subscription={sub} onEdit={onEdit} onDelete={onDelete} onRecordUsage={onRecordUsage} /></td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
 
-      {/* Mobile list */}
-      <div className="panel overflow-hidden md:hidden">
-        <div className="row-divide">
-          {sorted.map((sub) => {
-            const monthly = getMonthlyEquivalent(sub.price, sub.billingCycle)
-            return (
-              <div key={sub.id} className="px-4 py-3.5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <ProviderIcon slug={sub.providerSlug} size="sm" />
-                    <div className="min-w-0">
-                      <p className="truncate text-[13px] font-medium text-ink">
-                        {sub.providerName}
-                      </p>
-                      <p className="truncate text-[11.5px] text-ink-3">
-                        {sub.planName}
-                      </p>
-                    </div>
+      <div className="border-t border-line md:hidden">
+        {sorted.map((sub) => {
+          const monthly = getMonthlyEquivalent(sub.price, sub.billingCycle)
+          return (
+            <div key={sub.id} className="border-b border-line py-3.5 last:border-b-0">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <ProviderIcon slug={sub.providerSlug} size="sm" />
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-medium text-ink">{sub.providerName}</p>
+                    <p className="truncate text-[11.5px] text-ink-3">{sub.planName}</p>
                   </div>
-                  <StatusBadge status={sub.status} />
                 </div>
-
-                <div className="mt-3 flex items-end justify-between gap-3">
-                  <div>
-                    <p className="font-mono text-[13px] font-medium text-ink tabular-nums">
-                      {formatCurrency(monthly, sub.currency)}
-                      <span className="text-[10px] font-normal text-ink-3">
-                        /mo
-                      </span>
-                    </p>
-                    <p className="mt-1 text-[11px] text-ink-3">
-                      {sub.renewalDate
-                        ? `Renews ${formatRelativeDate(sub.renewalDate)}`
-                        : "No renewal set"}
-                    </p>
-                  </div>
-                  <Actions
-                    subscription={sub}
-                    onEdit={onEdit}
-                    onDelete={onDelete}
-                    onRecordUsage={onRecordUsage}
-                  />
-                </div>
-
-                <div className="mt-3">
-                  <UsageRemaining subscription={sub} />
-                </div>
+                <StatusBadge status={sub.status} />
               </div>
-            )
-          })}
-        </div>
+
+              <div className="mt-3 flex items-end justify-between gap-3">
+                <div>
+                  <p className="font-mono text-[13px] font-medium text-ink tabular-nums">
+                    {formatCurrency(monthly, sub.currency)}<span className="text-[10px] font-normal text-ink-3">/mo</span>
+                  </p>
+                  <p className="mt-1 text-[11px] text-ink-3">
+                    {sub.renewalDate ? `Renews ${formatRelativeDate(sub.renewalDate)}` : "No renewal set"}
+                  </p>
+                </div>
+                <Actions subscription={sub} onEdit={onEdit} onDelete={onDelete} onRecordUsage={onRecordUsage} />
+              </div>
+
+              <div className="mt-3"><UsageRemaining subscription={sub} /></div>
+            </div>
+          )
+        })}
       </div>
     </>
   )

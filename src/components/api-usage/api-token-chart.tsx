@@ -82,35 +82,23 @@ export function ApiTokenChart({ dailyTrend, byModel }: ApiTokenChartProps) {
   const maxCost = Math.max(...topModels.map((m) => m.cost), 0.0001)
 
   return (
-    <div className="grid gap-8 lg:grid-cols-3">
-      <section className="panel overflow-hidden lg:col-span-2">
-        <div className="panel-header">
+    <section className="grid gap-8 border-t border-line pt-5 lg:grid-cols-3">
+      <div className="lg:col-span-2">
+        <div className="flex items-start justify-between gap-4 pb-4">
           <div>
-            <h2 className="panel-title">Token consumption</h2>
-            <p className="panel-subtitle">
-              Daily ingest and generation, last 30 days
-            </p>
+            <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">Token consumption</h2>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">Daily ingest and generation over recent activity.</p>
           </div>
           <span className="flex items-center gap-1.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] text-ink-3">
-            <span
-              className="h-1.5 w-1.5 rounded-full"
-              style={{ background: CHART_ACCENT }}
-            />
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: CHART_ACCENT }} />
             Tokens
           </span>
         </div>
 
-        <div className="h-[260px] w-full px-3 py-4 sm:px-4">
+        <div className="h-[260px] w-full border-t border-line pt-4">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={dailyTrend}
-              margin={{ top: 4, right: 12, left: -14, bottom: 0 }}
-            >
-              <CartesianGrid
-                stroke={GRID_COLOR}
-                strokeDasharray="3 3"
-                vertical={false}
-              />
+            <LineChart data={dailyTrend} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}>
+              <CartesianGrid stroke={GRID_COLOR} strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="date"
                 tick={{ fill: AXIS_COLOR, fontSize: 10.5 }}
@@ -129,67 +117,40 @@ export function ApiTokenChart({ dailyTrend, byModel }: ApiTokenChartProps) {
                 width={48}
                 tickFormatter={(value: number) => formatNumber(value)}
               />
-              <Tooltip
-                content={<TrendTooltip />}
-                cursor={{ stroke: CURSOR_COLOR, strokeDasharray: "4 4" }}
-              />
-              <Line
-                type="monotone"
-                dataKey="tokens"
-                name="Tokens"
-                stroke={CHART_ACCENT}
-                strokeWidth={1.5}
-                dot={false}
-                activeDot={{ r: 3, strokeWidth: 0 }}
-              />
+              <Tooltip content={<TrendTooltip />} cursor={{ stroke: CURSOR_COLOR, strokeDasharray: "4 4" }} />
+              <Line type="monotone" dataKey="tokens" name="Tokens" stroke={CHART_ACCENT} strokeWidth={1.5} dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
-      </section>
+      </div>
 
-      <section className="panel overflow-hidden">
-        <div className="panel-header">
-          <div>
-            <h2 className="panel-title">Model cost</h2>
-            <p className="panel-subtitle">Top models by spend</p>
-          </div>
+      <div className="border-t border-line pt-4 lg:border-t-0 lg:pt-0">
+        <div className="pb-4">
+          <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">Model cost</h2>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">Top models by recorded spend.</p>
         </div>
 
         {topModels.length === 0 ? (
-          <p className="px-4 py-6 text-[12px] text-ink-3">
-            No model level spend recorded yet.
-          </p>
+          <p className="border-t border-line py-6 text-[12.5px] leading-relaxed text-ink-3">No model-level spend recorded yet.</p>
         ) : (
-          <div className="row-divide">
+          <div className="border-t border-line">
             {topModels.map((model) => (
-              <div key={`${model.provider}-${model.model}`} className="px-4 py-3 sm:px-5">
+              <div key={`${model.provider}-${model.model}`} className="border-b border-line py-3 last:border-b-0">
                 <div className="flex items-baseline justify-between gap-3">
-                  <p className="truncate font-mono text-[11px] text-ink">
-                    {model.model}
-                  </p>
-                  <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-ink">
-                    {formatCurrency(model.cost, "USD")}
-                  </span>
+                  <p className="truncate font-mono text-[11px] text-ink">{model.model}</p>
+                  <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-ink">{formatCurrency(model.cost, "USD")}</span>
                 </div>
                 <div className="mt-2 flex items-center gap-2">
                   <div className="h-px flex-1 bg-surface-3">
-                    <div
-                      className="h-px"
-                      style={{
-                        width: `${Math.max((model.cost / maxCost) * 100, 2)}%`,
-                        background: CHART_ACCENT,
-                      }}
-                    />
+                    <div className="h-px" style={{ width: `${Math.max((model.cost / maxCost) * 100, 2)}%`, background: CHART_ACCENT }} />
                   </div>
-                  <span className="shrink-0 font-mono text-[9.5px] tabular-nums text-ink-3">
-                    {formatNumber(model.tokens)} tok
-                  </span>
+                  <span className="shrink-0 font-mono text-[9.5px] tabular-nums text-ink-3">{formatNumber(model.tokens)} tok</span>
                 </div>
               </div>
             ))}
           </div>
         )}
-      </section>
-    </div>
+      </div>
+    </section>
   )
 }

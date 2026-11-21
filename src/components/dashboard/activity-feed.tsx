@@ -36,58 +36,48 @@ export function ActivityFeed({ activities }: ActivityFeedProps) {
     return null
   }
 
-  return (
-    <section className="border-t border-line pt-5">
-      <div className="flex items-start justify-between gap-4 pb-4">
-        <div>
-          <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
-            Recent activity
-          </h2>
-          <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
-            Latest changes across your stack
-          </p>
-        </div>
-      </div>
+  const items = activities.slice(0, 8)
 
-      <ul className="border-t border-line">
-        {activities.slice(0, 8).map((activity) => {
+  return (
+    <section className="border-t border-line">
+      <ol className="relative">
+        {items.map((activity, idx) => {
           const Icon = TYPE_ICON[activity.type] ?? TYPE_ICON.sync
+          const isLast = idx === items.length - 1
 
           return (
-            <li
-              key={activity.id}
-              className="flex items-start gap-3 border-b border-line py-3 last:border-b-0"
-            >
-              <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded border border-line bg-surface-2 text-ink-3">
-                <Icon className="h-3 w-3" strokeWidth={1.8} />
+            <li key={activity.id} className="relative grid grid-cols-[1.75rem_minmax(0,1fr)] gap-x-3 pb-4 last:pb-0">
+              <div className="relative flex justify-center pt-0.5">
+                {!isLast && <span className="absolute left-1/2 top-6 bottom-[-0.25rem] w-px -translate-x-1/2 bg-line" aria-hidden />}
+                <span className="relative flex h-7 w-7 items-center justify-center rounded-full border border-line bg-surface text-ink-3">
+                  <Icon className="h-3 w-3" strokeWidth={1.7} />
+                </span>
               </div>
 
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <p className="truncate text-[12.5px] font-medium text-ink">
-                    {activity.title}
-                  </p>
-                  {activity.severity !== "info" && (
-                    <span
-                      className={cn(
-                        "h-1 w-1 shrink-0 rounded-full",
-                        SEVERITY_DOT[activity.severity] ?? SEVERITY_DOT.info
-                      )}
-                    />
-                  )}
+              <div className="min-w-0 border-b border-line pb-4 pt-0.5 last:border-b-0">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <p className="truncate text-[13px] font-medium text-ink">{activity.title}</p>
+                    {activity.severity !== "info" && (
+                      <span
+                        className={cn(
+                          "h-1.5 w-1.5 shrink-0 rounded-full",
+                          SEVERITY_DOT[activity.severity] ?? SEVERITY_DOT.info
+                        )}
+                        aria-label={activity.severity}
+                      />
+                    )}
+                  </div>
+                  <time className="shrink-0 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-3">
+                    {formatRelativeDate(activity.timestamp)}
+                  </time>
                 </div>
-                <p className="mt-0.5 line-clamp-1 text-[11.5px] text-ink-3">
-                  {activity.description}
-                </p>
+                <p className="mt-1 text-[12px] leading-relaxed text-ink-2">{activity.description}</p>
               </div>
-
-              <span className="shrink-0 pt-0.5 font-mono text-[9.5px] uppercase tracking-[0.06em] text-ink-3">
-                {formatRelativeDate(activity.timestamp)}
-              </span>
             </li>
           )
         })}
-      </ul>
+      </ol>
     </section>
   )
 }

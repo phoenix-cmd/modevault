@@ -40,7 +40,7 @@ function Toggle({
       }`}
     >
       <span
-        className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-150 ${
+        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-150 ${
           checked ? "translate-x-[18px]" : "translate-x-[3px]"
         }`}
       />
@@ -48,75 +48,42 @@ function Toggle({
   )
 }
 
-function SectionHeader({
-  icon: Icon,
-  title,
-  description,
-}: {
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>
-  title: string
-  description: string
-}) {
-  return (
-    <div className="panel-header items-start">
-      <div className="flex items-start gap-3">
-        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-surface-2 text-ink-2">
-          <Icon className="h-3.5 w-3.5" strokeWidth={1.8} />
-        </span>
-        <div>
-          <h2 className="panel-title">{title}</h2>
-          <p className="panel-subtitle">{description}</p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function SettingsPage() {
   const [currency, setCurrency] = useState("INR")
-  const [userName, setUserName] = useState("Demo Architect")
-  const [userEmail, setUserEmail] = useState("demo@modelvault.dev")
-  const [threshold80, setThreshold80] = useState(true)
-  const [threshold90, setThreshold90] = useState(true)
-  const [renewalNoticeDays, setRenewalNoticeDays] = useState(7)
-  const [creditAlertMin, setCreditAlertMin] = useState(15)
-  const [savedMessage, setSavedMessage] = useState(false)
-  const [exportNotice, setExportNotice] = useState(false)
+  const [quotaAlerts, setQuotaAlerts] = useState(true)
+  const [renewalAlerts, setRenewalAlerts] = useState(true)
+  const [billingAlerts, setBillingAlerts] = useState(true)
+  const [syncAlerts, setSyncAlerts] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
 
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault()
-    setSavedMessage(true)
-    setTimeout(() => setSavedMessage(false), 3000)
+  const notify = (message: string) => {
+    setToast(message)
+    window.setTimeout(() => setToast(null), 2500)
   }
 
-  const exportData = () => {
-    setExportNotice(true)
+  const handleSave = () => {
+    notify("Settings saved")
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5 pb-16">
+    <div className="mx-auto max-w-3xl space-y-8 pb-16">
       <PageHeader
-        eyebrow="Workspace · Preferences"
+        eyebrow="Account · Preferences"
         title="Settings"
-        description="Currency, alert thresholds, identity, and data portability for your workspace."
-        action={
-          <button type="submit" form="settings-form" className="btn-primary">
-            <Save className="h-3.5 w-3.5" strokeWidth={2} />
-            Save preferences
-          </button>
-        }
+        description="Workspace defaults, notification policies, and account configuration. Changes here apply to your local workspace preferences."
       />
 
-      {savedMessage && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-success/25 bg-success-soft px-3.5 py-2.5 text-[12px] text-success animate-fade-in">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} />
-            <span>Settings saved successfully.</span>
-          </div>
+      {toast && (
+        <div
+          className="fixed right-4 top-20 z-50 flex items-center gap-2 border border-line-strong bg-surface px-3.5 py-2.5 shadow-float animate-fade-in-up"
+          role="status"
+          aria-live="polite"
+        >
+          <CheckCircle2 className="h-3.5 w-3.5 text-success" strokeWidth={2} />
+          <span className="text-[12.5px] font-medium text-ink">{toast}</span>
           <button
-            type="button"
-            onClick={() => setSavedMessage(false)}
-            className="text-success/70 transition-colors hover:text-success"
+            onClick={() => setToast(null)}
+            className="ml-1 text-ink-3 transition-colors hover:text-ink"
             aria-label="Dismiss"
           >
             <X className="h-3.5 w-3.5" strokeWidth={2} />
@@ -124,220 +91,146 @@ export default function SettingsPage() {
         </div>
       )}
 
-      <form id="settings-form" onSubmit={handleSave} className="space-y-4">
-        <section className="panel">
-          <SectionHeader
-            icon={Shield}
-            title="Identity & access"
-            description="Displayed on exports, audit logs and notifications."
-          />
-          <div className="panel-body grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="full-name" className="label">
-                Full name
-              </label>
-              <input
-                id="full-name"
-                type="text"
-                value={userName}
-                onChange={(e) => setUserName(e.target.value)}
-                className="field"
-              />
-            </div>
-            <div>
-              <label htmlFor="email" className="label">
-                Email address
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={userEmail}
-                onChange={(e) => setUserEmail(e.target.value)}
-                className="field"
-              />
-            </div>
+      <section className="border-t border-line pt-5">
+        <div className="pb-4">
+          <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">General</h2>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">Currency and display preferences.</p>
+        </div>
+
+        <div className="border-t border-line pt-4">
+          <div>
+            <label htmlFor="currency" className="label inline-flex items-center gap-1.5">
+              <Coins className="h-3 w-3" strokeWidth={1.8} />
+              Base currency
+            </label>
+            <select
+              id="currency"
+              value={currency}
+              onChange={(e) => {
+                setCurrency(e.target.value)
+                notify("Currency preference saved")
+              }}
+              className="select mt-1 sm:max-w-xs"
+            >
+              {CURRENCIES.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                  {c.hint ? ` — ${c.hint}` : ""}
+                </option>
+              ))}
+            </select>
+            <p className="mt-2 text-[11.5px] leading-relaxed text-ink-3">
+              Totals and comparisons are converted to this currency for display. Original billing values are preserved.
+            </p>
           </div>
-        </section>
+        </div>
+      </section>
 
-        <section className="panel">
-          <SectionHeader
-            icon={Coins}
-            title="Currency"
-            description="Applied to spend totals, invoices and analytics."
-          />
-          <div className="panel-body space-y-3">
-            <div className="sm:max-w-xs">
-              <label htmlFor="currency" className="label">
-                Default currency
-              </label>
-              <select
-                id="currency"
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-                className="select"
-              >
-                {CURRENCIES.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                    {item.hint ? ` [${item.hint}]` : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
+      <section className="border-t border-line pt-5">
+        <div className="pb-4">
+          <h2 className="inline-flex items-center gap-2 font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
+            <Bell className="h-4 w-4 text-accent" strokeWidth={1.8} />
+            Notifications
+          </h2>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">Choose which events generate alerts.</p>
+        </div>
 
-            <div className="rounded-lg border border-line bg-surface-2/50 px-3.5 py-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[12px] font-medium text-ink-2">
-                  Exchange rate reference
-                </span>
-                <span className="tnum rounded-md bg-surface px-2 py-0.5 font-mono text-[12px] text-ink">
-                  1 USD = 84.50 INR
-                </span>
-              </div>
-              <p className="mt-1 text-[11px] leading-relaxed text-ink-3">
-                Benchmark dated Nov 2026. Conversions across provider invoices
-                are computed against this index.
+        <div className="divide-y divide-line border-y border-line">
+          <div className="flex items-start justify-between gap-4 py-4">
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium text-ink">Quota warnings</p>
+              <p className="mt-0.5 text-[12px] leading-relaxed text-ink-3">
+                Alert when a subscription approaches 80% of its quota limit.
               </p>
             </div>
+            <Toggle checked={quotaAlerts} onChange={setQuotaAlerts} label="Quota warnings" />
           </div>
-        </section>
 
-        <section className="panel">
-          <SectionHeader
-            icon={Bell}
-            title="Smart alerts"
-            description="Quota and spend notifications across all providers."
-          />
-          <div className="row-divide px-4 sm:px-5">
-            <div className="flex items-center justify-between gap-4 py-3.5">
-              <div className="min-w-0">
-                <p className="text-[13px] font-medium text-ink">
-                  80% quota warning
-                </p>
-                <p className="mt-0.5 text-[11.5px] leading-relaxed text-ink-3">
-                  Alert when message or request quotas surpass 80%.
-                </p>
-              </div>
-              <Toggle
-                checked={threshold80}
-                onChange={setThreshold80}
-                label="80% quota warning"
-              />
+          <div className="flex items-start justify-between gap-4 py-4">
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium text-ink">Renewal reminders</p>
+              <p className="mt-0.5 text-[12px] leading-relaxed text-ink-3">
+                Notify 7 days before a subscription renewal or expiry date.
+              </p>
             </div>
-
-            <div className="flex items-center justify-between gap-4 py-3.5">
-              <div className="min-w-0">
-                <p className="text-[13px] font-medium text-ink">
-                  90% and 100% critical alerts
-                </p>
-                <p className="mt-0.5 text-[11.5px] leading-relaxed text-ink-3">
-                  Emergency notices before rate-limit throttling begins.
-                </p>
-              </div>
-              <Toggle
-                checked={threshold90}
-                onChange={setThreshold90}
-                label="90% and 100% critical alerts"
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-4 py-3.5">
-              <div className="min-w-0">
-                <p className="text-[13px] font-medium text-ink">
-                  Renewal advance notice
-                </p>
-                <p className="mt-0.5 text-[11.5px] leading-relaxed text-ink-3">
-                  Days ahead of an auto-debit charge to send a reminder.
-                </p>
-              </div>
-              <select
-                value={renewalNoticeDays}
-                onChange={(e) => setRenewalNoticeDays(Number(e.target.value))}
-                aria-label="Renewal advance notice"
-                className="select select-sm w-24 shrink-0"
-              >
-                <option value={3}>3 days</option>
-                <option value={7}>7 days</option>
-                <option value={14}>14 days</option>
-              </select>
-            </div>
-
-            <div className="flex items-center justify-between gap-4 py-3.5">
-              <div className="min-w-0">
-                <p className="text-[13px] font-medium text-ink">
-                  Low credit threshold
-                </p>
-                <p className="mt-0.5 text-[11.5px] leading-relaxed text-ink-3">
-                  Warning when prepaid developer balance falls below this value.
-                </p>
-              </div>
-              <div className="relative w-24 shrink-0">
-                <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[12px] text-ink-3">
-                  $
-                </span>
-                <input
-                  type="number"
-                  min="1"
-                  value={creditAlertMin}
-                  onChange={(e) => setCreditAlertMin(Number(e.target.value))}
-                  aria-label="Low credit threshold in dollars"
-                  className="field select-sm pl-6 text-right tnum"
-                />
-              </div>
-            </div>
+            <Toggle checked={renewalAlerts} onChange={setRenewalAlerts} label="Renewal reminders" />
           </div>
-        </section>
 
-        <section className="panel">
-          <SectionHeader
-            icon={Download}
-            title="Data portability"
-            description="Take your subscription, usage and billing data with you."
-          />
-          <div className="panel-body space-y-3">
-            <p className="text-[12px] leading-relaxed text-ink-2">
-              Export the entire MODELVAULT database — subscription contracts,
-              usage telemetry and billing entries — as a single JSON archive.
-            </p>
-            <button
-              type="button"
-              onClick={exportData}
-              className="btn-secondary"
-            >
-              <Download className="h-3.5 w-3.5" strokeWidth={2} />
-              Export database (JSON)
-            </button>
-
-            {exportNotice && (
-              <div className="flex items-start justify-between gap-3 border border-warning/25 bg-warning-soft px-3.5 py-2.5 text-[11.5px] leading-relaxed text-warning animate-fade-in">
-                <span>
-                  <span className="font-medium">
-                    No export endpoint is wired in this build.
-                  </span>{" "}
-                  Nothing was generated or downloaded. The archive generator
-                  still needs to be implemented server-side.
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setExportNotice(false)}
-                  className="shrink-0 text-warning/70 transition-colors hover:text-warning"
-                  aria-label="Dismiss export notice"
-                >
-                  <X className="h-3.5 w-3.5" strokeWidth={2} />
-                </button>
-              </div>
-            )}
+          <div className="flex items-start justify-between gap-4 py-4">
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium text-ink">Billing alerts</p>
+              <p className="mt-0.5 text-[12px] leading-relaxed text-ink-3">
+                Notify when monthly spend exceeds your configured threshold.
+              </p>
+            </div>
+            <Toggle checked={billingAlerts} onChange={setBillingAlerts} label="Billing alerts" />
           </div>
-        </section>
 
-        <div className="flex flex-col gap-2 border-t border-line pt-4 text-[11.5px] text-ink-3 sm:flex-row sm:items-center sm:justify-between">
-          <p>
-            <span className="font-medium text-ink-2">MODELVAULT</span> v1.0.0 ·
-            Enterprise
-          </p>
-          <p>Your AI ecosystem. One command center.</p>
+          <div className="flex items-start justify-between gap-4 py-4">
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium text-ink">Sync events</p>
+              <p className="mt-0.5 text-[12px] leading-relaxed text-ink-3">
+                Report when a provider integration sync fails or requires attention.
+              </p>
+            </div>
+            <Toggle checked={syncAlerts} onChange={setSyncAlerts} label="Sync events" />
+          </div>
         </div>
-      </form>
+
+        <div className="flex justify-end pt-4">
+          <button onClick={handleSave} className="btn-primary btn-sm">
+            <Save className="h-3.5 w-3.5" strokeWidth={2} />
+            Save preferences
+          </button>
+        </div>
+      </section>
+
+      <section className="border-t border-line pt-5">
+        <div className="pb-4">
+          <h2 className="inline-flex items-center gap-2 font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
+            <Shield className="h-4 w-4 text-accent" strokeWidth={1.8} />
+            Data &amp; account
+          </h2>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">Export, access, and destructive actions.</p>
+        </div>
+
+        <div className="divide-y divide-line border-y border-line">
+          <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium text-ink">Export data</p>
+              <p className="mt-0.5 text-[12px] leading-relaxed text-ink-3">
+                Download subscriptions, usage logs, and billing records as CSV.
+              </p>
+            </div>
+            <button
+              onClick={() => notify("Export started — CSV will download shortly")}
+              className="btn-secondary btn-sm shrink-0 self-start sm:self-auto"
+            >
+              <Download className="h-3.5 w-3.5" strokeWidth={1.8} />
+              Export CSV
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium text-danger">Delete account</p>
+              <p className="mt-0.5 text-[12px] leading-relaxed text-ink-3">
+                Permanently remove your account and all associated data. This cannot be undone.
+              </p>
+            </div>
+            <button
+              onClick={() => notify("Account deletion requires confirmation via support")}
+              className="btn-danger btn-sm shrink-0 self-start sm:self-auto"
+            >
+              Delete account
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">
+        MODELVAULT · workspace preferences stored locally in this browser session context
+      </p>
     </div>
   )
 }

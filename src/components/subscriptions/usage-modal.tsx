@@ -118,30 +118,31 @@ export function UsageModal({
   const hasQuota = fields.some((field) => field.quota !== null)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[1px] animate-fade-in">
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="usage-modal-title"
-        className="panel relative w-full max-w-md shadow-2xl"
+        className="panel relative w-full max-w-md shadow-float"
       >
-        <div className="flex items-center justify-between gap-4 border-b border-line px-5 py-3.5">
-          <div className="flex items-center gap-2">
-            <Gauge className="h-4 w-4 text-accent" strokeWidth={1.8} />
+        <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
+          <div className="flex items-start gap-2.5">
+            <Gauge className="mt-0.5 h-4 w-4 text-accent" strokeWidth={1.8} />
             <div>
+              <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">Quota</p>
               <h2
                 id="usage-modal-title"
-                className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink"
+                className="mt-1 font-display text-[16px] font-medium tracking-[-0.02em] text-ink"
               >
                 Record usage
               </h2>
-              <p className="text-[11.5px] text-ink-3">
+              <p className="mt-1 text-[12px] leading-relaxed text-ink-3">
                 {subscription.providerName} · {subscription.planName}
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="icon-btn" aria-label="Close">
+          <button onClick={onClose} className="icon-btn -mr-1 -mt-1" aria-label="Close">
             <X className="h-4 w-4" strokeWidth={2} />
           </button>
         </div>
@@ -149,7 +150,7 @@ export function UsageModal({
         <form onSubmit={handleSubmit}>
           <div className="space-y-4 px-5 py-4">
             {error && (
-              <div className="rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-[12px] text-danger">
+              <div className="border border-danger/25 bg-danger-soft px-3 py-2.5 text-[12px] text-danger">
                 {error}
               </div>
             )}
@@ -198,10 +199,8 @@ export function UsageModal({
             )}
           </div>
 
-          <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
-            <button type="button" onClick={onClose} className="btn-ghost">
-              Cancel
-            </button>
+          <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3.5">
+            <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
             <button type="submit" disabled={submitting} className="btn-primary">
               {submitting ? "Updating…" : "Update usage"}
             </button>

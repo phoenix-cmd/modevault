@@ -8,6 +8,11 @@ import {
   Activity,
   BarChart3,
   Bot,
+  Building2,
+  CalendarClock,
+  ChevronDown,
+  ChevronsLeft,
+  ChevronsRight,
   Code2,
   CreditCard,
   Cpu,
@@ -15,43 +20,50 @@ import {
   GitBranch,
   LayoutDashboard,
   Plug,
-  Plus,
+  Receipt,
   Settings,
   ShieldCheck,
+  UserCircle2,
   Workflow,
   X,
-  Zap,
+  Bell,
+  type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-const navSections = [
+const navSections: Array<{
+  label: string
+  items: Array<{ href: string; label: string; icon: LucideIcon }>
+}> = [
   {
     label: "Workspace",
     items: [
       { href: "/overview", label: "Overview", icon: LayoutDashboard },
       { href: "/projects", label: "Projects", icon: FolderGit2 },
-      { href: "/agents", label: "Agents", icon: Bot },
-      { href: "/workflows", label: "Workflows", icon: Workflow },
-      { href: "/studio", label: "Studio", icon: Code2 },
-      { href: "/git", label: "Git", icon: GitBranch },
+      { href: "/agents", label: "Agent Center", icon: Bot },
+      { href: "/workflows", label: "Workflow Builder", icon: Workflow },
+      { href: "/studio", label: "Development Studio", icon: Code2 },
+      { href: "/git", label: "Git Control", icon: GitBranch },
     ],
   },
   {
-    label: "Intelligence",
+    label: "AI Intelligence",
     items: [
-      { href: "/models", label: "Models", icon: Cpu },
-      { href: "/api-usage", label: "Usage", icon: Activity },
+      { href: "/models", label: "Model Library", icon: Cpu },
+      { href: "/api-usage", label: "Usage & Limits", icon: Activity },
       { href: "/analytics", label: "Analytics", icon: BarChart3 },
-      { href: "/subscriptions", label: "Subscriptions", icon: CreditCard },
+      { href: "/subscriptions", label: "Subscriptions & Billing", icon: CreditCard },
+      { href: "/billing", label: "Billing", icon: Receipt },
+      { href: "/calendar", label: "Renewals", icon: CalendarClock },
     ],
   },
   {
-    label: "Administration",
+    label: "Management",
     items: [
       { href: "/integrations", label: "Integrations", icon: Plug },
-      { href: "/organizations", label: "Organizations", icon: ShieldCheck },
+      { href: "/organizations", label: "Organizations", icon: Building2 },
       { href: "/permissions", label: "Permissions", icon: ShieldCheck },
-      { href: "/notifications", label: "Notifications", icon: Zap },
+      { href: "/notifications", label: "Notifications", icon: Bell },
       { href: "/settings", label: "Settings", icon: Settings },
     ],
   },
@@ -59,46 +71,34 @@ const navSections = [
 
 interface SidebarProps {
   mobileOpen: boolean
+  collapsed: boolean
   onClose: () => void
+  onToggleCollapse: () => void
 }
 
-function Brand() {
+function Brand({ collapsed }: { collapsed?: boolean }) {
   return (
-    <Link href="/overview" className="flex items-center gap-2.5">
-      <span className="flex h-7 w-7 items-center justify-center rounded bg-accent text-accent-ink">
+    <Link href="/overview" className="flex items-center gap-2.5" title="MODELVAULT">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-line bg-surface text-accent">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path
-            d="M8 1.75 14 4.5 8 7.25 2 4.5 8 1.75Z"
-            stroke="currentColor"
-            strokeWidth="1.3"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M2 8 8 10.75 14 8"
-            stroke="currentColor"
-            strokeWidth="1.3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M2 11.5 8 14.25 14 11.5"
-            stroke="currentColor"
-            strokeWidth="1.3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+          <circle cx="3.5" cy="8" r="1.2" stroke="currentColor" strokeWidth="1.2" />
+          <circle cx="12.5" cy="4" r="1.2" stroke="currentColor" strokeWidth="1.2" />
+          <circle cx="12.5" cy="12" r="1.2" stroke="currentColor" strokeWidth="1.2" />
+          <path d="M4.7 7.4 11.3 4.7M4.7 8.6l6.6 2.7M12.5 5.3v5.4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
         </svg>
       </span>
-      <span className="font-display text-[13px] font-semibold tracking-[0.16em] text-ink">
-        MODELVAULT
-      </span>
+      {!collapsed && (
+        <span className="font-display text-[13px] font-medium tracking-[0.12em] text-ink">
+          MODELVAULT
+        </span>
+      )}
     </Link>
   )
 }
 
-function WorkspaceIdentity() {
-  const [orgName, setOrgName] = useState("Acme Engineering")
-  const [workspaceName, setWorkspaceName] = useState("Core Platform")
+function useWorkspaceIdentity() {
+  const [orgName, setOrgName] = useState("Organization")
+  const [workspaceName, setWorkspaceName] = useState("Workspace")
 
   useEffect(() => {
     let active = true
@@ -116,44 +116,83 @@ function WorkspaceIdentity() {
     }
   }, [])
 
+  return { orgName, workspaceName }
+}
+
+function WorkspaceControls({ collapsed }: { collapsed?: boolean }) {
+  const { orgName, workspaceName } = useWorkspaceIdentity()
+
+  if (collapsed) {
+    return (
+      <div className="border-b border-line px-2 py-3 flex justify-center">
+        <div
+          className="flex h-8 w-8 items-center justify-center rounded border border-line bg-surface text-ink-2"
+          title={`${orgName} · ${workspaceName}`}
+        >
+          <Building2 className="h-4 w-4" strokeWidth={1.6} />
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="border-b border-line px-4 pb-4 pt-4">
-      <p className="font-mono text-[9.5px] font-medium uppercase tracking-[0.16em] text-ink-3">
-        Workspace
-      </p>
-      <p className="mt-1.5 truncate text-[12.5px] font-medium text-ink">{orgName}</p>
-      <p className="truncate font-mono text-[10.5px] text-ink-3">{workspaceName}</p>
+    <div className="space-y-2 border-b border-line px-3 py-3">
+      <div>
+        <p className="px-1 pb-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
+          Organisation
+        </p>
+        <button
+          type="button"
+          className="flex h-8 w-full items-center justify-between gap-2 rounded border border-line bg-surface px-2.5 text-left transition-colors hover:border-line-strong"
+          title="Organisation selector"
+        >
+          <span className="min-w-0 truncate text-[12px] font-medium text-ink">{orgName}</span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-ink-3" strokeWidth={1.8} />
+        </button>
+      </div>
+      <div>
+        <p className="px-1 pb-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
+          Workspace
+        </p>
+        <button
+          type="button"
+          className="flex h-8 w-full items-center justify-between gap-2 rounded border border-line bg-surface px-2.5 text-left transition-colors hover:border-line-strong"
+          title="Workspace switcher"
+        >
+          <span className="min-w-0 truncate font-mono text-[11px] text-ink-2">{workspaceName}</span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-ink-3" strokeWidth={1.8} />
+        </button>
+      </div>
     </div>
   )
 }
 
-function NavContent({ onNavigate }: { onNavigate?: () => void }) {
+function NavContent({
+  collapsed,
+  onNavigate,
+}: {
+  collapsed?: boolean
+  onNavigate?: () => void
+}) {
   const pathname = usePathname()
 
   return (
-    <div className="flex h-full flex-col bg-surface">
-      <div className="flex h-14 shrink-0 items-center border-b border-line px-4">
-        <Brand />
+    <div className="flex h-full flex-col bg-sidebar">
+      <div className={cn("flex h-14 shrink-0 items-center border-b border-line", collapsed ? "justify-center px-2" : "px-4")}>
+        <Brand collapsed={collapsed} />
       </div>
 
-      <WorkspaceIdentity />
+      <WorkspaceControls collapsed={collapsed} />
 
-      <div className="px-3 pt-4">
-        <Link
-          href="/agents"
-          onClick={onNavigate}
-          className="flex h-9 w-full items-center justify-center gap-2 rounded-md bg-accent text-[12.5px] font-semibold text-accent-ink transition-colors hover:bg-accent-hover"
-        >
-          <Plus className="h-3.5 w-3.5" strokeWidth={2.2} />
-          <span>New execution</span>
-        </Link>
-      </div>
-
-      <nav className="flex-1 overflow-y-auto px-2 pb-5">
+      <nav className={cn("flex-1 overflow-y-auto pb-4", collapsed ? "px-1.5 pt-2" : "px-2")}>
         {navSections.map((section) => (
-          <div key={section.label}>
-            <p className="nav-section-label">{section.label}</p>
-            <ul>
+          <div key={section.label} className={cn(collapsed ? "mt-2" : "")}>
+            {!collapsed ? (
+              <p className="nav-section-label">{section.label}</p>
+            ) : (
+              <div className="my-2 border-t border-line/70" aria-hidden />
+            )}
+            <ul className={cn(collapsed ? "space-y-1" : "")}>
               {section.items.map((item) => {
                 const isActive =
                   pathname === item.href ||
@@ -164,24 +203,35 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
                       href={item.href}
                       onClick={onNavigate}
                       aria-current={isActive ? "page" : undefined}
+                      title={item.label}
                       className={cn(
-                        "group relative flex h-8 items-center gap-2.5 rounded px-3 text-[12.5px] transition-colors duration-150",
+                        "group relative flex items-center rounded transition-colors duration-150",
+                        collapsed ? "h-9 justify-center px-0" : "h-8 gap-2.5 px-3",
                         isActive
-                          ? "bg-accent-soft font-medium text-accent"
-                          : "text-ink-2 hover:bg-surface-2/60 hover:text-ink"
+                          ? "bg-accent-soft text-accent"
+                          : "text-ink-2 hover:bg-surface-2/70 hover:text-ink"
                       )}
                     >
                       {isActive && (
-                        <span className="absolute inset-y-1.5 left-0 w-[2px] rounded-full bg-accent" />
+                        <span
+                          className={cn(
+                            "absolute bg-accent",
+                            collapsed ? "left-0 top-2 bottom-2 w-[2px] rounded-r" : "inset-y-1.5 left-0 w-[2px] rounded-full"
+                          )}
+                        />
                       )}
                       <item.icon
                         className={cn(
                           "h-[15px] w-[15px] shrink-0",
                           isActive ? "text-accent" : "text-ink-3 group-hover:text-ink-2"
                         )}
-                        strokeWidth={isActive ? 2 : 1.6}
+                        strokeWidth={1.6}
                       />
-                      <span className="truncate">{item.label}</span>
+                      {!collapsed && (
+                        <span className={cn("truncate text-[12.5px]", isActive ? "font-medium" : "font-normal")}>
+                          {item.label}
+                        </span>
+                      )}
                     </Link>
                   </li>
                 )
@@ -191,21 +241,74 @@ function NavContent({ onNavigate }: { onNavigate?: () => void }) {
         ))}
       </nav>
 
-      <div className="border-t border-line px-4 py-3">
-        <p className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-ink-3">
-          v1.0 · Local
-        </p>
+      <div className={cn("border-t border-line", collapsed ? "px-1.5 py-2" : "px-2 py-2.5")}>
+        <Link
+          href="/settings"
+          onClick={onNavigate}
+          title="User profile"
+          className={cn(
+            "group flex items-center rounded text-ink-2 transition-colors hover:bg-surface-2/70 hover:text-ink",
+            collapsed ? "h-9 justify-center" : "h-9 gap-2.5 px-2.5"
+          )}
+        >
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-line bg-surface font-mono text-[9px] font-medium text-ink-2">
+            AK
+          </span>
+          {!collapsed && (
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[12px] font-medium text-ink">Profile</span>
+              <span className="block truncate font-mono text-[10px] text-ink-3">Account & preferences</span>
+            </span>
+          )}
+        </Link>
+        <Link
+          href="/settings"
+          onClick={onNavigate}
+          title="Settings"
+          className={cn(
+            "group mt-0.5 flex items-center rounded text-ink-2 transition-colors hover:bg-surface-2/70 hover:text-ink",
+            collapsed ? "h-9 justify-center" : "h-8 gap-2.5 px-2.5"
+          )}
+        >
+          <Settings className="h-[15px] w-[15px] shrink-0 text-ink-3 group-hover:text-ink-2" strokeWidth={1.6} />
+          {!collapsed && <span className="truncate text-[12.5px]">Settings</span>}
+        </Link>
+        {!collapsed ? (
+          <p className="px-2.5 pt-2 font-mono text-[9.5px] uppercase tracking-[0.14em] text-ink-3">
+            v1.0 · Local
+          </p>
+        ) : (
+          <div className="flex justify-center pt-1 text-ink-3">
+            <UserCircle2 className="h-3.5 w-3.5 opacity-0" aria-hidden />
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
-export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
+export function Sidebar({ mobileOpen, collapsed, onClose, onToggleCollapse }: SidebarProps) {
   return (
     <>
       {/* Desktop fixed sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 border-r border-line bg-surface lg:block">
-        <NavContent />
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 hidden border-r border-line bg-sidebar transition-[width] duration-200 ease-out lg:flex lg:flex-col",
+          collapsed ? "w-[4.25rem]" : "w-60"
+        )}
+      >
+        <div className="relative h-full">
+          <NavContent collapsed={collapsed} />
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="absolute -right-3 top-[4.5rem] z-10 flex h-6 w-6 items-center justify-center rounded-full border border-line bg-surface text-ink-3 shadow-sm transition-colors hover:text-ink"
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed ? <ChevronsRight className="h-3.5 w-3.5" /> : <ChevronsLeft className="h-3.5 w-3.5" />}
+          </button>
+        </div>
       </aside>
 
       {/* Mobile drawer */}
@@ -217,7 +320,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="fixed inset-0 z-50 bg-black/60 lg:hidden"
+              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px] lg:hidden"
               onClick={onClose}
               aria-hidden="true"
             />
@@ -226,7 +329,7 @@ export function Sidebar({ mobileOpen, onClose }: SidebarProps) {
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "spring", damping: 30, stiffness: 320 }}
-              className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-line bg-surface lg:hidden"
+              className="fixed inset-y-0 left-0 z-50 flex w-[17rem] flex-col border-r border-line bg-sidebar lg:hidden"
             >
               <div className="absolute right-3 top-3.5 z-10">
                 <button

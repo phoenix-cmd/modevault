@@ -28,19 +28,19 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f6f4ef" },
-    { media: "(prefers-color-scheme: dark)", color: "#08090a" },
+    { media: "(prefers-color-scheme: light)", color: "#f7f3ec" },
+    { media: "(prefers-color-scheme: dark)", color: "#141311" },
   ],
 }
 
-// Dark is the default experience; a saved light preference opts out before paint.
-const themeScript = `(function(){try{var t=localStorage.getItem("mv-theme");var dark=t!=="light";document.documentElement.classList.toggle("dark",dark)}catch(e){document.documentElement.classList.add("dark")}})()`
+// Light is the default for the redesigned authenticated application; dark is opt-in.
+const themeScript = `(function(){try{var t=localStorage.getItem("mv-theme");var dark=t==="dark";document.documentElement.classList.toggle("dark",dark)}catch(e){document.documentElement.classList.remove("dark")}})()`
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${interTight.variable} ${jetbrainsMono.variable} dark h-full antialiased`}
+      className={`${inter.variable} ${interTight.variable} ${jetbrainsMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>

@@ -214,7 +214,7 @@ export default function ModelLibraryPage() {
     models.find((m) => m.id === selectedBenchmarkModel) || models[0] || null
 
   return (
-    <div className="mx-auto max-w-7xl space-y-7 pb-16">
+    <div className="mx-auto max-w-7xl space-y-8 pb-16">
       <PageHeader
         eyebrow="Intelligence · Model registry"
         title="Models"
@@ -242,332 +242,273 @@ export default function ModelLibraryPage() {
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-6 border-b border-line" role="tablist">
-        {TABS.map((tab) => {
-          const isActive = activeTab === tab.id
-          return (
-            <button
-              key={tab.id}
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => setActiveTab(tab.id)}
-              className={`-mb-px border-b py-2.5 font-mono text-[10px] font-medium uppercase tracking-[0.14em] transition-colors ${
-                isActive
-                  ? "border-accent text-accent"
-                  : "border-transparent text-ink-3 hover:text-ink"
-              }`}
-            >
-              {tab.label}
-            </button>
-          )
-        })}
-      </div>
+      <section className="border-t border-line pt-5">
+        <div className="-mb-px flex overflow-x-auto border-b border-line" role="tablist">
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setActiveTab(tab.id)}
+                className={`-mb-px shrink-0 border-b-2 px-4 py-3 font-mono text-[10px] font-medium uppercase tracking-[0.1em] transition-colors ${
+                  isActive
+                    ? "border-accent text-accent"
+                    : "border-transparent text-ink-3 hover:text-ink"
+                }`}
+              >
+                {tab.label}
+              </button>
+            )
+          })}
+        </div>
 
-      {/* Tab: Catalog */}
-      {activeTab === "catalog" && (
-        <section>
-          {models.length === 0 ? (
-            <div className="border-y border-line py-12 text-center">
-              <p className="text-[13px] font-medium text-ink">
-                {catalogSource === "loading" ? "Loading model catalog…" : "No models available"}
-              </p>
-              <p className="mt-1 text-[12px] text-ink-3">
-                {catalogSource === "loading"
-                  ? "Fetching the model registry."
-                  : "Seed the model catalog to compare pricing and context windows."}
-              </p>
-            </div>
-          ) : (
-            <>
-              <div className="hidden overflow-x-auto border-t border-line md:block">
-                <table className="data-table min-w-[860px]">
-                  <thead>
-                    <tr>
-                      <th>Model</th>
-                      <th>Provider</th>
-                      <th className="text-right">Context</th>
-                      <th className="text-right">Input / 1M</th>
-                      <th className="text-right">Output / 1M</th>
-                      <th className="text-right">Cached / 1M</th>
-                      <th className="text-right">Speed</th>
-                      <th className="text-right">Latency</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {models.map((m) => (
-                      <tr key={m.id}>
-                        <td>
-                          <p className="text-[12.5px] font-medium text-ink">{m.name}</p>
-                          <p className="max-w-[280px] truncate text-[11px] text-ink-3">
-                            {m.bestFor}
-                          </p>
-                        </td>
-                        <td className="whitespace-nowrap text-[12px] text-ink-2">
-                          {m.provider}
-                        </td>
-                        <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">
-                          {m.context}
-                        </td>
-                        <td className="text-right font-mono text-[11px] text-ink tabular-nums">
-                          ${m.inputPricePerM.toFixed(2)}
-                        </td>
-                        <td className="text-right font-mono text-[11px] text-ink tabular-nums">
-                          ${m.outputPricePerM.toFixed(2)}
-                        </td>
-                        <td className="text-right font-mono text-[11px] text-ink-3 tabular-nums">
-                          ${m.cachedPricePerM.toFixed(2)}
-                        </td>
-                        <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">
-                          {m.speedTokensPerSec} t/s
-                        </td>
-                        <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">
-                          {m.latencyMs} ms
-                        </td>
-                        <td>
-                          <span className="badge bg-surface-2 text-ink-3">
-                            {m.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+        {activeTab === "catalog" && (
+          <div className="py-5">
+            {models.length === 0 ? (
+              <div className="border-y border-line py-12">
+                <p className="text-[13px] font-medium text-ink">
+                  {catalogSource === "loading" ? "Loading model catalog…" : "No models available"}
+                </p>
+                <p className="mt-1 text-[12px] leading-relaxed text-ink-3">
+                  {catalogSource === "loading"
+                    ? "Fetching the model registry."
+                    : "Seed the model catalog to compare pricing and context windows."}
+                </p>
               </div>
+            ) : (
+              <>
+                <div className="hidden overflow-x-auto border-t border-line md:block">
+                  <table className="data-table min-w-[860px]">
+                    <thead>
+                      <tr>
+                        <th>Model</th>
+                        <th>Provider</th>
+                        <th className="text-right">Context</th>
+                        <th className="text-right">Input / 1M</th>
+                        <th className="text-right">Output / 1M</th>
+                        <th className="text-right">Cached / 1M</th>
+                        <th className="text-right">Speed</th>
+                        <th className="text-right">Latency</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {models.map((m) => (
+                        <tr key={m.id}>
+                          <td>
+                            <p className="text-[12.5px] font-medium text-ink">{m.name}</p>
+                            <p className="max-w-[280px] truncate text-[11px] text-ink-3">{m.bestFor}</p>
+                          </td>
+                          <td className="whitespace-nowrap text-[12px] text-ink-2">{m.provider}</td>
+                          <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">{m.context}</td>
+                          <td className="text-right font-mono text-[11px] text-ink tabular-nums">${m.inputPricePerM.toFixed(2)}</td>
+                          <td className="text-right font-mono text-[11px] text-ink tabular-nums">${m.outputPricePerM.toFixed(2)}</td>
+                          <td className="text-right font-mono text-[11px] text-ink-3 tabular-nums">${m.cachedPricePerM.toFixed(2)}</td>
+                          <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">{m.speedTokensPerSec} t/s</td>
+                          <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">{m.latencyMs} ms</td>
+                          <td>
+                            <span className="badge bg-surface-2 text-ink-3">{m.status}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-              <ul className="border-t border-line md:hidden">
-                {models.map((m) => (
-                  <li key={m.id} className="border-b border-line py-4 last:border-b-0">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-medium text-ink">{m.name}</p>
-                        <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-3">
-                          {m.provider} · {m.context} context
-                        </p>
-                      </div>
-                      <span className="badge shrink-0 bg-surface-2 text-ink-3">
-                        {m.status}
-                      </span>
-                    </div>
-                    <p className="mt-2 line-clamp-2 text-[11.5px] leading-relaxed text-ink-2">
-                      {m.bestFor}
-                    </p>
-                    <div className="mt-3 grid grid-cols-3 gap-3">
-                      {[
-                        ["Input", `$${m.inputPricePerM.toFixed(2)}`],
-                        ["Output", `$${m.outputPricePerM.toFixed(2)}`],
-                        ["Cached", `$${m.cachedPricePerM.toFixed(2)}`],
-                      ].map(([label, value]) => (
-                        <div key={label}>
-                          <p className="metric-label">{label} / 1M</p>
-                          <p className="mt-1 font-mono text-[11px] text-ink tabular-nums">
-                            {value}
+                <ul className="border-t border-line md:hidden">
+                  {models.map((m) => (
+                    <li key={m.id} className="border-b border-line py-4 last:border-b-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-medium text-ink">{m.name}</p>
+                          <p className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-3">
+                            {m.provider} · {m.context} context
                           </p>
                         </div>
-                      ))}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </section>
-      )}
-
-      {/* Tab: Benchmarks */}
-      {activeTab === "benchmarks" && !activeModel && (
-        <section className="border-y border-line py-12 text-center">
-          <p className="text-[13px] font-medium text-ink">
-            {catalogSource === "loading" ? "Loading model catalog…" : "No models available"}
-          </p>
-          <p className="mt-1 text-[12px] text-ink-3">
-            {catalogSource === "loading"
-              ? "Fetching the model registry."
-              : "Seed the model catalog or add models to run benchmarks."}
-          </p>
-        </section>
-      )}
-
-      {activeTab === "benchmarks" && activeModel && (
-        <div className="space-y-8">
-          <section className="border-t border-line pt-5">
-            <div className="flex flex-wrap items-start justify-between gap-4 pb-5">
-              <div>
-                <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
-                  Benchmark preview
-                </h2>
-                <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
-                  Simulated locally · no provider request is sent
-                </p>
-              </div>
-
-              <label className="flex items-center gap-2 font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-3">
-                Target
-                <select
-                  value={selectedBenchmarkModel}
-                  onChange={(e) => setSelectedBenchmarkModel(e.target.value)}
-                  className="select select-sm w-auto font-sans text-[12px] normal-case tracking-normal"
-                >
-                  {models.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} ({m.provider})
-                    </option>
+                        <span className="badge shrink-0 bg-surface-2 text-ink-3">{m.status}</span>
+                      </div>
+                      <p className="mt-2 line-clamp-2 text-[11.5px] leading-relaxed text-ink-2">{m.bestFor}</p>
+                      <div className="mt-3 grid grid-cols-3 gap-3">
+                        {[
+                          ["Input", `$${m.inputPricePerM.toFixed(2)}`],
+                          ["Output", `$${m.outputPricePerM.toFixed(2)}`],
+                          ["Cached", `$${m.cachedPricePerM.toFixed(2)}`],
+                        ].map(([label, value]) => (
+                          <div key={label}>
+                            <p className="metric-label">{label} / 1M</p>
+                            <p className="mt-1 font-mono text-[11px] text-ink tabular-nums">{value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </li>
                   ))}
-                </select>
-              </label>
-            </div>
+                </ul>
+              </>
+            )}
+          </div>
+        )}
 
-            <div className="flex flex-col gap-2 border-t border-line pt-4 sm:flex-row">
-              <input
-                type="text"
-                value={testPrompt}
-                onChange={(e) => setTestPrompt(e.target.value)}
-                placeholder="Enter a test prompt or code refactoring challenge…"
-                className="field flex-1"
-              />
-              <button
-                onClick={handleRunBenchmark}
-                disabled={benchmarking}
-                className="btn-primary"
-              >
-                <Play className="h-3 w-3 fill-current" strokeWidth={1.8} />
-                {benchmarking ? "Evaluating…" : "Run preview"}
-              </button>
-            </div>
-          </section>
+        {activeTab === "benchmarks" && !activeModel && (
+          <div className="border-y border-line py-12">
+            <p className="text-[13px] font-medium text-ink">
+              {catalogSource === "loading" ? "Loading model catalog…" : "No models available"}
+            </p>
+            <p className="mt-1 text-[12px] leading-relaxed text-ink-3">
+              {catalogSource === "loading"
+                ? "Fetching the model registry."
+                : "Seed the model catalog or add models to run benchmarks."}
+            </p>
+          </div>
+        )}
 
-          <StatBand
-            columns={4}
-            items={[
-              {
-                label: "First token",
-                value: `${activeModel.latencyMs} ms`,
-                meta: "Catalog median",
-              },
-              {
-                label: "Throughput",
-                value: `${activeModel.speedTokensPerSec} t/s`,
-                meta: "Peak stream burst",
-              },
-              {
-                label: "Input / 1M",
-                value: `$${activeModel.inputPricePerM.toFixed(2)}`,
-                meta: `Cached $${activeModel.cachedPricePerM.toFixed(2)}`,
-              },
-              {
-                label: "Context",
-                value: activeModel.context,
-                meta: "Token window",
-              },
-            ]}
-          />
+        {activeTab === "benchmarks" && activeModel && (
+          <div className="space-y-8 py-5">
+            <section className="border-t border-line pt-5">
+              <div className="flex flex-wrap items-start justify-between gap-4 pb-5">
+                <div>
+                  <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
+                    Benchmark preview
+                  </h2>
+                  <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
+                    Simulated locally · no provider request is sent
+                  </p>
+                </div>
 
-          <section className="border-t border-line pt-5">
-            <div className="flex flex-wrap items-baseline justify-between gap-3 pb-4">
-              <div>
-                <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
-                  Reference output
-                </h2>
+                <label className="flex items-center gap-2 font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-3">
+                  Target
+                  <select
+                    value={selectedBenchmarkModel}
+                    onChange={(e) => setSelectedBenchmarkModel(e.target.value)}
+                    className="select select-sm w-auto font-sans text-[12px] normal-case tracking-normal"
+                  >
+                    {models.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.provider})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="flex flex-col gap-2 border-t border-line pt-4 sm:flex-row">
+                <input
+                  type="text"
+                  value={testPrompt}
+                  onChange={(e) => setTestPrompt(e.target.value)}
+                  placeholder="Enter a test prompt or code refactoring challenge…"
+                  className="field flex-1"
+                />
+                <button onClick={handleRunBenchmark} disabled={benchmarking} className="btn-primary">
+                  <Play className="h-3 w-3 fill-current" strokeWidth={1.8} />
+                  {benchmarking ? "Evaluating…" : "Run preview"}
+                </button>
+              </div>
+            </section>
+
+            <StatBand
+              columns={4}
+              items={[
+                { label: "First token", value: `${activeModel.latencyMs} ms`, meta: "Catalog median" },
+                { label: "Throughput", value: `${activeModel.speedTokensPerSec} t/s`, meta: "Peak stream burst" },
+                {
+                  label: "Input / 1M",
+                  value: `$${activeModel.inputPricePerM.toFixed(2)}`,
+                  meta: `Cached $${activeModel.cachedPricePerM.toFixed(2)}`,
+                },
+                { label: "Context", value: activeModel.context, meta: "Token window" },
+              ]}
+            />
+
+            <section className="border-t border-line pt-5">
+              <div className="flex flex-wrap items-baseline justify-between gap-3 pb-4">
+                <div>
+                  <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">Reference output</h2>
+                  <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
+                    Stored sample · {activeModel.name}
+                  </p>
+                </div>
+                <span className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-3">Not a live response</span>
+              </div>
+
+              <pre className="overflow-x-auto border border-line bg-canvas p-4 font-mono text-[11px] leading-relaxed text-ink-2">
+                {activeModel.sampleResponse}
+              </pre>
+            </section>
+          </div>
+        )}
+
+        {activeTab === "calculator" && (
+          <div className="space-y-8 py-5">
+            <section className="border-t border-line pt-5">
+              <div className="pb-5">
+                <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">Monthly budget forecaster</h2>
                 <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
-                  Stored sample · {activeModel.name}
+                  Simulated spend · 75% input / 25% output
                 </p>
               </div>
-              <span className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-3">
-                Not a live response
-              </span>
-            </div>
 
-            <pre className="overflow-x-auto border border-line bg-canvas p-4 font-mono text-[11px] leading-relaxed text-ink-2">
-              {activeModel.sampleResponse}
-            </pre>
-          </section>
-        </div>
-      )}
-
-      {/* Tab: Unit Economics Calculator */}
-      {activeTab === "calculator" && (
-        <div className="space-y-8">
-          <section className="border-t border-line pt-5">
-            <div className="pb-5">
-              <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
-                Monthly budget forecaster
-              </h2>
-              <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
-                Simulated spend · 75% input / 25% output
-              </p>
-            </div>
-
-            <div className="border-t border-line pt-5">
-              <div className="flex flex-wrap items-baseline justify-between gap-3">
-                <span className="metric-label">Monthly volume</span>
-                <span className="font-mono text-[13px] tabular-nums text-accent">
-                  {monthlyTokensMillions}M tokens
-                  <span className="ml-2 text-ink-3">
-                    ~{formatNumber(monthlyTokensMillions * 1000000)}
+              <div className="border-t border-line pt-5">
+                <div className="flex flex-wrap items-baseline justify-between gap-3">
+                  <span className="metric-label">Monthly volume</span>
+                  <span className="font-mono text-[13px] tabular-nums text-accent">
+                    {monthlyTokensMillions}M tokens
+                    <span className="ml-2 text-ink-3">~{formatNumber(monthlyTokensMillions * 1000000)}</span>
                   </span>
-                </span>
-              </div>
-              <input
-                type="range"
-                min="1"
-                max="100"
-                value={monthlyTokensMillions}
-                onChange={(e) => setMonthlyTokensMillions(Number(e.target.value))}
-                className="mt-4 w-full accent-accent"
-              />
-              <div className="mt-2 flex justify-between font-mono text-[9px] uppercase tracking-[0.08em] text-ink-3">
-                <span>1M · startup</span>
-                <span className="hidden sm:inline">25M · growth</span>
-                <span className="hidden sm:inline">50M · scale-up</span>
-                <span>100M · enterprise</span>
-              </div>
-            </div>
-          </section>
-
-          <div className="grid gap-px border border-line bg-line sm:grid-cols-2 xl:grid-cols-4">
-            {models.map((m) => {
-              // Assume 75% input tokens, 25% output tokens
-              const inputCost = monthlyTokensMillions * 0.75 * m.inputPricePerM
-              const outputCost = monthlyTokensMillions * 0.25 * m.outputPricePerM
-              const totalMonth = inputCost + outputCost
-
-              return (
-                <div key={m.id} className="space-y-3 bg-surface p-4">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <h3 className="text-[12px] font-medium text-ink">{m.name}</h3>
-                    <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-ink-3">
-                      {m.provider}
-                    </span>
-                  </div>
-
-                  <p className="font-mono text-[24px] font-medium leading-none tracking-[-0.045em] text-ink tabular-nums">
-                    ${totalMonth.toFixed(0)}
-                    <span className="ml-1 text-[10px] font-normal tracking-normal text-ink-3">
-                      /mo
-                    </span>
-                  </p>
-
-                  <div className="space-y-1 border-t border-line pt-3 font-mono text-[10px] text-ink-3">
-                    <div className="flex justify-between gap-3">
-                      <span>Input ({monthlyTokensMillions * 0.75}M)</span>
-                      <span className="tabular-nums text-ink-2">
-                        ${inputCost.toFixed(1)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <span>Output ({monthlyTokensMillions * 0.25}M)</span>
-                      <span className="tabular-nums text-ink-2">
-                        ${outputCost.toFixed(1)}
-                      </span>
-                    </div>
-                  </div>
                 </div>
-              )
-            })}
+                <input
+                  type="range"
+                  min="1"
+                  max="100"
+                  value={monthlyTokensMillions}
+                  onChange={(e) => setMonthlyTokensMillions(Number(e.target.value))}
+                  className="mt-4 w-full accent-accent"
+                />
+                <div className="mt-2 flex justify-between font-mono text-[9px] uppercase tracking-[0.08em] text-ink-3">
+                  <span>1M · startup</span>
+                  <span className="hidden sm:inline">25M · growth</span>
+                  <span className="hidden sm:inline">50M · scale-up</span>
+                  <span>100M · enterprise</span>
+                </div>
+              </div>
+            </section>
+
+            <div className="grid gap-px border border-line bg-line sm:grid-cols-2 xl:grid-cols-4">
+              {models.map((m) => {
+                const inputCost = monthlyTokensMillions * 0.75 * m.inputPricePerM
+                const outputCost = monthlyTokensMillions * 0.25 * m.outputPricePerM
+                const totalMonth = inputCost + outputCost
+
+                return (
+                  <div key={m.id} className="space-y-3 bg-surface p-4">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <h3 className="text-[12px] font-medium text-ink">{m.name}</h3>
+                      <span className="font-mono text-[9px] uppercase tracking-[0.08em] text-ink-3">{m.provider}</span>
+                    </div>
+
+                    <p className="font-mono text-[24px] font-medium leading-none tracking-[-0.045em] text-ink tabular-nums">
+                      ${totalMonth.toFixed(0)}
+                      <span className="ml-1 text-[10px] font-normal tracking-normal text-ink-3">/mo</span>
+                    </p>
+
+                    <div className="space-y-1 border-t border-line pt-3 font-mono text-[10px] text-ink-3">
+                      <div className="flex justify-between gap-3">
+                        <span>Input ({monthlyTokensMillions * 0.75}M)</span>
+                        <span className="tabular-nums text-ink-2">${inputCost.toFixed(1)}</span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span>Output ({monthlyTokensMillions * 0.25}M)</span>
+                        <span className="tabular-nums text-ink-2">${outputCost.toFixed(1)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </section>
     </div>
   )
 }

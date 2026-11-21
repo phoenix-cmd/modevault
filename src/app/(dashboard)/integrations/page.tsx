@@ -38,508 +38,406 @@ const INTEGRATION_CATALOG: ProviderIntegrationState[] = [
     status: "connected",
     lastSync: "10 mins ago",
     features: { subscriptionQuotas: false, apiTokens: true, invoices: true },
-    notes:
-      "Official Usage API active for API keys. Consumer ChatGPT Plus limits tracked manually.",
+    notes: "Developer API usage and billing data syncs automatically when connected.",
   },
   {
     slug: "anthropic",
     name: "Anthropic / Claude",
     status: "connected",
-    lastSync: "25 mins ago",
-    features: { subscriptionQuotas: false, apiTokens: true, invoices: false },
-    notes:
-      "Claude API usage tracked via Admin API. Claude Pro 5x window recorded manually.",
+    lastSync: "1 hour ago",
+    features: { subscriptionQuotas: false, apiTokens: true, invoices: true },
+    notes: "Claude Pro quotas are not available via API and remain manual.",
   },
   {
     slug: "google",
     name: "Google / Gemini",
     status: "manual",
-    lastSync: "1 hour ago",
-    features: { subscriptionQuotas: false, apiTokens: true, invoices: false },
-    notes:
-      "Gemini API tracked via Google Cloud AI Studio credentials. Advanced subscription manual.",
+    lastSync: "Yesterday",
+    features: { subscriptionQuotas: false, apiTokens: false, invoices: false },
+    notes: "Consumer subscription data is tracked manually in this workspace.",
   },
   {
-    slug: "openrouter",
-    name: "OpenRouter",
-    status: "connected",
-    lastSync: "5 mins ago",
-    features: { subscriptionQuotas: false, apiTokens: true, invoices: true },
-    notes:
-      "Live balance and token accounting enabled via OpenRouter Key API.",
-  },
-  {
-    slug: "github-copilot",
-    name: "GitHub Copilot",
+    slug: "github",
+    name: "GitHub / Copilot",
     status: "manual",
-    lastSync: "Manual",
-    features: { subscriptionQuotas: true, apiTokens: false, invoices: true },
-    notes: "Consumer Copilot seats monitored via manual quota logs.",
-  },
-  {
-    slug: "cursor",
-    name: "Cursor",
-    status: "manual",
-    lastSync: "Manual",
-    features: { subscriptionQuotas: true, apiTokens: false, invoices: false },
-    notes:
-      "Fast premium requests (500/mo) monitored via manual tracking ledger.",
+    lastSync: "2 days ago",
+    features: { subscriptionQuotas: false, apiTokens: false, invoices: false },
+    notes: "Seat and Copilot usage tracking is managed manually.",
   },
   {
     slug: "perplexity",
     name: "Perplexity",
-    status: "manual",
-    lastSync: "Manual",
-    features: { subscriptionQuotas: true, apiTokens: true, invoices: false },
-    notes: "Pro search quotas (300/day) and Sonar API credits supported.",
+    status: "not_connected",
+    lastSync: null,
+    features: { subscriptionQuotas: false, apiTokens: false, invoices: false },
+    notes: "Connect a key to enable API usage monitoring for this provider.",
   },
   {
-    slug: "windsurf",
-    name: "Windsurf",
-    status: "manual",
-    lastSync: "Manual",
-    features: { subscriptionQuotas: true, apiTokens: false, invoices: false },
-    notes: "Cascade flow usage recorded manually.",
-  },
-  {
-    slug: "huggingface",
-    name: "Hugging Face",
-    status: "connected",
-    lastSync: "40 mins ago",
-    features: { subscriptionQuotas: false, apiTokens: true, invoices: true },
-    notes: "Serverless Inference API rate limits and compute units tracked.",
+    slug: "cursor",
+    name: "Cursor",
+    status: "not_connected",
+    lastSync: null,
+    features: { subscriptionQuotas: false, apiTokens: false, invoices: false },
+    notes: "Pro request tracking is currently managed manually.",
   },
 ]
 
-export default function IntegrationsPage() {
-  const [integrations, setIntegrations] = useState(INTEGRATION_CATALOG)
-  const [selectedProvider, setSelectedProvider] =
-    useState<ProviderIntegrationState | null>(null)
-  const [apiKeyInput, setApiKeyInput] = useState("")
-  const [syncing, setSyncing] = useState(false)
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [loadingIntegrations, setLoadingIntegrations] = useState(true)
+function mergeIntegrations(
+  remote: Array<{
+    providerSlug: string
+    status?: string
+    lastSyncAt?: string | null
+    keyPreview?: string | null
+    notes?: string | null
+    features?: {
+      subscriptionQuotas?: boolean
+      apiTokens?: boolean
+      invoices?: boolean
+    } | null
+  }>
+): ProviderIntegrationState[] {
+  const map = new Map(remote.map((item) => [item.providerSlug, item]))
+  return INTEGRATION_CATALOG.map((item) => {
+    const saved = map.get(item.slug)
+    if (!saved) return item
+    const status =
+      saved.status === "connected" || saved.status === "manual" || saved.status === "not_connected"
+        ? saved.status
+        : item.status
+    return {
+      ...item,
+      status,
+      lastSync: saved.lastSyncAt
+        ? new Date(saved.lastSyncAt).toLocaleString("en-IN", {
+            day: "numeric",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : item.lastSync,
+      keyPreview: saved.keyPreview ?? item.keyPreview,
+      notes: saved.notes || item.notes,
+      features: {
+        subscriptionQuotas: saved.features?.subscriptionQuotas ?? item.features.subscriptionQuotas,
+        apiTokens: saved.features?.apiTokens ?? item.features.apiTokens,
+        invoices: saved.features?.invoices ?? item.features.invoices,
+      },
+    }
+  })
+}
 
-  const dialogRef = useModalA11y(Boolean(selectedProvider), () =>
-    setSelectedProvider(null)
-  )
+export default function IntegrationsPage() {
+  const [integrations, setIntegrations] = useState<ProviderIntegrationState[]>(INTEGRATION_CATALOG)
+  const [loading, setLoading] = useState(true)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [selected, setSelected] = useState<ProviderIntegrationState | null>(null)
+  const [keyValue, setKeyValue] = useState("")
+  const [statusValue, setStatusValue] = useState<"connected" | "manual" | "not_connected">("manual")
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const modalRef = useModalA11y(modalOpen, () => setModalOpen(false))
+
+  const load = async () => {
+    try {
+      setLoading(true)
+      const res = await fetch("/api/integrations")
+      const json = await res.json()
+      if (res.ok && json.data) {
+        setIntegrations(mergeIntegrations(json.data))
+      }
+    } catch (err) {
+      console.error("Failed to load integrations", err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    let active = true
-    fetch("/api/integrations")
-      .then((res) => res.json())
-      .then((json) => {
-        if (!active) return
-        const records: Array<{
-          providerSlug: string
-          status: "connected" | "manual" | "not_connected"
-          features: {
-            subscriptionQuotas?: boolean
-            apiTokens?: boolean
-            invoices?: boolean
-          } | null
-          notes: string | null
-          keyPreview: string | null
-          lastSyncAt: string | null
-        }> = json?.data || []
-        if (records.length > 0) {
-          setIntegrations((prev) =>
-            prev.map((item) => {
-              const record = records.find((r) => r.providerSlug === item.slug)
-              if (!record) return item
-              return {
-                ...item,
-                status: record.status,
-                lastSync: record.lastSyncAt
-                  ? new Date(record.lastSyncAt).toLocaleString()
-                  : item.lastSync,
-                notes: record.notes || item.notes,
-                keyPreview: record.keyPreview,
-                features: {
-                  subscriptionQuotas:
-                    record.features?.subscriptionQuotas ??
-                    item.features.subscriptionQuotas,
-                  apiTokens: record.features?.apiTokens ?? item.features.apiTokens,
-                  invoices: record.features?.invoices ?? item.features.invoices,
-                },
-              }
-            })
-          )
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (active) setLoadingIntegrations(false)
-      })
-    return () => {
-      active = false
-    }
+    load()
   }, [])
 
-  const handleConnect = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedProvider) return
-    setSyncing(true)
-    setErrorMessage(null)
+  const openModal = (item: ProviderIntegrationState) => {
+    setSelected(item)
+    setStatusValue(item.status)
+    setKeyValue("")
+    setError(null)
+    setModalOpen(true)
+  }
+
+  const handleConnect = async () => {
+    if (!selected) return
+    setSaving(true)
+    setError(null)
     try {
       const res = await fetch("/api/integrations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          providerSlug: selectedProvider.slug,
-          apiKey: apiKeyInput.trim() || undefined,
-          status: apiKeyInput.trim() ? "connected" : "manual",
-          features: selectedProvider.features,
+          providerSlug: selected.slug,
+          status: statusValue,
+          apiKey: keyValue || undefined,
+          notes: selected.notes,
+          features: selected.features,
         }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || "Failed to save integration")
-
-      setIntegrations((prev) =>
-        prev.map((item) =>
-          item.slug === selectedProvider.slug
-            ? {
-                ...item,
-                status: apiKeyInput.trim() ? "connected" : "manual",
-                lastSync: json.data?.lastSyncAt
-                  ? new Date(json.data.lastSyncAt).toLocaleString()
-                  : item.lastSync,
-                keyPreview: json.data?.keyPreview ?? item.keyPreview,
-              }
-            : item
-        )
-      )
-      setSelectedProvider(null)
-      setApiKeyInput("")
-      setToastMessage(
-        apiKeyInput.trim()
-          ? `${selectedProvider.name} connected. Key encrypted at rest.`
-          : `${selectedProvider.name} saved in manual tracking mode.`
-      )
-      setTimeout(() => setToastMessage(null), 4000)
+      await load()
+      setModalOpen(false)
+      setKeyValue("")
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Failed to save integration")
+      setError(err instanceof Error ? err.message : "Failed to save integration")
     } finally {
-      setSyncing(false)
+      setSaving(false)
     }
   }
 
-  const handleDisconnect = async () => {
-    if (!selectedProvider) return
-    setSyncing(true)
-    setErrorMessage(null)
-    try {
-      const res = await fetch(
-        `/api/integrations?providerSlug=${encodeURIComponent(selectedProvider.slug)}`,
-        { method: "DELETE" }
-      )
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}))
-        throw new Error(json.error || "Failed to disconnect")
-      }
-      setIntegrations((prev) =>
-        prev.map((item) =>
-          item.slug === selectedProvider.slug
-            ? { ...item, status: "manual", keyPreview: null, lastSync: "Manual" }
-            : item
-        )
-      )
-      setSelectedProvider(null)
-      setApiKeyInput("")
-      setToastMessage(`${selectedProvider.name} credential removed.`)
-      setTimeout(() => setToastMessage(null), 4000)
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : "Failed to disconnect")
-    } finally {
-      setSyncing(false)
-    }
-  }
-
-  const capability = (label: string, supported: boolean) => (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 border px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.06em]",
-        supported
-          ? "border-success/25 bg-success-soft text-success"
-          : "border-line bg-surface-2 text-ink-3"
-      )}
-    >
-      {supported ? (
-        <Check className="h-2.5 w-2.5" strokeWidth={2.5} />
-      ) : (
-        <Minus className="h-2.5 w-2.5" strokeWidth={2.5} />
-      )}
-      {label}
-    </span>
-  )
+  const connected = integrations.filter((i) => i.status === "connected").length
+  const manual = integrations.filter((i) => i.status === "manual").length
+  const pending = integrations.filter((i) => i.status === "not_connected").length
 
   return (
-    <div className="mx-auto max-w-7xl space-y-7 pb-16">
+    <div className="mx-auto max-w-7xl space-y-8 pb-16">
       <PageHeader
-        eyebrow="Workspace · Connectors"
+        eyebrow="Operations · Connections"
         title="Integrations"
-        description="Connectors for live API telemetry, encrypted credential storage, and manual tracking fallbacks."
+        description="Provider connections for automated usage sync, billing, and quota data. Catalog entries without a saved record are shown with local defaults."
+        action={
+          <span className="badge bg-success-soft text-success">
+            <ShieldCheck className="h-3 w-3" strokeWidth={2} />
+            Keys stored encrypted
+          </span>
+        }
       />
 
-      {loadingIntegrations ? (
-        <StatBandSkeleton columns={4} />
+      {loading ? (
+        <StatBandSkeleton columns={3} />
       ) : (
         <StatBand
-          columns={4}
+          columns={3}
           items={[
-            {
-              label: "Connected",
-              value: String(
-                integrations.filter((item) => item.status === "connected").length
-              ),
-              meta: "Live official telemetry",
-              accent: true,
-            },
-            {
-              label: "Manual",
-              value: String(
-                integrations.filter((item) => item.status === "manual").length
-              ),
-              meta: "Tracked by hand",
-            },
-            {
-              label: "Not connected",
-              value: String(
-                integrations.filter(
-                  (item) => item.status === "not_connected"
-                ).length
-              ),
-              meta: "Available to configure",
-            },
-            {
-              label: "Token capable",
-              value: String(
-                integrations.filter((item) => item.features.apiTokens).length
-              ),
-              meta: "Report API usage",
-            },
+            { label: "Connected", value: String(connected), meta: "API sync active", accent: true },
+            { label: "Manual", value: String(manual), meta: "Tracked without sync" },
+            { label: "Pending", value: String(pending), meta: "Not yet configured" },
           ]}
         />
       )}
 
-      {toastMessage && (
-        <div className="flex items-center justify-between gap-3 border border-success/25 bg-success-soft px-3.5 py-2.5 text-[12px] text-success animate-fade-in">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} />
-            <span>{toastMessage}</span>
-          </div>
-          <button
-            onClick={() => setToastMessage(null)}
-            className="text-success/70 hover:text-success"
-            aria-label="Dismiss"
-          >
-            <X className="h-3.5 w-3.5" strokeWidth={2} />
-          </button>
-        </div>
-      )}
-
-      {errorMessage && (
-        <div className="flex items-center justify-between gap-3 border border-danger/25 bg-danger-soft px-3.5 py-2.5 text-[12px] text-danger animate-fade-in">
-          <span>{errorMessage}</span>
-          <button
-            onClick={() => setErrorMessage(null)}
-            className="text-danger/70 hover:text-danger"
-            aria-label="Dismiss"
-          >
-            <X className="h-3.5 w-3.5" strokeWidth={2} />
-          </button>
-        </div>
-      )}
-
-      <section className="flex items-start gap-3.5 border-y border-line py-4">
-        <Lock
-          className="mt-0.5 h-4 w-4 shrink-0 text-accent"
-          strokeWidth={1.8}
-        />
-        <div className="space-y-1">
-          <h2 className="font-display text-[14.5px] font-medium tracking-[-0.02em] text-ink">
-            Zero-knowledge credential security
-          </h2>
-          <p className="max-w-3xl text-[12px] leading-relaxed text-ink-2">
-            MODELVAULT adheres to provider terms of service. We never request
-            account passwords or scrape private consumer portals. Developer API
-            keys are encrypted at rest using server-side AES-GCM and never
-            exposed to browser bundles. Where official telemetry APIs do not
-            exist, we provide transparent manual logging.
-          </p>
-        </div>
-      </section>
-
-      <section>
-        <div className="flex flex-wrap items-end justify-between gap-3 pb-3">
+      <section className="border-t border-line pt-5">
+        <div className="flex flex-wrap items-end justify-between gap-3 pb-4">
           <div>
-            <h2 className="panel-title">Provider directory</h2>
-            <p className="panel-subtitle">
-              Read-only adapters for quota, token, and invoice telemetry.
+            <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">Provider catalog</h2>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">
+              Connect a provider API key to enable automated sync where supported.
             </p>
           </div>
-          <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">
-            {integrations.length} providers
-          </span>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 border-t border-line pt-4 md:grid-cols-2 xl:grid-cols-3">
-          {integrations.map((item) => (
-            <article
-              key={item.slug}
-              className="flex flex-col border border-line bg-surface p-4 transition-colors duration-150 hover:border-line-strong"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <ProviderIcon slug={item.slug} size="md" />
-                  <div className="min-w-0">
-                    <h3 className="truncate text-[13px] font-medium text-ink">
-                      {item.name}
-                    </h3>
-                    <p className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-ink-3">
-                      {item.lastSync || "Manual"}
-                    </p>
+        {error && !modalOpen && (
+          <div className="mb-4 border border-danger/25 bg-danger-soft/40 px-3 py-2.5 text-[12px] text-danger">{error}</div>
+        )}
+
+        {loading ? (
+          <div className="border-t border-line">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 border-b border-line py-3.5 last:border-b-0">
+                <div className="skeleton h-8 w-8 rounded-[6px]" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="skeleton h-3.5 w-36" />
+                  <div className="skeleton h-2.5 w-48" />
+                </div>
+                <div className="skeleton h-5 w-16" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <div className="hidden overflow-x-auto border-t border-line md:block">
+              <table className="data-table min-w-[860px]">
+                <thead>
+                  <tr>
+                    <th>Provider</th>
+                    <th>Status</th>
+                    <th className="text-center">Sub quotas</th>
+                    <th className="text-center">API tokens</th>
+                    <th className="text-center">Invoices</th>
+                    <th>Last sync</th>
+                    <th className="text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {integrations.map((item) => (
+                    <tr key={item.slug}>
+                      <td>
+                        <div className="flex items-center gap-2.5">
+                          <ProviderIcon slug={item.slug} size="sm" />
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-medium text-ink">{item.name}</p>
+                            <p className="max-w-[360px] truncate text-[11px] text-ink-3">
+                              {item.keyPreview ? `Key ${item.keyPreview} · ` : ""}
+                              {item.notes}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td><StatusBadge status={item.status} /></td>
+                      <td className="text-center">
+                        {item.features.subscriptionQuotas ? (
+                          <Check className="mx-auto h-3.5 w-3.5 text-success" strokeWidth={2.2} />
+                        ) : (
+                          <Minus className="mx-auto h-3.5 w-3.5 text-ink-3/50" strokeWidth={2} />
+                        )}
+                      </td>
+                      <td className="text-center">
+                        {item.features.apiTokens ? (
+                          <Check className="mx-auto h-3.5 w-3.5 text-success" strokeWidth={2.2} />
+                        ) : (
+                          <Minus className="mx-auto h-3.5 w-3.5 text-ink-3/50" strokeWidth={2} />
+                        )}
+                      </td>
+                      <td className="text-center">
+                        {item.features.invoices ? (
+                          <Check className="mx-auto h-3.5 w-3.5 text-success" strokeWidth={2.2} />
+                        ) : (
+                          <Minus className="mx-auto h-3.5 w-3.5 text-ink-3/50" strokeWidth={2} />
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap font-mono text-[10.5px] text-ink-3">{item.lastSync || "Never"}</td>
+                      <td className="text-right">
+                        <button
+                          onClick={() => openModal(item)}
+                          className={cn(item.status === "connected" ? "btn-ghost btn-sm" : "btn-secondary btn-sm")}
+                        >
+                          {item.status === "connected" ? "Manage" : "Connect"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="border-t border-line md:hidden">
+              {integrations.map((item) => (
+                <div key={item.slug} className="border-b border-line py-3.5 last:border-b-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <ProviderIcon slug={item.slug} size="sm" />
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-medium text-ink">{item.name}</p>
+                        <p className="mt-0.5 text-[11px] text-ink-3">{item.lastSync ? `Synced ${item.lastSync}` : "Never synced"}</p>
+                      </div>
+                    </div>
+                    <StatusBadge status={item.status} />
+                  </div>
+                  <p className="mt-2 line-clamp-2 pl-10 text-[11.5px] leading-relaxed text-ink-3">{item.notes}</p>
+                  <div className="mt-3 flex items-center justify-between pl-10">
+                    <div className="flex items-center gap-3 font-mono text-[9.5px] uppercase tracking-[0.08em] text-ink-3">
+                      <span className={item.features.apiTokens ? "text-ink-2" : ""}>API</span>
+                      <span className={item.features.invoices ? "text-ink-2" : ""}>Invoices</span>
+                      <span className={item.features.subscriptionQuotas ? "text-ink-2" : ""}>Quotas</span>
+                    </div>
+                    <button onClick={() => openModal(item)} className="btn-ghost btn-sm">
+                      {item.status === "connected" ? "Manage" : "Connect"}
+                    </button>
                   </div>
                 </div>
-                <StatusBadge status={item.status} />
-              </div>
-
-              <p className="mt-3 flex-1 text-[11.5px] leading-relaxed text-ink-2">
-                {item.notes}
-              </p>
-
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {capability("Tokens", item.features.apiTokens)}
-                {capability("Quotas", item.features.subscriptionQuotas)}
-                {capability("Invoices", item.features.invoices)}
-              </div>
-
-              <div className="mt-3.5 flex items-center justify-between border-t border-line pt-3">
-                <span className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-ink-3">
-                  {item.status === "connected" ? "Encrypted vault" : "Manual mode"}
-                </span>
-                <button
-                  onClick={() => setSelectedProvider(item)}
-                  className="btn-secondary btn-sm"
-                >
-                  {item.status === "connected" ? "Reconfigure" : "Configure"}
-                </button>
-              </div>
-            </article>
-          ))}
-        </div>
+              ))}
+            </div>
+          </>
+        )}
       </section>
 
-      {selectedProvider && (
-        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      {modalOpen && selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[1px] animate-fade-in">
           <div
-            ref={dialogRef}
+            ref={modalRef}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="configure-provider-title"
-            className="panel max-h-[90vh] w-full max-w-md overflow-y-auto shadow-2xl"
+            aria-labelledby="integration-modal-title"
+            className="panel relative w-full max-w-lg shadow-float"
           >
             <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
-              <div>
-                <p className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-accent">
-                  Telemetry adapter
-                </p>
-                <h2
-                  id="configure-provider-title"
-                  className="mt-1 font-display text-[16px] font-medium tracking-[-0.02em] text-ink"
-                >
-                  {selectedProvider.name}
-                </h2>
-                <p className="mt-1 text-[11.5px] text-ink-3">
-                  Read-only quota, token, and invoice access.
-                </p>
+              <div className="flex items-center gap-2.5">
+                <ProviderIcon slug={selected.slug} size="sm" />
+                <div>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">Provider connection</p>
+                  <h2 id="integration-modal-title" className="mt-1 font-display text-[16px] font-medium tracking-[-0.02em] text-ink">
+                    {selected.status === "connected" ? "Manage" : "Connect"} {selected.name}
+                  </h2>
+                </div>
               </div>
-              <button
-                onClick={() => setSelectedProvider(null)}
-                className="icon-btn -mr-1.5 -mt-1"
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" strokeWidth={1.8} />
+              <button onClick={() => setModalOpen(false)} className="icon-btn -mr-1 -mt-1" aria-label="Close">
+                <X className="h-4 w-4" strokeWidth={2} />
               </button>
             </div>
 
-            <form onSubmit={handleConnect}>
-              <div className="space-y-4 px-5 py-4">
-                <p className="text-[12px] leading-relaxed text-ink-2">
-                  Enter your official API key for {selectedProvider.name}. The
-                  key is transmitted over TLS and encrypted at rest with
-                  server-side keys.
+            <div className="space-y-4 px-5 py-4">
+              {error && (
+                <div className="border border-danger/25 bg-danger-soft px-3 py-2.5 text-[12px] text-danger">{error}</div>
+              )}
+
+              <div>
+                <label className="label">API key</label>
+                <div className="relative">
+                  <Key className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3" strokeWidth={1.8} />
+                  <input
+                    type="password"
+                    value={keyValue}
+                    onChange={(e) => setKeyValue(e.target.value)}
+                    placeholder={
+                      selected.keyPreview
+                        ? `Leave blank to keep ${selected.keyPreview}`
+                        : "sk-… or provider API key"
+                    }
+                    className="field pl-9"
+                  />
+                </div>
+                <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-ink-3">
+                  <Lock className="h-3 w-3" strokeWidth={2} />
+                  Keys are encrypted at rest. Leave blank to keep the existing key.
                 </p>
-
-                <div>
-                  <label className="label" htmlFor="provider-api-key">
-                    API key or access token
-                  </label>
-                  <div className="relative">
-                    <Key
-                      className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3"
-                      strokeWidth={1.8}
-                    />
-                    <input
-                      id="provider-api-key"
-                      type="password"
-                      required={!selectedProvider.keyPreview}
-                      placeholder={
-                        selectedProvider.keyPreview
-                          ? `Saved key ${selectedProvider.keyPreview} — enter a new key to replace`
-                          : "sk-…"
-                      }
-                      value={apiKeyInput}
-                      onChange={(e) => setApiKeyInput(e.target.value)}
-                      className="field pl-8 font-mono text-[12px]"
-                    />
-                  </div>
-                </div>
-
-                <div className="border border-line bg-surface-2/50 p-3">
-                  <div className="flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-[0.1em] text-success">
-                    <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.8} />
-                    Encrypted client boundary
-                  </div>
-                  <p className="mt-1.5 text-[11px] leading-relaxed text-ink-3">
-                    Keys are used only for read-only quota and balance telemetry
-                    and are never transmitted to third parties.
-                  </p>
-                </div>
               </div>
 
-              <div className="flex items-center justify-between gap-2 border-t border-line px-5 py-3">
-                <div>
-                  {selectedProvider.keyPreview && (
-                    <button
-                      type="button"
-                      onClick={handleDisconnect}
-                      disabled={syncing}
-                      className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-danger hover:underline disabled:opacity-50"
-                    >
-                      Disconnect credential
-                    </button>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedProvider(null)}
-                    className="btn-ghost"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={syncing}
-                    className="btn-primary"
-                  >
-                    {syncing ? "Saving…" : selectedProvider.keyPreview ? "Update" : "Save"}
-                  </button>
-                </div>
+              <div>
+                <label className="label">Connection status</label>
+                <select
+                  value={statusValue}
+                  onChange={(e) => setStatusValue(e.target.value as "connected" | "manual" | "not_connected")}
+                  className="select"
+                >
+                  <option value="connected">Connected — enable automated sync</option>
+                  <option value="manual">Manual — track without sync</option>
+                  <option value="not_connected">Not connected</option>
+                </select>
               </div>
-            </form>
+
+              <div className="border border-line bg-surface-2/30 p-3.5">
+                <p className="font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-ink-3">Sync capabilities</p>
+                <ul className="mt-2 space-y-1.5 text-[12px] text-ink-2">
+                  <li className="flex items-center gap-2">
+                    {selected.features.apiTokens ? <CheckCircle2 className="h-3.5 w-3.5 text-success" strokeWidth={2} /> : <Minus className="h-3.5 w-3.5 text-ink-3" strokeWidth={2} />}
+                    API token usage
+                  </li>
+                  <li className="flex items-center gap-2">
+                    {selected.features.invoices ? <CheckCircle2 className="h-3.5 w-3.5 text-success" strokeWidth={2} /> : <Minus className="h-3.5 w-3.5 text-ink-3" strokeWidth={2} />}
+                    Billing and invoices
+                  </li>
+                  <li className="flex items-center gap-2">
+                    {selected.features.subscriptionQuotas ? <CheckCircle2 className="h-3.5 w-3.5 text-success" strokeWidth={2} /> : <Minus className="h-3.5 w-3.5 text-ink-3" strokeWidth={2} />}
+                    Subscription quotas
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3.5">
+              <button type="button" onClick={() => setModalOpen(false)} className="btn-ghost">Cancel</button>
+              <button onClick={handleConnect} disabled={saving} className="btn-primary">
+                {saving ? "Saving…" : "Save integration"}
+              </button>
+            </div>
           </div>
         </div>
       )}

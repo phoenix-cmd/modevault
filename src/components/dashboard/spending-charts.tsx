@@ -33,14 +33,10 @@ function SectionHead({
   aside?: React.ReactNode
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 pb-5">
+    <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 pb-4">
       <div className="min-w-0">
-        <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
-          {title}
-        </h2>
-        <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
-          {meta}
-        </p>
+        <h3 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">{title}</h3>
+        <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">{meta}</p>
       </div>
       {aside}
     </div>
@@ -128,28 +124,15 @@ function MonthlySpendingChart({ data }: { data: SpendingDataPoint[] }) {
       />
 
       {data.length === 0 ? (
-        <p className="border-t border-line py-10 text-center text-[12px] text-ink-3">
+        <p className="border-t border-line py-8 text-[13px] leading-relaxed text-ink-3">
           No spending history recorded yet.
         </p>
       ) : (
-        <div className="h-[280px] w-full">
+        <div className="h-[280px] w-full border-t border-line pt-2">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={data}
-              margin={{ top: 4, right: 8, left: -20, bottom: 0 }}
-            >
-              <CartesianGrid
-                stroke={GRID_COLOR}
-                strokeDasharray="3 3"
-                vertical={false}
-              />
-              <XAxis
-                dataKey="month"
-                tick={{ fill: AXIS_COLOR, fontSize: 10.5 }}
-                axisLine={false}
-                tickLine={false}
-                dy={8}
-              />
+            <LineChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+              <CartesianGrid stroke={GRID_COLOR} strokeDasharray="2 4" vertical={false} />
+              <XAxis dataKey="month" tick={{ fill: AXIS_COLOR, fontSize: 10.5 }} axisLine={false} tickLine={false} dy={8} />
               <YAxis
                 tick={{ fill: AXIS_COLOR, fontSize: 10.5 }}
                 axisLine={false}
@@ -157,28 +140,9 @@ function MonthlySpendingChart({ data }: { data: SpendingDataPoint[] }) {
                 tickFormatter={compactCurrency}
                 width={48}
               />
-              <Tooltip
-                content={<ChartTooltip />}
-                cursor={{ stroke: CURSOR_COLOR, strokeDasharray: "4 4" }}
-              />
-              <Line
-                type="monotone"
-                dataKey="subscriptions"
-                name="Subscriptions"
-                stroke={CHART_ACCENT}
-                strokeWidth={1.5}
-                dot={false}
-                activeDot={{ r: 3, strokeWidth: 0 }}
-              />
-              <Line
-                type="monotone"
-                dataKey="api"
-                name="API"
-                stroke={CHART_TEAL}
-                strokeWidth={1.5}
-                dot={false}
-                activeDot={{ r: 3, strokeWidth: 0 }}
-              />
+              <Tooltip content={<ChartTooltip />} cursor={{ stroke: CURSOR_COLOR, strokeDasharray: "4 4" }} />
+              <Line type="monotone" dataKey="subscriptions" name="Subscriptions" stroke={CHART_ACCENT} strokeWidth={1.75} dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
+              <Line type="monotone" dataKey="api" name="API" stroke={CHART_TEAL} strokeWidth={1.75} dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -196,39 +160,24 @@ function ProviderSpendingChart({ data }: { data: ProviderSpendingData[] }) {
 
   return (
     <section className="border-t border-line pt-5">
-      <SectionHead
-        title="By provider"
-        meta={`${sorted.length} providers · ${formatCurrency(total, "INR")}`}
-      />
+      <SectionHead title="Provider distribution" meta={`${sorted.length} providers · ${formatCurrency(total, "INR")} recorded`} />
 
       {sorted.length === 0 ? (
-        <p className="border-t border-line py-8 text-center text-[12px] text-ink-3">
-          No provider spend recorded yet.
-        </p>
+        <p className="border-t border-line py-8 text-[13px] leading-relaxed text-ink-3">No provider spend recorded yet.</p>
       ) : (
         <ul className="border-t border-line">
-          {sorted.map((entry) => (
-            <li
-              key={entry.provider}
-              className="border-b border-line py-2.5 last:border-b-0"
-            >
-              <div className="flex items-center gap-2.5">
-                <ProviderIcon slug={entry.providerSlug} size="sm" />
-                <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-2">
-                  {entry.provider}
-                </span>
-                <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-ink">
-                  {formatCurrency(entry.amount, "INR")}
-                </span>
-              </div>
-              <div className="mt-2 h-px w-full bg-surface-3">
-                <div
-                  className="h-px"
-                  style={{
-                    width: `${Math.max((entry.amount / max) * 100, 2)}%`,
-                    background: CHART_ACCENT,
-                  }}
-                />
+          {sorted.map((entry, idx) => (
+            <li key={entry.provider} className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-x-2 border-b border-line py-2.5 last:border-b-0">
+              <span className="pt-1 font-mono text-[10px] tabular-nums text-ink-3">{String(idx + 1).padStart(2, "0")}</span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2.5">
+                  <ProviderIcon slug={entry.providerSlug} size="sm" />
+                  <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">{entry.provider}</span>
+                  <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-ink">{formatCurrency(entry.amount, "INR")}</span>
+                </div>
+                <div className="mt-2 h-px w-full bg-surface-3">
+                  <div className="h-px bg-accent" style={{ width: `${Math.max((entry.amount / max) * 100, 2)}%` }} />
+                </div>
               </div>
             </li>
           ))}
@@ -254,27 +203,18 @@ function ApiVsSubscriptionSplit({ spending }: { spending: SpendingDataPoint[] })
 
   return (
     <section className="border-t border-line pt-5">
-      <SectionHead title="Composition" meta="Six-month allocation" />
+      <SectionHead title="Spend composition" meta="Six-month allocation by source" />
 
       <div className="border-t border-line pt-4">
-        <div className="flex h-1 w-full overflow-hidden rounded-full bg-surface-3">
-          <div
-            className="h-full"
-            style={{ width: `${subsPct}%`, background: CHART_ACCENT }}
-          />
-          <div
-            className="h-full"
-            style={{ width: `${apiPct}%`, background: CHART_TEAL }}
-          />
+        <div className="flex h-[3px] w-full overflow-hidden bg-surface-3">
+          <div className="h-full" style={{ width: `${subsPct}%`, background: CHART_ACCENT }} />
+          <div className="h-full" style={{ width: `${apiPct}%`, background: CHART_TEAL }} />
         </div>
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 space-y-0 border-t border-line">
           {rows.map((row) => (
-            <div key={row.name} className="flex items-baseline justify-between gap-4">
-              <span className="flex items-center gap-1.5 text-[12px] text-ink-2">
-                <span
-                  className="h-1.5 w-1.5 rounded-full"
-                  style={{ background: row.color }}
-                />
+            <div key={row.name} className="flex items-baseline justify-between gap-4 border-b border-line py-2.5 last:border-b-0">
+              <span className="flex items-center gap-2 text-[12.5px] text-ink-2">
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: row.color }} />
                 {row.name}
               </span>
               <span className="font-mono text-[11.5px] tabular-nums text-ink">

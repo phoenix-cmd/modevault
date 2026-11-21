@@ -90,24 +90,24 @@ export function UsageOverview({ subscriptions }: UsageOverviewProps) {
   )
 
   if (subsWithUsage.length === 0) {
-    return null
+    if (subscriptions.length === 0) return null
+    return (
+      <div className="border-t border-line py-6">
+        <p className="max-w-2xl text-[13px] leading-relaxed text-ink-3">
+          {subscriptions.length} subscription{subscriptions.length === 1 ? "" : "s"} tracked, but no quota
+          limits are recorded yet. Add message, request, token, or credit limits to surface usage pressure here.
+        </p>
+      </div>
+    )
   }
 
   return (
-    <section className="border-t border-line pt-5">
-      <div className="flex items-start justify-between gap-4 pb-4">
-        <div>
-          <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
-            Usage &amp; quota
-          </h2>
-          <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
-            Consumption across {subsWithUsage.length} metered plan
-            {subsWithUsage.length === 1 ? "" : "s"}
-          </p>
-        </div>
+    <section className="border-t border-line">
+      <div className="hidden grid-cols-[minmax(180px,1.2fr)_minmax(0,2fr)] items-center gap-8 border-b border-line bg-surface-2/30 px-0 py-2 font-mono text-[9.5px] uppercase tracking-[0.12em] text-ink-3 sm:grid">
+        <span>Subscription</span>
+        <span>Quota utilisation</span>
       </div>
-
-      <ul className="border-t border-line">
+      <ul>
         {subsWithUsage.map((sub) => {
           const metrics = extractUsageMetrics(sub)
           const source = DATA_SOURCE_STYLE[sub.dataSource]
@@ -115,56 +115,46 @@ export function UsageOverview({ subscriptions }: UsageOverviewProps) {
           return (
             <li
               key={sub.id}
-              className="grid gap-4 border-b border-line py-4 last:border-b-0 sm:grid-cols-[minmax(170px,1fr)_minmax(0,2fr)] sm:gap-8"
+              className="grid gap-4 border-b border-line py-4 last:border-b-0 sm:grid-cols-[minmax(180px,1.2fr)_minmax(0,2fr)] sm:gap-8"
             >
               <div className="flex min-w-0 items-start gap-2.5">
                 <ProviderIcon slug={sub.providerSlug} size="sm" />
                 <div className="min-w-0">
-                  <p className="truncate text-[13px] font-medium text-ink">
-                    {sub.providerName}
-                  </p>
-                  <p className="truncate text-[11.5px] text-ink-3">
-                    {sub.planName}
-                  </p>
-                  <span className={cn("badge mt-1.5", source.className)}>
-                    {source.label}
-                  </span>
+                  <p className="truncate text-[13px] font-medium text-ink">{sub.providerName}</p>
+                  <p className="truncate text-[11.5px] text-ink-3">{sub.planName}</p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                    <span className={cn("badge", source.className)}>{source.label}</span>
+                    <span className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-ink-3">
+                      {metrics.length} metric{metrics.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
                 {metrics.map((metric) => {
                   const pct = getUsagePercentage(metric.used, metric.quota)
                   const UnitIcon = UNIT_ICON[metric.unit]
 
                   return (
-                    <div key={metric.unit}>
-                      <div className="mb-2 flex items-baseline justify-between gap-3">
+                    <div key={metric.unit} className="min-w-0">
+                      <div className="mb-1.5 flex items-baseline justify-between gap-3">
                         <span className="flex items-center gap-1.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] text-ink-3">
                           <UnitIcon className="h-3 w-3" strokeWidth={1.8} />
                           {metric.label}
                         </span>
-                        <span
-                          className={cn(
-                            "font-mono text-[11.5px] tabular-nums",
-                            getUsageColor(pct)
-                          )}
-                        >
+                        <span className={cn("font-mono text-[11px] tabular-nums", getUsageColor(pct))}>
                           {pct}%
                         </span>
                       </div>
                       <div className="h-px w-full overflow-hidden bg-surface-3">
                         <div
-                          className={cn(
-                            "h-full transition-[width] duration-500 ease-out",
-                            getUsageBarColor(pct)
-                          )}
+                          className={cn("h-full transition-[width] duration-500 ease-out", getUsageBarColor(pct))}
                           style={{ width: `${pct}%` }}
                         />
                       </div>
                       <p className="mt-1.5 font-mono text-[10px] tabular-nums text-ink-3">
-                        {formatNumber(metric.used)} / {formatNumber(metric.quota)}{" "}
-                        {metric.unit}
+                        {formatNumber(metric.used)} / {formatNumber(metric.quota)} {metric.unit}
                       </p>
                     </div>
                   )

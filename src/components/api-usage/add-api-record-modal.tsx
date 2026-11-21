@@ -87,30 +87,23 @@ export function AddApiRecordModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[1px] animate-fade-in">
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="api-record-modal-title"
-        className="panel relative max-h-[90vh] w-full max-w-lg overflow-y-auto shadow-2xl"
+        className="panel relative max-h-[90vh] w-full max-w-lg overflow-y-auto shadow-float"
       >
-        <div className="flex items-center justify-between gap-4 border-b border-line px-5 py-3.5">
-          <div className="flex items-center gap-2">
-            <Terminal className="h-4 w-4 text-accent" strokeWidth={1.8} />
-            <div>
-              <h2
-                id="api-record-modal-title"
-                className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink"
-              >
-                Log API usage
-              </h2>
-              <p className="text-[11.5px] text-ink-3">
-                Record tokens, cost and request volume
-              </p>
-            </div>
+        <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">Developer usage</p>
+            <h2 id="api-record-modal-title" className="mt-1 font-display text-[16px] font-medium tracking-[-0.02em] text-ink">
+              Log API usage
+            </h2>
+            <p className="mt-1 text-[12px] leading-relaxed text-ink-3">Record tokens, cost, and request volume for an account.</p>
           </div>
-          <button onClick={onClose} className="icon-btn" aria-label="Close">
+          <button onClick={onClose} className="icon-btn -mr-1 -mt-1" aria-label="Close">
             <X className="h-4 w-4" strokeWidth={2} />
           </button>
         </div>
@@ -118,18 +111,12 @@ export function AddApiRecordModal({
         <form onSubmit={handleSubmit}>
           <div className="space-y-4 px-5 py-4">
             {error && (
-              <div className="rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-[12px] text-danger">
-                {error}
-              </div>
+              <div className="border border-danger/25 bg-danger-soft px-3 py-2.5 text-[12px] text-danger">{error}</div>
             )}
 
             <div>
               <label className="label">API account</label>
-              <select
-                value={accountId}
-                onChange={(e) => setAccountId(e.target.value)}
-                className="select"
-              >
+              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="select">
                 {apiAccounts.map((account) => (
                   <option key={account.id} value={account.id}>
                     {account.accountName || account.providerName}
@@ -152,46 +139,22 @@ export function AddApiRecordModal({
               </div>
               <div>
                 <label className="label">Date</label>
-                <input
-                  type="date"
-                  required
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="field"
-                />
+                <input type="date" required value={date} onChange={(e) => setDate(e.target.value)} className="field" />
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-2.5">
               <div>
                 <label className="label">Input</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={inputTokens}
-                  onChange={(e) => setInputTokens(Number(e.target.value))}
-                  className="field tnum"
-                />
+                <input type="number" min="0" value={inputTokens} onChange={(e) => setInputTokens(Number(e.target.value))} className="field tnum" />
               </div>
               <div>
                 <label className="label">Output</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={outputTokens}
-                  onChange={(e) => setOutputTokens(Number(e.target.value))}
-                  className="field tnum"
-                />
+                <input type="number" min="0" value={outputTokens} onChange={(e) => setOutputTokens(Number(e.target.value))} className="field tnum" />
               </div>
               <div>
                 <label className="label">Cached</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={cachedTokens}
-                  onChange={(e) => setCachedTokens(Number(e.target.value))}
-                  className="field tnum"
-                />
+                <input type="number" min="0" value={cachedTokens} onChange={(e) => setCachedTokens(Number(e.target.value))} className="field tnum" />
               </div>
             </div>
 
@@ -209,26 +172,17 @@ export function AddApiRecordModal({
               </div>
               <div>
                 <label className="label">Request count</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={requests}
-                  onChange={(e) => setRequests(Number(e.target.value))}
-                  className="field tnum"
-                />
+                <input type="number" min="1" value={requests} onChange={(e) => setRequests(Number(e.target.value))} className="field tnum" />
               </div>
             </div>
 
-            <p className="help-text">
-              Total tokens are computed as input plus output tokens when saved.
-            </p>
+            <p className="text-[11.5px] leading-relaxed text-ink-3">Total tokens are computed as input plus output tokens when saved.</p>
           </div>
 
-          <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3">
-            <button type="button" onClick={onClose} className="btn-ghost">
-              Cancel
-            </button>
+          <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3.5">
+            <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
             <button type="submit" disabled={submitting} className="btn-primary">
+              <Terminal className="h-3.5 w-3.5" strokeWidth={1.8} />
               {submitting ? "Saving…" : "Add record"}
             </button>
           </div>

@@ -9,7 +9,6 @@ import {
   Info,
   ShieldAlert,
   Trash2,
-  X,
 } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
 import { StatBand, StatBandSkeleton } from "@/components/ui/stat-band"
@@ -42,261 +41,202 @@ function severityMeta(severity: string) {
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [filter, setFilter] = useState("all")
 
-  const fetchNotifs = async () => {
+  const load = async () => {
     try {
       setLoading(true)
       const res = await fetch("/api/notifications")
       const json = await res.json()
-      if (json.data?.notifications) {
-        setNotifications(json.data.notifications)
-      }
-    } catch (e) {
-      console.error(e)
-      setError("The alert stream could not be loaded.")
+      if (json.data?.notifications) setNotifications(json.data.notifications)
+    } catch (err) {
+      console.error("Failed to load notifications", err)
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    fetchNotifs()
+    load()
   }, [])
 
-  const unread = notifications.filter((n) => !n.isRead)
-  const counts = useMemo(
-    () => ({
-      critical: notifications.filter((n) => n.severity === "critical").length,
-      warning: notifications.filter((n) => n.severity === "warning").length,
-    }),
-    [notifications]
-  )
-
-  const handleMarkAllRead = async () => {
-    try {
-      await fetch("/api/notifications/mark-all-read", { method: "POST" })
-      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))
-    } catch (e) {
-      console.error(e)
-      setError("Marking alerts as read failed.")
-    }
-  }
-
-  const handleMarkRead = async (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
-    )
+  const markRead = async (id: string) => {
     try {
       const res = await fetch(`/api/notifications/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isRead: true }),
       })
-      if (!res.ok) throw new Error("request failed")
-    } catch (e) {
-      console.error(e)
-      setError("That alert could not be marked as read.")
-      fetchNotifs()
+      if (res.ok) {
+        setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)))
+      }
+    } catch (err) {
+      console.error("Failed to mark read", err)
     }
   }
 
-  const handleDismiss = async (id: string) => {
-    const previous = notifications
-    setNotifications((prev) => prev.filter((n) => n.id !== id))
+  const markAllRead = async () => {
+    try {
+      const res = await fetch("/api/notifications/mark-all-read", { method: "POST" })
+      if (res.ok) {
+        setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))
+      }
+    } catch (err) {
+      console.error("Failed to mark all read", err)
+    }
+  }
+
+  const remove = async (id: string) => {
     try {
       const res = await fetch(`/api/notifications/${id}`, { method: "DELETE" })
-      if (!res.ok) throw new Error("request failed")
-    } catch (e) {
-      console.error(e)
-      setError("That alert could not be dismissed.")
-      setNotifications(previous)
+      if (res.ok) {
+        setNotifications((prev) => prev.filter((n) => n.id !== id))
+      }
+    } catch (err) {
+      console.error("Failed to delete notification", err)
     }
   }
 
+  const unreadCount = notifications.filter((n) => !n.isRead).length
+  const criticalCount = notifications.filter((n) => n.severity === "critical" && !n.isRead).length
+
+  const filtered = useMemo(() => {
+    return notifications.filter((n) => {
+      if (filter === "unread") return !n.isRead
+      if (filter === "critical") return n.severity === "critical"
+      if (filter === "warning") return n.severity === "warning"
+      return true
+    })
+  }, [notifications, filter])
+
   return (
-    <div className="mx-auto max-w-5xl space-y-7 pb-16">
+    <div className="mx-auto max-w-7xl space-y-8 pb-16">
       <PageHeader
-        eyebrow="Workspace · Signals"
+        eyebrow="Operations · Inbox"
         title="Notifications"
-        description="Quota exhaustion, approval gates, and billing events across every connected provider."
+        description="System alerts for budget thresholds, renewal windows, and integration events."
         action={
-          <button
-            onClick={handleMarkAllRead}
-            disabled={unread.length === 0}
-            className="btn-secondary"
-          >
-            <CheckCheck className="h-3.5 w-3.5" strokeWidth={1.8} />
-            Mark all read
-          </button>
+          <div className="flex items-center gap-2">
+            {unreadCount > 0 && (
+              <button onClick={markAllRead} className="btn-secondary btn-sm">
+                <CheckCheck className="h-3.5 w-3.5" strokeWidth={1.8} />
+                Mark all read
+              </button>
+            )}
+          </div>
         }
       />
 
       {loading ? (
-        <StatBandSkeleton columns={4} />
+        <StatBandSkeleton columns={3} />
       ) : (
         <StatBand
-          columns={4}
+          columns={3}
           items={[
-            {
-              label: "Unread",
-              value: String(unread.length),
-              meta: unread.length > 0 ? "Awaiting review" : "Inbox clear",
-              accent: unread.length > 0,
-            },
-            {
-              label: "Critical",
-              value: String(counts.critical),
-              meta: "Quota or access failures",
-            },
-            {
-              label: "Warnings",
-              value: String(counts.warning),
-              meta: "Approaching thresholds",
-            },
-            {
-              label: "Total alerts",
-              value: String(notifications.length),
-              meta: "In this workspace",
-            },
+            { label: "Unread", value: String(unreadCount), accent: unreadCount > 0 },
+            { label: "Critical", value: String(criticalCount), meta: criticalCount > 0 ? "Needs attention" : "Clear" },
+            { label: "Total", value: String(notifications.length) },
           ]}
         />
       )}
 
-      {error && (
-        <div className="flex items-start justify-between gap-3 border border-danger/25 bg-danger-soft px-3.5 py-2.5 text-[11.5px] text-danger">
-          <span className="font-medium">{error}</span>
-          <button
-            onClick={() => setError(null)}
-            className="text-danger/70 transition-colors hover:text-danger"
-            aria-label="Dismiss error"
-          >
-            <X className="h-3.5 w-3.5" strokeWidth={2} />
-          </button>
-        </div>
-      )}
-
       <section className="border-t border-line pt-5">
-        <div className="flex flex-wrap items-end justify-between gap-3 pb-3">
+        <div className="flex flex-col gap-3 border-b border-line pb-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="panel-title">Alert stream</h2>
-            <p className="panel-subtitle">
-              Newest first. Unread alerts carry an amber rule.
+            <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">Activity</h2>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">
+              {filtered.length} notification{filtered.length === 1 ? "" : "s"}
             </p>
           </div>
-          <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">
-            {unread.length} unread / {notifications.length} total
-          </span>
+          <div className="flex items-center gap-2">
+            <select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="select select-sm w-auto"
+              aria-label="Filter notifications"
+            >
+              <option value="all">All</option>
+              <option value="unread">Unread</option>
+              <option value="critical">Critical</option>
+              <option value="warning">Warning</option>
+            </select>
+          </div>
         </div>
 
         {loading ? (
-          <div className="border-t border-line">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="flex items-start gap-3 border-b border-line py-4">
-                <div className="skeleton h-7 w-7 shrink-0" />
-                <div className="flex-1 space-y-2">
-                  <div className="skeleton h-3 w-52" />
-                  <div className="skeleton h-2.5 w-full max-w-lg" />
+          <div className="border-b border-line">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-start gap-3 border-b border-line py-3.5 last:border-b-0">
+                <div className="skeleton mt-0.5 h-4 w-4 rounded-full" />
+                <div className="flex-1 space-y-1.5">
+                  <div className="skeleton h-3.5 w-48" />
+                  <div className="skeleton h-2.5 w-full max-w-md" />
                 </div>
               </div>
             ))}
           </div>
-        ) : notifications.length === 0 ? (
-          <div className="border-t border-line px-6 py-16 text-center">
-            <Bell className="mx-auto h-7 w-7 text-ink-3" strokeWidth={1.4} />
-            <h3 className="mt-3 font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
-              No alerts in this workspace
-            </h3>
-            <p className="mx-auto mt-1.5 max-w-sm text-[12px] leading-relaxed text-ink-3">
-              Quota warnings and approval requests will appear here as providers
-              report usage.
+        ) : filtered.length === 0 ? (
+          <div className="border-b border-line py-12">
+            <div className="flex items-center gap-2 text-ink-3">
+              <Bell className="h-4 w-4" strokeWidth={1.8} />
+              <p className="text-[13px] font-medium text-ink">No notifications</p>
+            </div>
+            <p className="mt-1 text-[12px] leading-relaxed text-ink-3">
+              {filter === "all"
+                ? "Alerts and system events will appear here."
+                : "No notifications match the selected filter."}
             </p>
           </div>
         ) : (
           <div className="border-t border-line">
-            {notifications.map((n) => {
+            {filtered.map((n) => {
               const meta = severityMeta(n.severity)
               const Icon = meta.icon
               return (
-                <article
+                <div
                   key={n.id}
                   className={cn(
-                    "group relative flex flex-wrap items-start justify-between gap-4 border-b border-line py-4 pl-4 pr-1 transition-colors duration-150",
-                    !n.isRead ? "bg-surface-2/30" : "hover:bg-surface-2/20"
+                    "group flex items-start gap-3 border-b border-line py-3.5 last:border-b-0 sm:gap-4",
+                    !n.isRead && "bg-surface-2/20 -mx-1 px-1 sm:-mx-2 sm:px-2"
                   )}
                 >
-                  <span
-                    className={cn(
-                      "absolute inset-y-3 left-0 w-px bg-accent transition-opacity",
-                      n.isRead ? "opacity-0" : "opacity-100"
-                    )}
-                    aria-hidden
-                  />
+                  <span className={cn("mt-0.5 shrink-0", meta.tone)} aria-hidden>
+                    <Icon className="h-4 w-4" strokeWidth={1.8} />
+                  </span>
 
-                  <div className="flex min-w-0 flex-1 items-start gap-3">
-                    <span
-                      className={cn(
-                        "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center border border-line bg-surface",
-                        meta.tone
-                      )}
-                    >
-                      <Icon className="h-3.5 w-3.5" strokeWidth={1.8} />
-                    </span>
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                        <span
-                          className={cn(
-                            "font-mono text-[9px] font-medium uppercase tracking-[0.12em]",
-                            meta.tone
-                          )}
-                        >
-                          {meta.label}
-                        </span>
-                        <h3
-                          className={cn(
-                            "text-[12.5px] text-ink",
-                            n.isRead ? "font-medium" : "font-semibold"
-                          )}
-                        >
-                          {n.title}
-                        </h3>
-                        {!n.isRead && (
-                          <span
-                            className="h-1.5 w-1.5 rounded-full bg-accent"
-                            aria-label="Unread"
-                          />
-                        )}
-                      </div>
-                      <p className="mt-1 max-w-2xl text-[11.5px] leading-relaxed text-ink-2">
-                        {n.message}
-                      </p>
-                      <p className="mt-1.5 font-mono text-[9.5px] uppercase tracking-[0.08em] text-ink-3">
-                        {new Date(n.createdAt).toLocaleString()}
-                      </p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <p className={cn("text-[13px] font-medium text-ink", !n.isRead && "font-semibold")}>{n.title}</p>
+                      {!n.isRead && <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-label="Unread" />}
+                      <span className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-3">{meta.label}</span>
                     </div>
+                    <p className="mt-1 text-[12.5px] leading-relaxed text-ink-2">{n.message}</p>
+                    <p className="mt-1.5 font-mono text-[10px] text-ink-3 tabular-nums">
+                      {new Date(n.createdAt).toLocaleString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-0.5">
+                  <div className="flex shrink-0 items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                     {!n.isRead && (
-                      <button
-                        onClick={() => handleMarkRead(n.id)}
-                        className="icon-btn h-7 w-7"
-                        title="Mark as read"
-                        aria-label={`Mark ${n.title} as read`}
-                      >
-                        <Check className="h-3.5 w-3.5" strokeWidth={1.8} />
+                      <button onClick={() => markRead(n.id)} className="icon-btn h-7 w-7" aria-label="Mark as read" title="Mark as read">
+                        <Check className="h-3.5 w-3.5" strokeWidth={2} />
                       </button>
                     )}
                     <button
-                      onClick={() => handleDismiss(n.id)}
-                      className="icon-btn h-7 w-7 hover:text-danger"
-                      title="Dismiss alert"
-                      aria-label={`Dismiss ${n.title}`}
+                      onClick={() => remove(n.id)}
+                      className="icon-btn h-7 w-7 hover:border-danger/30 hover:bg-danger-soft hover:text-danger"
+                      aria-label="Delete notification"
+                      title="Delete"
                     >
                       <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
                     </button>
                   </div>
-                </article>
+                </div>
               )
             })}
           </div>
