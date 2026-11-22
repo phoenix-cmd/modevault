@@ -850,7 +850,7 @@ export default function WorkflowsPage() {
           ) : (
             <div className="space-y-3">
               {/* Mobile/Tablet inline legend */}
-              <div className="flex flex-wrap items-center justify-between gap-2 border border-line bg-surface px-3.5 py-2.5 md:hidden">
+              <div className="flex flex-wrap items-center justify-between gap-2 border border-line bg-surface px-3.5 py-2.5 xl:hidden">
                 <div className="flex items-center gap-2 text-ink">
                   {activeTemplate === "pr_security" ? <ShieldCheck className="h-3.5 w-3.5 text-accent" strokeWidth={1.8} /> : <Workflow className="h-3.5 w-3.5 text-accent" strokeWidth={1.8} />}
                   <span className="font-display text-[13px] font-medium">{templateLabel}</span>
@@ -884,7 +884,7 @@ export default function WorkflowsPage() {
                   showMiniMap={isTabletOrUp}
                 />
 
-                <div className="pointer-events-none absolute left-4 top-4 z-10 hidden max-w-[320px] border border-line bg-surface/95 px-3.5 py-3 backdrop-blur-[1px] md:block">
+                <div className="pointer-events-none absolute left-4 top-4 z-10 hidden max-w-[320px] border border-line bg-surface/95 px-3.5 py-3 backdrop-blur-[1px] xl:block">
                   <div className="flex items-center gap-2 text-ink">
                     {activeTemplate === "pr_security" ? <ShieldCheck className="h-3.5 w-3.5 text-accent" strokeWidth={1.8} /> : <Workflow className="h-3.5 w-3.5 text-accent" strokeWidth={1.8} />}
                     <p className="font-display text-[13px] font-medium tracking-[-0.02em]">{templateLabel}</p>

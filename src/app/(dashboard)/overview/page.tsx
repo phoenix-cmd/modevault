@@ -300,7 +300,7 @@ export default function OverviewPage() {
                 <tbody>
                   {executions.slice(0, 6).map((exec) => (
                     <tr key={exec.id}>
-                      <td className="max-w-[260px]">
+                      <td className="max-w-[180px] lg:max-w-[260px]">
                         <Link
                           href="/agents"
                           className="block truncate font-medium text-ink transition-colors hover:text-accent"
@@ -308,7 +308,7 @@ export default function OverviewPage() {
                           {exec.title}
                         </Link>
                       </td>
-                      <td className="whitespace-nowrap font-mono text-[11px] text-ink-2">
+                      <td className="max-w-[140px] truncate font-mono text-[11px] text-ink-2 lg:max-w-[200px]">
                         {exec.project?.name || "—"}
                       </td>
                       <td className="hidden whitespace-nowrap font-mono text-[11px] text-ink-3 xl:table-cell">
