@@ -1,12 +1,33 @@
-import { type NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
-import { getCurrentUserOrDefault } from "@/lib/auth"
+import { type NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
+import { prisma } from "@/lib/db"
+import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { parseJson } from "@/lib/validation"
+import { logger, errorContext } from "@/lib/logger"
 
+const subscriptionCreateSchema = z.object({
+  providerId: z.string().min(1).max(128),
+  planId: z.string().max(128).nullable().optional(),
+  customPlanName: z.string().max(160).nullable().optional(),
+  type: z.enum(["consumer", "api"]),
+  status: z.enum(["active", "paused", "expired", "cancelled", "trial"]).optional(),
+  billingCycle: z.enum(["monthly", "yearly", "custom"]).optional(),
+  price: z.coerce.number().finite().nonnegative().max(10_000_000),
+  currency: z.string().trim().min(1).max(12).optional(),
+  startDate: z.string().max(64).optional(),
+  renewalDate: z.string().max(64).nullable().optional(),
+  expiryDate: z.string().max(64).nullable().optional(),
+  quotaMessages: z.number().int().nonnegative().nullable().optional(),
+  quotaTokens: z.number().int().nonnegative().nullable().optional(),
+  quotaRequests: z.number().int().nonnegative().nullable().optional(),
+  quotaCredits: z.number().finite().nonnegative().nullable().optional(),
+  quotaResetPeriod: z.string().max(40).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+})
 
-// GET /api/subscriptions — List all subscriptions for user, with provider data
 export async function GET(_request: NextRequest) {
   try {
-    const user = await getCurrentUserOrDefault()
+    const user = await requireAuthenticatedUser()
     const subscriptions = await prisma.subscription.findMany({
       where: { userId: user.id },
       include: {
@@ -14,40 +35,40 @@ export async function GET(_request: NextRequest) {
         plan: true,
       },
       orderBy: { createdAt: "desc" },
-    });
+    })
 
-    return Response.json({ data: subscriptions });
-  } catch (error) {
-    console.error("Subscriptions GET error:", error);
-    return Response.json(
-      { data: null, error: "Failed to fetch subscriptions" },
-      { status: 500 }
-    );
+    return NextResponse.json({ data: subscriptions })
+  } catch (err: unknown) {
+    logger.error("Subscriptions GET error", errorContext(err))
+    return authErrorResponse(err, "Failed to fetch subscriptions")
   }
 }
 
-// POST /api/subscriptions — Create a new subscription
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUserOrDefault()
-    const body = await request.json();
+    const user = await requireAuthenticatedUser()
+    const parsed = await parseJson(request, subscriptionCreateSchema)
+    if ("response" in parsed) return parsed.response
 
-    const { providerId, type, price, startDate, billingCycle, planId, customPlanName, currency, status, renewalDate, expiryDate, quotaMessages, quotaTokens, quotaRequests, quotaCredits, quotaResetPeriod, notes } = body;
-
-    // Validate required fields
-    if (!providerId || !type || price == null) {
-      return Response.json(
-        { data: null, error: "Missing required fields: providerId, type, price" },
-        { status: 400 }
-      );
-    }
-
-    if (!["consumer", "api"].includes(type)) {
-      return Response.json(
-        { data: null, error: "type must be 'consumer' or 'api'" },
-        { status: 400 }
-      );
-    }
+    const {
+      providerId,
+      type,
+      price,
+      startDate,
+      billingCycle,
+      planId,
+      customPlanName,
+      currency,
+      status,
+      renewalDate,
+      expiryDate,
+      quotaMessages,
+      quotaTokens,
+      quotaRequests,
+      quotaCredits,
+      quotaResetPeriod,
+      notes,
+    } = parsed.data
 
     const subscription = await prisma.subscription.create({
       data: {
@@ -71,14 +92,11 @@ export async function POST(request: NextRequest) {
         notes: notes ?? null,
       },
       include: { provider: true, plan: true },
-    });
+    })
 
-    return Response.json({ data: subscription }, { status: 201 });
-  } catch (error) {
-    console.error("Subscriptions POST error:", error);
-    return Response.json(
-      { data: null, error: "Failed to create subscription" },
-      { status: 500 }
-    );
+    return NextResponse.json({ data: subscription }, { status: 201 })
+  } catch (err: unknown) {
+    logger.error("Subscriptions POST error", errorContext(err))
+    return authErrorResponse(err, "Failed to create subscription")
   }
 }

@@ -20,11 +20,11 @@ export function PageHeader({
   return (
     <div
       className={cn(
-        "flex flex-col gap-5 pb-7 sm:flex-row sm:items-end sm:justify-between",
+        "flex flex-wrap items-end justify-between gap-x-6 gap-y-5 pb-7",
         className
       )}
     >
-      <div className="min-w-0 max-w-3xl space-y-2.5">
+      <div className="min-w-[min(100%,300px)] flex-1 max-w-3xl space-y-2.5">
         {eyebrow && (
           <p className="inline-flex items-center gap-2 border border-line bg-surface px-2.5 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.16em] text-accent">
             <span className="h-1.5 w-1.5 bg-accent" aria-hidden />
@@ -44,7 +44,7 @@ export function PageHeader({
         )}
       </div>
       {action && (
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:max-w-full">
           {action}
         </div>
       )}

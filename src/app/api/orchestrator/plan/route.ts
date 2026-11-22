@@ -1,20 +1,38 @@
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
 import { prisma } from "@/lib/db"
+import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { getUserAccessibleWorkspaceIds, requireProjectAccess } from "@/lib/permissions"
+import { idSchema, parseJson } from "@/lib/validation"
+import { logger, errorContext } from "@/lib/logger"
+
+const orchestratorPlanSchema = z.object({
+  projectId: idSchema.optional(),
+  prompt: z.string().trim().min(1).max(20000),
+})
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
-    const { projectId, prompt } = body
+    const user = await requireAuthenticatedUser()
+    const parsed = await parseJson(req, orchestratorPlanSchema)
+    if ("response" in parsed) return parsed.response
+    const { projectId, prompt } = parsed.data
 
-    if (!prompt) {
-      return NextResponse.json({ error: "prompt is required" }, { status: 400 })
+    let project = null
+    if (projectId) {
+      await requireProjectAccess(projectId, user.id, "viewer")
+      project = await prisma.project.findUnique({ where: { id: projectId } })
+      if (!project) {
+        return NextResponse.json({ error: "Project not found" }, { status: 404 })
+      }
+    } else {
+      const workspaceIds = await getUserAccessibleWorkspaceIds(user.id, "viewer")
+      project = await prisma.project.findFirst({
+        where: { workspaceId: { in: workspaceIds } },
+        orderBy: { updatedAt: "desc" },
+      })
     }
 
-    const project = projectId
-      ? await prisma.project.findUnique({ where: { id: projectId } })
-      : await prisma.project.findFirst()
-
-    // Determine targeted files and domain from prompt
     const isUiRelated = /ui|button|modal|component|page|css|tailwind|style|design/i.test(prompt)
     const isApiRelated = /api|backend|database|prisma|stripe|checkout|auth|endpoint|sql/i.test(prompt)
 
@@ -81,7 +99,7 @@ export async function POST(req: NextRequest) {
     ]
 
     const totalEstimatedTokens = planStages.reduce((sum, s) => sum + s.estimatedTokens, 0)
-    const estimatedCost = parseFloat(((totalEstimatedTokens / 1000000) * 4.25).toFixed(4)) // Blend model pricing
+    const estimatedCost = parseFloat(((totalEstimatedTokens / 1000000) * 4.25).toFixed(4))
     const estimatedDurationSec = Math.floor(totalEstimatedTokens / 450) + 12
 
     return NextResponse.json({
@@ -99,7 +117,8 @@ export async function POST(req: NextRequest) {
         },
       },
     })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err: unknown) {
+    logger.error("Orchestrator plan POST failed", errorContext(err))
+    return authErrorResponse(err, "Failed to generate orchestrator plan")
   }
 }

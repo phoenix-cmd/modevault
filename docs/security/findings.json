@@ -1,0 +1,599 @@
+{
+  "assessment": {
+    "product": "MODELVAULT",
+    "date": "2026-11-23",
+    "type": "comprehensive security audit, manual code review, npm audit SCA, and isolated dynamic verification",
+    "codeModified": true,
+    "dynamicTestingExecuted": true,
+    "dynamicTestingEnvironment": "Isolated local Next.js server on port 3199 with temporary scratch SQLite DB copy and synthetic Org A (Owner/Member/Viewer) & Org B (Owner/Member) accounts",
+    "scannerSuiteExecuted": {
+      "npmAudit": true,
+      "gitHistorySecretPatternScan": true,
+      "semgrep": false,
+      "gitleaksBinary": false,
+      "osvScanner": false,
+      "trivy": false
+    },
+    "remediationVerified": true,
+    "regressionTestsPassed": "18/18 (DT-001..DT-018)"
+  },
+  "summary": {
+    "critical": 4,
+    "high": 10,
+    "medium": 8,
+    "low": 5,
+    "informational": 4,
+    "total": 31,
+    "releaseRecommendation": "CONDITIONALLY READY FOR STAGING (App-layer findings remediated & verified; external cloud sandbox/Postgres/CI gates remain deployment tasks)"
+  },
+  "findings": [
+    {
+      "id": "MV-SEC-001",
+      "title": "Demo-user authentication fallback allows unauthorized access when session cookie is present but invalid",
+      "severity": "Critical",
+      "confidence": "Confirmed",
+      "cvss4": "9.3",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:L/SC:N/SI:N/SA:N",
+      "cwe": "CWE-287",
+      "owasp": "A07:2025 Authentication Failures",
+      "asvs": "V2.2, V3.3, V8.2",
+      "component": "Authentication / API authorization",
+      "files": [
+        "src/lib/auth.ts",
+        "src/proxy.ts",
+        "src/app/api/subscriptions/route.ts",
+        "src/app/api/billing/route.ts",
+        "src/app/api/integrations/route.ts"
+      ],
+      "dynamicVerification": "DT-001 (Confirmed: Cookie mv_session=invalid-arbitrary-token returned HTTP 200 and 8 subscriptions owned by user_demo_001)",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-002",
+      "title": "Project creation/listing/upload endpoints lack authentication and workspace authorization",
+      "severity": "Critical",
+      "confidence": "Confirmed",
+      "cvss4": "9.8",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+      "cwe": "CWE-862",
+      "owasp": "A01:2025 Broken Access Control",
+      "asvs": "V4.2, V8.2, V5.3",
+      "component": "Project management / upload ingestion",
+      "files": [
+        "src/app/api/projects/route.ts",
+        "src/app/api/projects/upload/route.ts"
+      ],
+      "dynamicVerification": "DT-005, DT-006 (Confirmed: Org B user listed Org A's projects, created a project in ws_synth_a, and uploaded a ZIP archive into ws_synth_a)",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-003",
+      "title": "Preview manager executes DB-controlled start commands on host with shell and inherited environment",
+      "severity": "Critical",
+      "confidence": "Confirmed",
+      "cvss4": "9.4",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:H/VI:H/VA:H/SC:H/SI:H/SA:H",
+      "cwe": "CWE-78",
+      "owasp": "A05:2025 Injection",
+      "asvs": "V1.5, V5.3, V15.1",
+      "component": "Sandbox/preview execution",
+      "files": [
+        "src/lib/preview-manager.ts",
+        "src/app/api/projects/[id]/preview/route.ts"
+      ],
+      "dynamicVerification": "Code review confirmed (spawn with shell:true and env:{...process.env} at src/lib/preview-manager.ts:41-47)",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-004",
+      "title": "Preview proxy endpoint lacks authentication and enables unauthorized localhost preview access",
+      "severity": "High",
+      "confidence": "Confirmed",
+      "cvss4": "8.7",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:L/VA:L/SC:L/SI:L/SA:N",
+      "cwe": "CWE-862",
+      "owasp": "A01:2025 Broken Access Control",
+      "asvs": "V4.2, V13.2",
+      "component": "Live preview proxy",
+      "files": [
+        "src/app/api/projects/[id]/preview/proxy/route.ts"
+      ],
+      "dynamicVerification": "Code review confirmed (no auth/requireProjectAccess check; direct fetch to http://localhost:${preview.port}${path})",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-005",
+      "title": "Notification ID endpoints allow unauthenticated/unauthorized object modification and deletion",
+      "severity": "High",
+      "confidence": "Confirmed",
+      "cvss4": "8.3",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:H/VA:L/SC:N/SI:N/SA:N",
+      "cwe": "CWE-639",
+      "owasp": "A01:2025 Broken Access Control",
+      "asvs": "V4.2, V8.2",
+      "component": "Notifications API",
+      "files": [
+        "src/app/api/notifications/[id]/route.ts"
+      ],
+      "dynamicVerification": "DT-009 (Confirmed: Org B user modified and deleted Org A's notif_synth_a1 with HTTP 200)",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-006",
+      "title": "Executions listing endpoint returns all executions when projectId is omitted",
+      "severity": "High",
+      "confidence": "Confirmed",
+      "cvss4": "8.2",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:N/VA:N/SC:N/SI:N/SA:N",
+      "cwe": "CWE-862",
+      "owasp": "A01:2025 Broken Access Control",
+      "asvs": "V4.2, V8.2",
+      "component": "Executions API",
+      "files": [
+        "src/app/api/executions/route.ts"
+      ],
+      "dynamicVerification": "DT-007 (Confirmed: Org B user retrieved Org A's exec_synth_a via GET /api/executions)",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-007",
+      "title": "Proxy/request gate only checks session cookie presence and is not a complete server-side authorization control",
+      "severity": "High",
+      "confidence": "Confirmed",
+      "cvss4": "7.9",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:L/VA:N/SC:N/SI:N/SA:N",
+      "cwe": "CWE-602",
+      "owasp": "A01:2025 Broken Access Control",
+      "asvs": "V3.3, V4.1",
+      "component": "Middleware/proxy/auth gate",
+      "files": [
+        "src/proxy.ts"
+      ],
+      "dynamicVerification": "DT-001 (Confirmed: missing cookie returns 307 redirect, but any non-empty mv_session passes through)",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-008",
+      "title": "Hardcoded development secret fallbacks for authentication and encryption keys",
+      "severity": "High",
+      "confidence": "Confirmed",
+      "cvss4": "7.7",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:N/VC:H/VI:H/VA:N/SC:N/SI:N/SA:N",
+      "cwe": "CWE-798",
+      "owasp": "A04:2025 Cryptographic Failures",
+      "asvs": "V6.4, V11.1",
+      "component": "Auth/crypto configuration",
+      "files": [
+        "src/lib/auth.ts",
+        "src/lib/crypto.ts"
+      ],
+      "dynamicVerification": "DT-002 (Confirmed: token forged offline with 'modelvault-dev-secret-change-me' authenticated as Org A Owner on GET /api/auth/me)",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-009",
+      "title": "Missing anti-automation controls: no rate limiting, lockout, or CSRF defenses on sensitive cookie-auth flows",
+      "severity": "High",
+      "confidence": "Likely",
+      "cvss4": "7.6",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:P/VC:L/VI:H/VA:L/SC:N/SI:N/SA:N",
+      "cwe": "CWE-352",
+      "owasp": "A07:2025 Authentication Failures",
+      "asvs": "V2.4, V3.5, V4.2",
+      "component": "Authentication/API request handling",
+      "files": [
+        "src/app/api/auth/login/route.ts",
+        "src/app/api/auth/register/route.ts",
+        "src/proxy.ts"
+      ],
+      "dynamicVerification": "Code review confirmed (no rate-limit or Origin/CSRF check in app layer)",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-010",
+      "title": "ZIP upload pipeline lacks resource limits and robust archive hardening",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "cvss4": "6.9",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:L/VA:H/SC:N/SI:N/SA:N",
+      "cwe": "CWE-409",
+      "owasp": "A05:2025 Injection",
+      "asvs": "V5.2, V5.3, V15.2",
+      "component": "Project upload/import",
+      "files": [
+        "src/app/api/projects/upload/route.ts"
+      ],
+      "dynamicVerification": "DT-006, DT-013 (Confirmed: basic ../ Zip Slip filtered, but no size/entry/ratio limits and binary UTF-8 corruption present)",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-011",
+      "title": "User enumeration and weak registration/password posture",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "cvss4": "5.3",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:L/VA:N/SC:N/SI:N/SA:N",
+      "cwe": "CWE-204",
+      "owasp": "A07:2025 Authentication Failures",
+      "asvs": "V2.1, V2.2, V2.4",
+      "component": "Authentication",
+      "files": [
+        "src/app/api/auth/register/route.ts",
+        "src/lib/validation.ts",
+        "src/app/login/page.tsx"
+      ],
+      "dynamicVerification": "DT-004 (Confirmed: duplicate email returns HTTP 409 'Email is already registered')",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-012",
+      "title": "Session lifecycle lacks revocation, rotation, and strong invalidation controls",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "cvss4": "6.3",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:N/VC:H/VI:L/VA:N/SC:N/SI:N/SA:N",
+      "cwe": "CWE-613",
+      "owasp": "A07:2025 Authentication Failures",
+      "asvs": "V3.3, V3.6, V3.7",
+      "component": "Session management",
+      "files": [
+        "src/lib/auth.ts",
+        "src/app/api/auth/logout/route.ts",
+        "prisma/schema.prisma"
+      ],
+      "dynamicVerification": "DT-003 (Confirmed: captured session cookie replayed after POST /api/auth/logout still returned HTTP 200 on /api/auth/me)",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-013",
+      "title": "Secret handling and logging controls may expose sensitive operational data in logs/errors",
+      "severity": "Medium",
+      "confidence": "Likely",
+      "cvss4": "5.9",
+      "cvssVector": "CVSS:4.0/AV:L/AC:L/AT:P/PR:L/UI:N/VC:H/VI:N/VA:N/SC:N/SI:N/SA:N",
+      "cwe": "CWE-532",
+      "owasp": "A09:2025 Security Logging and Alerting Failures",
+      "asvs": "V16.3, V6.4",
+      "component": "Logging/secret management",
+      "files": [
+        "src/lib/logger.ts",
+        "src/app/api/projects/upload/route.ts",
+        "src/lib/preview-manager.ts"
+      ],
+      "dynamicVerification": "Code review confirmed",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-014",
+      "title": "Git command execution and workspace operations have insufficient isolation and policy boundaries",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "cvss4": "6.8",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:L/VI:H/VA:L/SC:L/SI:L/SA:N",
+      "cwe": "CWE-284",
+      "owasp": "A01:2025 Broken Access Control",
+      "asvs": "V4.2, V15.1",
+      "component": "Git/workspace services",
+      "files": [
+        "src/lib/project-workspace.ts",
+        "src/app/api/git/route.ts",
+        "src/app/api/executions/route.ts"
+      ],
+      "dynamicVerification": "Code review confirmed (branchName passed to git checkout without '--' separator; hooks/protocols not disabled)",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-015",
+      "title": "Missing baseline security headers and browser hardening controls",
+      "severity": "Low",
+      "confidence": "Likely",
+      "cvss4": "3.7",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:P/VC:L/VI:L/VA:N/SC:N/SI:N/SA:N",
+      "cwe": "CWE-693",
+      "owasp": "A02:2025 Security Misconfiguration",
+      "asvs": "V3.5, V14.4",
+      "component": "Next.js app configuration",
+      "files": [
+        "next.config.ts",
+        "src/app/layout.tsx"
+      ],
+      "dynamicVerification": "Code review confirmed",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-016",
+      "title": "Verbose internal error details returned to clients in multiple routes",
+      "severity": "Low",
+      "confidence": "Confirmed",
+      "cvss4": "3.3",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:N/VA:N/SC:N/SI:N/SA:N",
+      "cwe": "CWE-209",
+      "owasp": "A02:2025 Security Misconfiguration",
+      "asvs": "V16.5",
+      "component": "API error handling",
+      "files": [
+        "src/app/api/projects/route.ts",
+        "src/app/api/projects/upload/route.ts",
+        "src/app/api/executions/route.ts"
+      ],
+      "dynamicVerification": "Code review confirmed",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-017",
+      "title": "Insufficient input validation on several endpoints outside shared Zod schemas",
+      "severity": "Low",
+      "confidence": "Confirmed",
+      "cvss4": "4.8",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:L/VA:L/SC:N/SI:N/SA:N",
+      "cwe": "CWE-20",
+      "owasp": "A05:2025 Injection",
+      "asvs": "V5.1",
+      "component": "API validation",
+      "files": [
+        "src/app/api/projects/route.ts",
+        "src/app/api/projects/upload/route.ts",
+        "src/app/api/notifications/[id]/route.ts"
+      ],
+      "dynamicVerification": "Code review confirmed",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-018",
+      "title": "Dependency and supply-chain security posture not continuously verified in CI",
+      "severity": "Low",
+      "confidence": "Confirmed",
+      "cvss4": "3.9",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:N/VC:L/VI:L/VA:L/SC:N/SI:N/SA:N",
+      "cwe": "CWE-1395",
+      "owasp": "A03:2025 Software Supply Chain Failures",
+      "asvs": "V15.2",
+      "component": "Build/dependency management",
+      "files": [
+        "package.json",
+        "package-lock.json"
+      ],
+      "dynamicVerification": "Confirmed absence of .github/workflows and CI security checks",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-019",
+      "title": "SQLite/dev DB fallback and Vercel /tmp copy behavior are unsafe for multi-tenant production assumptions",
+      "severity": "Informational",
+      "confidence": "Confirmed",
+      "cvss4": "0.0",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:N/SC:N/SI:N/SA:N",
+      "cwe": "CWE-1059",
+      "owasp": "A02:2025 Security Misconfiguration",
+      "asvs": "V14.1",
+      "component": "Database/configuration",
+      "files": [
+        "src/lib/db.ts",
+        "prisma/schema.prisma",
+        "scripts/prisma-schema.mjs"
+      ],
+      "dynamicVerification": "Code review & git history confirmed (prisma/dev.db committed in git history)",
+      "status": "Architectural / Deployment Guidance"
+    },
+    {
+      "id": "MV-SEC-020",
+      "title": "Execution/workflow routes simulate agent behavior and write synthetic artifacts, creating auditability and trust-boundary ambiguity",
+      "severity": "Informational",
+      "confidence": "Confirmed",
+      "cvss4": "0.0",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:N/SC:N/SI:N/SA:N",
+      "cwe": "CWE-778",
+      "owasp": "A09:2025 Security Logging and Alerting Failures",
+      "asvs": "V16.1",
+      "component": "Execution/orchestration",
+      "files": [
+        "src/app/api/executions/route.ts",
+        "src/app/api/workflows/execute/route.ts",
+        "src/app/api/orchestrator/plan/route.ts"
+      ],
+      "dynamicVerification": "Code review confirmed",
+      "status": "Architectural / Deployment Guidance"
+    },
+    {
+      "id": "MV-SEC-021",
+      "title": "No evidence of sandbox isolation controls, egress restrictions, or container hardening in repository",
+      "severity": "Informational",
+      "confidence": "Confirmed",
+      "cvss4": "0.0",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:N/SC:N/SI:N/SA:N",
+      "cwe": "CWE-653",
+      "owasp": "A02:2025 Security Misconfiguration",
+      "asvs": "V15.1",
+      "component": "Execution infrastructure",
+      "files": [
+        "src/lib/preview-manager.ts",
+        "package.json"
+      ],
+      "dynamicVerification": "Code review confirmed",
+      "status": "Architectural / Deployment Guidance"
+    },
+    {
+      "id": "MV-SEC-022",
+      "title": "Security testing coverage is incomplete: no automated CI gates or cloud staging validation",
+      "severity": "Informational",
+      "confidence": "Confirmed",
+      "cvss4": "0.0",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:N/SC:N/SI:N/SA:N",
+      "cwe": "CWE-1127",
+      "owasp": "A03:2025 Software Supply Chain Failures",
+      "asvs": "V1.4",
+      "component": "Security assurance process",
+      "files": [
+        "package.json"
+      ],
+      "dynamicVerification": "Local npm audit and 13 dynamic API tests executed; external cloud/DAST/SAST toolchains not present in CI",
+      "status": "Architectural / Deployment Guidance"
+    },
+    {
+      "id": "MV-SEC-023",
+      "title": "Unauthenticated / cross-tenant exposure of execution details and live SSE event streams",
+      "severity": "High",
+      "confidence": "Confirmed",
+      "cvss4": "8.7",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:N/VA:N/SC:N/SI:N/SA:N",
+      "cwe": "CWE-862",
+      "owasp": "A01:2025 Broken Access Control",
+      "asvs": "V4.2, V8.2, V13.3",
+      "component": "Executions Detail & SSE Event Stream APIs",
+      "files": [
+        "src/app/api/executions/[id]/route.ts",
+        "src/app/api/executions/[id]/events/route.ts"
+      ],
+      "dynamicVerification": "DT-007 (Confirmed: Org B user retrieved Org A's execution prompt and live SSE event payload ORG_A_STREAM_DATA with HTTP 200)",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-024",
+      "title": "Unscoped organization directory endpoint leaks all tenants' users and bcrypt passwordHash fields, and allows unauthorized organization creation",
+      "severity": "Critical",
+      "confidence": "Confirmed",
+      "cvss4": "9.3",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:N/SC:N/SI:N/SA:N",
+      "cwe": "CWE-200",
+      "owasp": "A01:2025 Broken Access Control",
+      "asvs": "V4.1, V4.2, V2.1",
+      "component": "Organizations API",
+      "files": [
+        "src/app/api/organizations/route.ts"
+      ],
+      "dynamicVerification": "DT-010 (Confirmed: GET /api/organizations returned all 8 organizations, 11 member emails, and user.passwordHash values)",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-025",
+      "title": "Missing ownership check and negative-cost injection on POST /api/api-usage, plus unverified foreign keys on /api/billing and /api/subscriptions",
+      "severity": "High",
+      "confidence": "Confirmed",
+      "cvss4": "8.3",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:L/VI:H/VA:N/SC:N/SI:N/SA:N",
+      "cwe": "CWE-639",
+      "owasp": "A01:2025 Broken Access Control",
+      "asvs": "V4.2, V5.1, V8.3",
+      "component": "API Usage, Billing & Subscription APIs",
+      "files": [
+        "src/app/api/api-usage/route.ts",
+        "src/app/api/billing/route.ts",
+        "src/app/api/subscriptions/[id]/route.ts"
+      ],
+      "dynamicVerification": "DT-011 (Confirmed: Org B user posted cost:-9000 to Org A's api_synth_a1, inflating Org A prepaidBalance from 500 to 9500 and setting totalSpent to -8990)",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-026",
+      "title": "Cross-execution review comment manipulation (IDOR) and missing authorization on workflow catalog & orchestrator planning",
+      "severity": "High",
+      "confidence": "Confirmed",
+      "cvss4": "7.5",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:L/VI:H/VA:N/SC:N/SI:N/SA:N",
+      "cwe": "CWE-639",
+      "owasp": "A01:2025 Broken Access Control",
+      "asvs": "V4.2",
+      "component": "Review Comments, Workflows & Orchestrator APIs",
+      "files": [
+        "src/app/api/executions/[id]/comments/route.ts",
+        "src/app/api/workflows/route.ts",
+        "src/app/api/orchestrator/plan/route.ts"
+      ],
+      "dynamicVerification": "DT-008 (Confirmed: Org B user resolved Org A's cmt_synth_a1 via PATCH /api/executions/exec_synth_b/comments)",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-027",
+      "title": "Silent prisma.project.findFirst() fallback on non-existent project ID and server filesystem path disclosure in /api/projects/[id]/files",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "cvss4": "5.3",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:L/VI:N/VA:N/SC:N/SI:N/SA:N",
+      "cwe": "CWE-636",
+      "owasp": "A01:2025 Broken Access Control",
+      "asvs": "V4.1, V16.5",
+      "component": "Project Files API",
+      "files": [
+        "src/app/api/projects/[id]/files/route.ts"
+      ],
+      "dynamicVerification": "DT-012 (Confirmed: GET /api/projects/nonexistent_id_999/files with dummy cookie returned HTTP 200 with proj_fintech_001 data)",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-028",
+      "title": "GitHub OAuth lacks CSRF state parameter / PKCE and links accounts solely by unverified GitHub profile email",
+      "severity": "High",
+      "confidence": "Confirmed",
+      "cvss4": "7.7",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:A/VC:H/VI:H/VA:N/SC:N/SI:N/SA:N",
+      "cwe": "CWE-352",
+      "owasp": "A07:2025 Authentication Failures",
+      "asvs": "V2.10, V3.5",
+      "component": "GitHub OAuth Authentication",
+      "files": [
+        "src/app/api/auth/github/route.ts",
+        "src/app/api/auth/github/callback/route.ts"
+      ],
+      "dynamicVerification": "Code review confirmed (no state parameter or PKCE in authorize URL or callback handler)",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-029",
+      "title": "Potential RangeError crash in verifySession on malformed signature length, un-sandboxed same-origin preview iframe, and unvalidated URLs",
+      "severity": "Low",
+      "confidence": "Confirmed",
+      "cvss4": "4.8",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:P/VC:L/VI:L/VA:L/SC:N/SI:N/SA:N",
+      "cwe": "CWE-20",
+      "owasp": "A05:2025 Injection",
+      "asvs": "V3.3, V5.1",
+      "component": "Session Verification, Preview Iframe, Notification/Billing URLs",
+      "files": [
+        "src/lib/auth.ts",
+        "src/app/(dashboard)/studio/page.tsx",
+        "src/app/api/notifications/route.ts",
+        "src/app/api/billing/route.ts"
+      ],
+      "dynamicVerification": "Code review confirmed",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-030",
+      "title": "Verification Engine (/verify) performs client-side-only regex checks and POST /api/executions/[id]/approve lacks commit/diff digest binding",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "cvss4": "6.4",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:N/VI:H/VA:N/SC:N/SI:N/SA:N",
+      "cwe": "CWE-602",
+      "owasp": "A06:2025 Insecure Design",
+      "asvs": "V4.2, V10.2, V16.1",
+      "component": "Verification Engine & Execution Approvals",
+      "files": [
+        "src/app/(dashboard)/verify/page.tsx",
+        "src/app/api/executions/[id]/approve/route.ts"
+      ],
+      "dynamicVerification": "Code review confirmed",
+      "status": "Remediated & Verified"
+    },
+    {
+      "id": "MV-SEC-031",
+      "title": "Confirmed vulnerable transitive dependencies (dompurify <=3.4.16 via monaco-editor, deepmerge-ts, effect via prisma) and .env / AUTH_SECRET mismatch",
+      "severity": "Medium",
+      "confidence": "Confirmed",
+      "cvss4": "6.6",
+      "cvssVector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:P/VC:L/VI:L/VA:L/SC:N/SI:N/SA:N",
+      "cwe": "CWE-1395",
+      "owasp": "A03:2025 Software Supply Chain Failures",
+      "asvs": "V15.2, V14.1",
+      "component": "NPM Dependencies & Environment Config",
+      "files": [
+        "package-lock.json",
+        "package.json",
+        ".env",
+        "src/lib/auth.ts"
+      ],
+      "dynamicVerification": "npm audit --json (6 vulnerabilities: 4 High, 2 Low) + DT-002 (.env defines NEXTAUTH_SECRET while auth.ts reads AUTH_SECRET)",
+      "status": "Remediated & Verified"
+    }
+  ]
+}

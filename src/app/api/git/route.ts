@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
-import { getCurrentUserOrDefault } from "@/lib/auth"
-import { requireProjectAccess } from "@/lib/permissions"
+import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { getUserAccessibleWorkspaceIds, requireProjectAccess } from "@/lib/permissions"
 import {
   getGitBranches,
   getGitCommits,
   getGitDiff,
-  getGitStatus,
   getGitStatusFiles,
   getCurrentGitBranch,
   createBranch,
@@ -25,23 +24,27 @@ import { logger, errorContext } from "@/lib/logger"
 
 export async function GET(req: NextRequest) {
   try {
+    const user = await requireAuthenticatedUser()
     const { searchParams } = new URL(req.url)
     const projectId = searchParams.get("projectId")
 
-    const project = projectId
-      ? await prisma.project.findUnique({ where: { id: projectId }, include: { sources: true } })
-      : await prisma.project.findFirst({ include: { sources: true } })
+    let project
+    if (projectId) {
+      project = await prisma.project.findUnique({ where: { id: projectId }, include: { sources: true } })
+    } else {
+      const workspaceIds = await getUserAccessibleWorkspaceIds(user.id, "viewer")
+      project = await prisma.project.findFirst({
+        where: { workspaceId: { in: workspaceIds } },
+        include: { sources: true },
+        orderBy: { updatedAt: "desc" },
+      })
+    }
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
     }
 
-    const user = await getCurrentUserOrDefault()
-    try {
-      await requireProjectAccess(project.id, user.id, "viewer")
-    } catch {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
+    await requireProjectAccess(project.id, user.id, "viewer")
 
     const operations = await prisma.gitOperation.findMany({
       where: { projectId: project.id },
@@ -119,31 +122,35 @@ export async function GET(req: NextRequest) {
     })
   } catch (err: unknown) {
     logger.error("Failed to load git state", errorContext(err))
-    return NextResponse.json({ error: "Failed to load git state" }, { status: 500 })
+    return authErrorResponse(err, "Failed to load git state")
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await requireAuthenticatedUser()
     const parsed = await parseJson(req, gitActionSchema)
     if ("response" in parsed) return parsed.response
     const { action, projectId, branchName, commitMessage, commitSha, prTitle } = parsed.data
     const body = parsed.data
 
-    const project = projectId
-      ? await prisma.project.findUnique({ where: { id: projectId }, include: { sources: true } })
-      : await prisma.project.findFirst({ include: { sources: true } })
+    let project
+    if (projectId) {
+      project = await prisma.project.findUnique({ where: { id: projectId }, include: { sources: true } })
+    } else {
+      const workspaceIds = await getUserAccessibleWorkspaceIds(user.id, "member")
+      project = await prisma.project.findFirst({
+        where: { workspaceId: { in: workspaceIds } },
+        include: { sources: true },
+        orderBy: { updatedAt: "desc" },
+      })
+    }
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
     }
 
-    const user = await getCurrentUserOrDefault()
-    try {
-      await requireProjectAccess(project.id, user.id, "member")
-    } catch {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
+    await requireProjectAccess(project.id, user.id, "member")
 
     if (action === "commit") {
       const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find(
@@ -321,6 +328,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 })
   } catch (err: unknown) {
     logger.error("Git action failed", errorContext(err))
-    return NextResponse.json({ error: "Git action failed" }, { status: 500 })
+    return authErrorResponse(err, "Git action failed")
   }
 }

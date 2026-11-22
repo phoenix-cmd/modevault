@@ -1,13 +1,41 @@
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
 import { prisma } from "@/lib/db"
+import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import {
+  getUserAccessibleWorkspaceIds,
+  requireWorkspaceAccess,
+  resolveUserDefaultWorkspace,
+} from "@/lib/permissions"
+import { parseJson, safeUrlSchema } from "@/lib/validation"
+import { logger, errorContext } from "@/lib/logger"
+
+const projectCreateSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  description: z.string().max(2000).nullable().optional(),
+  framework: z.enum(["nextjs", "react", "vue", "node", "python", "custom"]).optional(),
+  language: z.enum(["typescript", "javascript", "python"]).optional(),
+  repositoryUrl: safeUrlSchema.nullable().optional(),
+  workspaceId: z.string().min(1).max(128).optional(),
+})
 
 export async function GET(req: NextRequest) {
   try {
+    const user = await requireAuthenticatedUser()
     const { searchParams } = new URL(req.url)
-    const workspaceId = searchParams.get("workspaceId") || "ws_core_001"
+    const requestedWorkspaceId = searchParams.get("workspaceId")
+
+    let whereClause: { workspaceId: string | { in: string[] } }
+    if (requestedWorkspaceId) {
+      await requireWorkspaceAccess(requestedWorkspaceId, user.id, "viewer")
+      whereClause = { workspaceId: requestedWorkspaceId }
+    } else {
+      const workspaceIds = await getUserAccessibleWorkspaceIds(user.id, "viewer")
+      whereClause = { workspaceId: { in: workspaceIds } }
+    }
 
     const projects = await prisma.project.findMany({
-      where: { workspaceId },
+      where: whereClause,
       include: {
         sources: true,
         environments: true,
@@ -20,26 +48,28 @@ export async function GET(req: NextRequest) {
     })
 
     return NextResponse.json({ data: projects })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err: unknown) {
+    logger.error("Projects GET failed", errorContext(err))
+    return authErrorResponse(err, "Failed to load projects")
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
-    const { name, description, framework, language, repositoryUrl, workspaceId } = body
+    const user = await requireAuthenticatedUser()
+    const parsed = await parseJson(req, projectCreateSchema)
+    if ("response" in parsed) return parsed.response
+    const { name, description, framework, language, repositoryUrl, workspaceId } = parsed.data
 
-    if (!name) {
-      return NextResponse.json({ error: "Project name is required" }, { status: 400 })
-    }
+    const targetWorkspace = workspaceId
+      ? await requireWorkspaceAccess(workspaceId, user.id, "member")
+      : await resolveUserDefaultWorkspace(user.id, "member")
 
-    const wsId = workspaceId || "ws_core_001"
-    const slug = name.toLowerCase().replace(/[^a-z0-9-]/g, "-")
+    const slug = name.toLowerCase().replace(/[^a-z0-9-]/g, "-") || "project"
 
     const project = await prisma.project.create({
       data: {
-        workspaceId: wsId,
+        workspaceId: targetWorkspace.workspaceId,
         name,
         slug,
         description: description || null,
@@ -50,10 +80,11 @@ export async function POST(req: NextRequest) {
         environments: {
           create: {
             runtime: language === "python" ? "python-3.11" : "nodejs-20",
-            buildCommand: language === "python" ? "pip install -r requirements.txt" : "npm install && npm run build",
+            buildCommand:
+              language === "python" ? "pip install -r requirements.txt" : "npm install && npm run build",
             startCommand: language === "python" ? "python main.py" : "npm run start",
             runPort: 3000 + Math.floor(Math.random() * 500),
-            status: "running",
+            status: "stopped",
           },
         },
         sources: {
@@ -76,7 +107,8 @@ export async function POST(req: NextRequest) {
     })
 
     return NextResponse.json({ data: project }, { status: 201 })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err: unknown) {
+    logger.error("Projects POST failed", errorContext(err))
+    return authErrorResponse(err, "Failed to create project")
   }
 }

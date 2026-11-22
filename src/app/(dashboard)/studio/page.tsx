@@ -573,8 +573,10 @@ export default function StudioPage() {
                               key={previewFrameKey}
                               src={previewUrl}
                               title="Live project preview"
+                              sandbox="allow-scripts allow-forms"
+                              referrerPolicy="no-referrer"
                               className="h-full w-full border-0"
-                              allow="clipboard-read; clipboard-write; fullscreen"
+                              allow="fullscreen"
                             />
                           ) : (
                             <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center sm:p-8">

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
-import { getCurrentUserOrDefault } from "@/lib/auth"
+import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
 
 export async function GET(_request: NextRequest) {
   try {
-    const user = await getCurrentUserOrDefault()
+    const user = await requireAuthenticatedUser()
     const now = new Date()
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
 
@@ -241,10 +241,6 @@ export async function GET(_request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("Analytics error:", error)
-    return NextResponse.json(
-      { data: null, error: "Failed to fetch analytics data" },
-      { status: 500 }
-    )
+    return authErrorResponse(error, "Failed to fetch analytics data", "Analytics error")
   }
 }

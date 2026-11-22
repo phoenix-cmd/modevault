@@ -1,14 +1,57 @@
 import { cookies } from "next/headers"
 import crypto from "node:crypto"
+import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 
 const COOKIE_NAME = "mv_session"
-const JWT_SECRET = process.env.AUTH_SECRET || "modelvault-dev-secret-change-me"
+const INSECURE_DEV_SECRETS = new Set([
+  "modelvault-dev-secret-change-me",
+  "modelvault-local-development-secret",
+  "change-me",
+  "secret",
+])
 
 export interface AuthUser {
   id: string
   email: string
   name: string | null
+}
+
+export class AuthError extends Error {
+  status: number
+  constructor(message = "Unauthorized", status = 401) {
+    super(message)
+    this.name = "AuthError"
+    this.status = status
+  }
+}
+
+export function isAuthError(err: unknown): err is AuthError {
+  return err instanceof AuthError || (typeof err === "object" && err !== null && (err as { name?: string }).name === "AuthError")
+}
+
+export function authErrorResponse(err: unknown, fallbackMessage = "Internal server error", routeName?: string) {
+  if (isAuthError(err)) {
+    return NextResponse.json({ data: null, error: err.message }, { status: err.status })
+  }
+  if (routeName) {
+    console.error(`${routeName}:`, err)
+  }
+  return NextResponse.json({ data: null, error: fallbackMessage }, { status: 500 })
+}
+
+function getSigningSecret(): string {
+  const configured = (process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "").trim()
+  if (configured && !INSECURE_DEV_SECRETS.has(configured)) {
+    return configured
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("CRITICAL: AUTH_SECRET (or NEXTAUTH_SECRET) must be configured with a strong secret in production")
+  }
+  return crypto
+    .createHash("sha256")
+    .update(`modelvault-local-ephemeral:${process.cwd()}`)
+    .digest("hex")
 }
 
 function base64UrlEncode(value: string): string {
@@ -19,36 +62,111 @@ function base64UrlDecode(value: string): string {
   return Buffer.from(value, "base64url").toString("utf8")
 }
 
-export async function signSession(userId: string): Promise<string> {
-  const payload = JSON.stringify({ sub: userId, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 })
-  const encodedPayload = base64UrlEncode(payload)
-  const signature = crypto
-    .createHmac("sha256", JWT_SECRET)
-    .update(encodedPayload)
-    .digest("base64url")
-  return `${encodedPayload}.${signature}`
+export function hashSessionToken(token: string): string {
+  return crypto.createHash("sha256").update(token).digest("hex")
 }
 
-export async function verifySession(token: string): Promise<string | null> {
-  const [encodedPayload, signature] = token.split(".")
+export function verifySessionSignatureOnly(token: string): { sub: string; exp: number; jti?: string } | null {
+  if (!token || typeof token !== "string") return null
+  const parts = token.split(".")
+  if (parts.length !== 2) return null
+  const [encodedPayload, signature] = parts
   if (!encodedPayload || !signature) return null
 
+  let secret: string
+  try {
+    secret = getSigningSecret()
+  } catch {
+    return null
+  }
+
   const expected = crypto
-    .createHmac("sha256", JWT_SECRET)
+    .createHmac("sha256", secret)
     .update(encodedPayload)
     .digest("base64url")
 
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+  const sigBuf = Buffer.from(signature, "utf8")
+  const expBuf = Buffer.from(expected, "utf8")
+  if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
     return null
   }
 
   try {
-    const payload = JSON.parse(base64UrlDecode(encodedPayload)) as { sub?: string; exp?: number }
-    if (!payload.sub || !payload.exp || payload.exp < Date.now()) return null
-    return payload.sub
+    const payload = JSON.parse(base64UrlDecode(encodedPayload)) as {
+      sub?: string
+      exp?: number
+      jti?: string
+    }
+    if (
+      !payload.sub ||
+      typeof payload.sub !== "string" ||
+      typeof payload.exp !== "number" ||
+      !Number.isFinite(payload.exp) ||
+      payload.exp <= Date.now()
+    ) {
+      return null
+    }
+    return { sub: payload.sub, exp: payload.exp, jti: payload.jti }
   } catch {
     return null
   }
+}
+
+export async function signSession(userId: string): Promise<string> {
+  const exp = Date.now() + 7 * 24 * 60 * 60 * 1000
+  const jti = crypto.randomBytes(16).toString("hex")
+  const payload = JSON.stringify({ sub: userId, exp, jti })
+  const encodedPayload = base64UrlEncode(payload)
+  const signature = crypto
+    .createHmac("sha256", getSigningSecret())
+    .update(encodedPayload)
+    .digest("base64url")
+  const token = `${encodedPayload}.${signature}`
+
+  try {
+    await prisma.session.create({
+      data: {
+        sessionToken: hashSessionToken(token),
+        userId,
+        expires: new Date(exp),
+      },
+    })
+  } catch {
+    // Allow token creation if user table / FK is checked downstream
+  }
+
+  return token
+}
+
+export async function revokeSessionToken(token: string | undefined | null): Promise<void> {
+  if (!token) return
+  const hashed = hashSessionToken(token)
+  await prisma.session
+    .deleteMany({
+      where: {
+        OR: [{ sessionToken: hashed }, { sessionToken: token }],
+      },
+    })
+    .catch(() => {})
+}
+
+export async function verifySession(token: string): Promise<string | null> {
+  const verified = verifySessionSignatureOnly(token)
+  if (!verified) return null
+
+  // If the token contains a jti (server-tracked session), require an active non-expired DB Session record.
+  if (verified.jti) {
+    const hashed = hashSessionToken(token)
+    const sessionRecord = await prisma.session.findUnique({
+      where: { sessionToken: hashed },
+      select: { userId: true, expires: true },
+    })
+    if (!sessionRecord || sessionRecord.userId !== verified.sub || sessionRecord.expires.getTime() <= Date.now()) {
+      return null
+    }
+  }
+
+  return verified.sub
 }
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
@@ -69,17 +187,20 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   }
 }
 
-export async function getCurrentUserOrDefault(): Promise<AuthUser> {
+export async function requireAuthenticatedUser(): Promise<AuthUser> {
   const user = await getCurrentUser()
-  if (user) return user
+  if (!user) {
+    throw new AuthError("Unauthorized", 401)
+  }
+  return user
+}
 
-  const demo = await prisma.user.findUnique({
-    where: { id: "user_demo_001" },
-    select: { id: true, email: true, name: true },
-  })
-  if (demo) return demo
-
-  throw new Error("No demo user available")
+/**
+ * Replaces the old insecure demo-user fallback.
+ * Always requires a valid authenticated session and throws AuthError(401) when unauthenticated.
+ */
+export async function getCurrentUserOrDefault(): Promise<AuthUser> {
+  return requireAuthenticatedUser()
 }
 
 export { COOKIE_NAME }

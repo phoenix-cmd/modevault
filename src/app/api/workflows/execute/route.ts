@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
-import { getCurrentUserOrDefault } from "@/lib/auth"
-import { requireProjectAccess } from "@/lib/permissions"
+import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { getUserAccessibleWorkspaceIds, requireProjectAccess } from "@/lib/permissions"
 import {
   createBranch,
   commitWorkspace,
@@ -13,24 +13,28 @@ import { logger, errorContext } from "@/lib/logger"
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await requireAuthenticatedUser()
     const parsed = await parseJson(req, workflowExecuteSchema)
     if ("response" in parsed) return parsed.response
     const { workflowId, projectId, customPrompt } = parsed.data
 
-    const project = projectId
-      ? await prisma.project.findUnique({ where: { id: projectId }, include: { sources: true } })
-      : await prisma.project.findFirst({ include: { sources: true } })
+    let project
+    if (projectId) {
+      project = await prisma.project.findUnique({ where: { id: projectId }, include: { sources: true } })
+    } else {
+      const workspaceIds = await getUserAccessibleWorkspaceIds(user.id, "member")
+      project = await prisma.project.findFirst({
+        where: { workspaceId: { in: workspaceIds } },
+        include: { sources: true },
+        orderBy: { updatedAt: "desc" },
+      })
+    }
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
     }
 
-    const user = await getCurrentUserOrDefault()
-    try {
-      await requireProjectAccess(project.id, user.id, "member")
-    } catch {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
+    await requireProjectAccess(project.id, user.id, "member")
 
     const workflow = workflowId
       ? await prisma.workflowDefinition.findUnique({ where: { id: workflowId } })
@@ -193,6 +197,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ data: execution }, { status: 201 })
   } catch (err: unknown) {
     logger.error("Workflow execution failed", errorContext(err))
-    return NextResponse.json({ error: "Workflow execution failed" }, { status: 500 })
+    return authErrorResponse(err, "Workflow execution failed")
   }
 }

@@ -1,11 +1,21 @@
 import { NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
 import { prisma } from "@/lib/db"
-import { getCurrentUserOrDefault } from "@/lib/auth"
+import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { parseJson, safeUrlSchema } from "@/lib/validation"
+import { logger, errorContext } from "@/lib/logger"
 
+const notificationCreateSchema = z.object({
+  type: z.string().trim().min(1).max(80).optional(),
+  title: z.string().trim().min(1).max(200),
+  message: z.string().trim().min(1).max(2000),
+  severity: z.enum(["info", "warning", "critical"]).optional(),
+  actionUrl: safeUrlSchema.nullable().optional(),
+})
 
 export async function GET(_request: NextRequest) {
   try {
-    const user = await getCurrentUserOrDefault()
+    const user = await requireAuthenticatedUser()
     const notifications = await prisma.notification.findMany({
       where: { userId: user.id },
       orderBy: [{ isRead: "asc" }, { createdAt: "desc" }],
@@ -21,27 +31,18 @@ export async function GET(_request: NextRequest) {
         unreadCount,
       },
     })
-  } catch (error) {
-    console.error("Notifications error:", error)
-    return NextResponse.json(
-      { data: null, error: "Failed to fetch notifications" },
-      { status: 500 }
-    )
+  } catch (err: unknown) {
+    logger.error("Notifications GET error", errorContext(err))
+    return authErrorResponse(err, "Failed to fetch notifications")
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUserOrDefault()
-    const body = await request.json()
-    const { type, title, message, severity, actionUrl } = body
-
-    if (!title || !message) {
-      return NextResponse.json(
-        { data: null, error: "Title and message are required" },
-        { status: 400 }
-      )
-    }
+    const user = await requireAuthenticatedUser()
+    const parsed = await parseJson(request, notificationCreateSchema)
+    if ("response" in parsed) return parsed.response
+    const { type, title, message, severity, actionUrl } = parsed.data
 
     const notification = await prisma.notification.create({
       data: {
@@ -55,11 +56,8 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json({ data: notification }, { status: 201 })
-  } catch (error) {
-    console.error("Create notification error:", error)
-    return NextResponse.json(
-      { data: null, error: "Failed to create notification" },
-      { status: 500 }
-    )
+  } catch (err: unknown) {
+    logger.error("Create notification error", errorContext(err))
+    return authErrorResponse(err, "Failed to create notification")
   }
 }

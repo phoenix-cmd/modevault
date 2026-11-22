@@ -1,33 +1,67 @@
+import crypto from "node:crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
-import { getCurrentUserOrDefault } from "@/lib/auth"
+import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
 import { requireProjectAccess } from "@/lib/permissions"
 import { approvalSchema, parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
+
+function computeDiffSha256(content: string): string {
+  return crypto.createHash("sha256").update(content, "utf8").digest("hex")
+}
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await requireAuthenticatedUser()
     const { id } = await params
     const parsed = await parseJson(req, approvalSchema)
     if ("response" in parsed) return parsed.response
-    const { action, feedback } = parsed.data
+    const { action, feedback, expectedCommitSha, expectedDiffHash } = parsed.data
 
     const execution = await prisma.execution.findUnique({
       where: { id },
+      include: {
+        artifacts: true,
+        gitOperations: true,
+      },
     })
 
     if (!execution) {
       return NextResponse.json({ error: "Execution not found" }, { status: 404 })
     }
 
-    const user = await getCurrentUserOrDefault()
-    try {
-      await requireProjectAccess(execution.projectId, user.id, "member")
-    } catch {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    await requireProjectAccess(execution.projectId, user.id, "member")
+
+    if (
+      execution.status !== "awaiting_approval" &&
+      execution.status !== "running" &&
+      execution.status !== "pending"
+    ) {
+      return NextResponse.json(
+        { error: `Execution in "${execution.status}" state cannot transition via approval` },
+        { status: 409 }
+      )
+    }
+
+    const diffArtifact = execution.artifacts.find((a) => a.type === "git_diff")
+    const diffSha256 = diffArtifact ? computeDiffSha256(diffArtifact.content || "") : null
+    const latestCommitSha = execution.gitOperations[0]?.commitSha || null
+
+    if (expectedDiffHash && diffSha256 && expectedDiffHash !== diffSha256) {
+      return NextResponse.json(
+        { error: "Approval rejected: diff artifact content changed since review (digest mismatch)" },
+        { status: 409 }
+      )
+    }
+
+    if (expectedCommitSha && latestCommitSha && expectedCommitSha !== latestCommitSha) {
+      return NextResponse.json(
+        { error: "Approval rejected: workspace commit SHA changed since review" },
+        { status: 409 }
+      )
     }
 
     let nextStatus = "completed"
@@ -48,7 +82,6 @@ export async function POST(
       data: { status: taskStatus },
     })
 
-    // Update Git Operation status
     await prisma.gitOperation.updateMany({
       where: { executionId: id },
       data: {
@@ -61,7 +94,6 @@ export async function POST(
       },
     })
 
-    // Log approval event
     await prisma.agentEvent.create({
       data: {
         executionId: id,
@@ -71,14 +103,26 @@ export async function POST(
           action,
           feedback: feedback || null,
           reviewerId: user.id,
+          reviewerEmail: user.email,
+          commitSha: latestCommitSha,
+          diffSha256,
           timestamp: new Date().toISOString(),
         }),
       },
     })
 
-    return NextResponse.json({ data: updated })
+    return NextResponse.json({
+      data: {
+        ...updated,
+        approvalProvenance: {
+          reviewerId: user.id,
+          commitSha: latestCommitSha,
+          diffSha256,
+        },
+      },
+    })
   } catch (err: unknown) {
     logger.error("Approval action failed", errorContext(err))
-    return NextResponse.json({ error: "Approval action failed" }, { status: 500 })
+    return authErrorResponse(err, "Approval action failed")
   }
 }

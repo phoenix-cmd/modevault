@@ -1,27 +1,66 @@
 import { NextRequest, NextResponse } from "next/server"
 import JSZip from "jszip"
 import { prisma } from "@/lib/db"
+import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { requireWorkspaceAccess, resolveUserDefaultWorkspace } from "@/lib/permissions"
 import {
   ensureProjectWorkspace,
   initializeGitRepository,
+  isSafeRelativePath,
   writeWorkspaceFile,
 } from "@/lib/project-workspace"
+import { logger, errorContext } from "@/lib/logger"
+
+const MAX_COMPRESSED_BYTES = 25 * 1024 * 1024 // 25 MB
+const MAX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024 // 100 MB
+const MAX_SINGLE_FILE_BYTES = 10 * 1024 * 1024 // 10 MB per file
+const MAX_ARCHIVE_FILES = 500
+const MAX_COMPRESSION_RATIO = 80
+
+function isSymlinkZipEntry(zipEntry: JSZip.JSZipObject): boolean {
+  const unixPerms = typeof zipEntry.unixPermissions === "number" ? zipEntry.unixPermissions : 0
+  // S_IFMT = 0o170000, S_IFLNK = 0o120000
+  return (unixPerms & 0o170000) === 0o120000
+}
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await requireAuthenticatedUser()
     const formData = await req.formData()
     const file = formData.get("file") as File | null
-    const name = (formData.get("name") as string) || "Imported Project"
-    const workspaceId = (formData.get("workspaceId") as string) || "ws_core_001"
+    const rawName = ((formData.get("name") as string) || "Imported Project").trim()
+    const name = rawName.slice(0, 120) || "Imported Project"
+    const requestedWorkspaceId = ((formData.get("workspaceId") as string) || "").trim()
 
     if (!file) {
       return NextResponse.json({ error: "No ZIP file provided" }, { status: 400 })
     }
 
+    if (file.size <= 0) {
+      return NextResponse.json({ error: "Uploaded ZIP file is empty" }, { status: 400 })
+    }
+
+    if (file.size > MAX_COMPRESSED_BYTES) {
+      return NextResponse.json(
+        { error: `ZIP archive exceeds maximum compressed size (${Math.round(MAX_COMPRESSED_BYTES / (1024 * 1024))} MB)` },
+        { status: 413 }
+      )
+    }
+
+    const targetWorkspace = requestedWorkspaceId
+      ? await requireWorkspaceAccess(requestedWorkspaceId, user.id, "member")
+      : await resolveUserDefaultWorkspace(user.id, "member")
+
     const arrayBuffer = await file.arrayBuffer()
-    const zip = await JSZip.loadAsync(arrayBuffer)
+    let zip: JSZip
+    try {
+      zip = await JSZip.loadAsync(arrayBuffer)
+    } catch {
+      return NextResponse.json({ error: "Malformed or unsupported ZIP archive" }, { status: 422 })
+    }
 
     const fileList: string[] = []
+    const safeEntries: string[] = []
     let detectedFramework = "custom"
     let detectedLanguage = "javascript"
     let packageJsonContent: {
@@ -29,18 +68,77 @@ export async function POST(req: NextRequest) {
       devDependencies?: Record<string, string>
     } | null = null
 
-    // Traverse ZIP file tree
+    let symlinkDetected = false
     zip.forEach((relativePath, zipEntry) => {
+      if (isSymlinkZipEntry(zipEntry)) {
+        symlinkDetected = true
+        return
+      }
       if (!zipEntry.dir) {
         fileList.push(relativePath)
+        const normalized = relativePath.replace(/\\/g, "/")
+        if (
+          normalized.length <= 512 &&
+          isSafeRelativePath(normalized) &&
+          !normalized.startsWith(".git/") &&
+          normalized !== ".git"
+        ) {
+          safeEntries.push(relativePath)
+        }
       }
     })
 
-    // Inspect files for frameworks and dependencies
-    const pkgFile = zip.file("package.json") || zip.file(fileList.find((f) => f.endsWith("package.json")) || "")
-    if (pkgFile) {
+    if (symlinkDetected) {
+      return NextResponse.json(
+        { error: "ZIP archive contains symbolic links, which are rejected by security policy" },
+        { status: 422 }
+      )
+    }
+
+    if (fileList.length > MAX_ARCHIVE_FILES) {
+      return NextResponse.json(
+        { error: `ZIP archive contains too many files (${fileList.length} > ${MAX_ARCHIVE_FILES})` },
+        { status: 422 }
+      )
+    }
+
+    // Decompress entries into memory buffers while enforcing total uncompressed size & compression ratio
+    const extractedBuffers: Array<{ relativePath: string; buffer: Buffer }> = []
+    let totalUncompressedBytes = 0
+
+    for (const relativePath of safeEntries) {
+      const zipEntry = zip.file(relativePath)
+      if (!zipEntry || zipEntry.dir) continue
+      const buffer = await zipEntry.async("nodebuffer")
+      if (buffer.byteLength > MAX_SINGLE_FILE_BYTES) {
+        return NextResponse.json(
+          { error: `File "${relativePath}" exceeds maximum single-file size (10 MB)` },
+          { status: 413 }
+        )
+      }
+      totalUncompressedBytes += buffer.byteLength
+      if (totalUncompressedBytes > MAX_UNCOMPRESSED_BYTES) {
+        return NextResponse.json(
+          { error: "ZIP archive exceeds maximum uncompressed size limit (100 MB)" },
+          { status: 413 }
+        )
+      }
+      if (file.size > 0 && totalUncompressedBytes / Math.max(file.size, 64) > MAX_COMPRESSION_RATIO) {
+        return NextResponse.json(
+          { error: "ZIP archive rejected due to excessive compression ratio" },
+          { status: 422 }
+        )
+      }
+      extractedBuffers.push({ relativePath: relativePath.replace(/\\/g, "/"), buffer })
+    }
+
+    const pkgEntry =
+      extractedBuffers.find((e) => e.relativePath === "package.json") ||
+      extractedBuffers.find((e) => e.relativePath.endsWith("/package.json"))
+
+    if (pkgEntry) {
       try {
-        const text = await pkgFile.async("string")
+        const text = pkgEntry.buffer.toString("utf8")
         packageJsonContent = JSON.parse(text)
         const deps = { ...packageJsonContent!.dependencies, ...packageJsonContent!.devDependencies }
 
@@ -49,13 +147,13 @@ export async function POST(req: NextRequest) {
         else if (deps["vue"]) detectedFramework = "vue"
         else detectedFramework = "node"
 
-        if (deps["typescript"] || fileList.some((f) => f.endsWith(".ts") || f.endsWith(".tsx"))) {
+        if (deps["typescript"] || safeEntries.some((f) => f.endsWith(".ts") || f.endsWith(".tsx"))) {
           detectedLanguage = "typescript"
         }
-      } catch (e) {
-        console.warn("Failed to parse package.json from zip", e)
+      } catch {
+        // Ignore malformed package.json during framework detection
       }
-    } else if (fileList.some((f) => f.endsWith(".py") || f.endsWith("requirements.txt"))) {
+    } else if (safeEntries.some((f) => f.endsWith(".py") || f.endsWith("requirements.txt"))) {
       detectedFramework = "python"
       detectedLanguage = "python"
     }
@@ -64,15 +162,14 @@ export async function POST(req: NextRequest) {
       ? Object.keys({ ...packageJsonContent.dependencies, ...packageJsonContent.devDependencies })
       : ["standard-runtime"]
 
-    const slug = name.toLowerCase().replace(/[^a-z0-9-]/g, "-")
+    const slug = name.toLowerCase().replace(/[^a-z0-9-]/g, "-") || "imported-project"
 
-    // Create Project, Source, and provision Sandbox Environment in DB
     const project = await prisma.project.create({
       data: {
-        workspaceId,
+        workspaceId: targetWorkspace.workspaceId,
         name,
         slug,
-        description: `Imported from archive: ${file.name} (${Math.round(file.size / 1024)} KB, ${fileList.length} files)`,
+        description: `Imported from archive: ${file.name} (${Math.round(file.size / 1024)} KB, ${extractedBuffers.length} files)`,
         framework: detectedFramework,
         language: detectedLanguage,
         status: "ready",
@@ -82,7 +179,7 @@ export async function POST(req: NextRequest) {
             buildCommand: detectedLanguage === "python" ? "pip install -r requirements.txt" : "npm install",
             startCommand: detectedLanguage === "python" ? "python main.py" : "npm run dev",
             runPort: 3000 + Math.floor(Math.random() * 500),
-            status: "running",
+            status: "stopped",
           },
         },
         sources: {
@@ -94,8 +191,8 @@ export async function POST(req: NextRequest) {
             manifestJson: JSON.stringify({
               fileName: file.name,
               fileSize: file.size,
-              fileCount: fileList.length,
-              files: fileList.slice(0, 100),
+              fileCount: extractedBuffers.length,
+              files: extractedBuffers.map((e) => e.relativePath).slice(0, 100),
               detectedFramework,
               detectedLanguage,
               dependencies: detectedDependencies.slice(0, 20),
@@ -109,20 +206,9 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    // Persist the archive to a controlled local workspace and initialize Git.
     const workspacePath = await ensureProjectWorkspace(project.id)
-    const safeEntries = fileList.filter((relativePath) => {
-      const normalized = relativePath.replace(/\\\\/g, "/")
-      return !normalized.startsWith("/") && !normalized.split("/").includes("..")
-    })
-    for (const relativePath of safeEntries) {
-      const zipEntry = zip.file(relativePath)
-      if (!zipEntry || zipEntry.dir) continue
-      const content = await zipEntry.async("string").catch(async () => {
-        const buffer = await zipEntry.async("nodebuffer")
-        return buffer.toString("base64")
-      })
-      await writeWorkspaceFile(workspacePath, relativePath, content)
+    for (const item of extractedBuffers) {
+      await writeWorkspaceFile(workspacePath, item.relativePath, item.buffer)
     }
     await initializeGitRepository(workspacePath)
 
@@ -138,17 +224,16 @@ export async function POST(req: NextRequest) {
         project,
         inspection: {
           fileName: file.name,
-          fileCount: fileList.length,
+          fileCount: extractedBuffers.length,
           framework: detectedFramework,
           language: detectedLanguage,
           dependencies: detectedDependencies.slice(0, 15),
-          previewFiles: fileList.slice(0, 15),
+          previewFiles: extractedBuffers.map((e) => e.relativePath).slice(0, 15),
         },
       },
     })
   } catch (err: unknown) {
-    const error = err as { message?: string }
-    console.error("ZIP upload error:", err)
-    return NextResponse.json({ error: error.message || "Failed to process ZIP archive" }, { status: 500 })
+    logger.error("ZIP upload error", errorContext(err))
+    return authErrorResponse(err, "Failed to process ZIP archive")
   }
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
-import { getCurrentUserOrDefault } from "@/lib/auth"
-import { requireProjectAccess } from "@/lib/permissions"
+import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { getUserAccessibleWorkspaceIds, requireProjectAccess } from "@/lib/permissions"
 import {
   createBranch,
   commitWorkspace,
@@ -13,18 +13,17 @@ import { logger, errorContext } from "@/lib/logger"
 
 export async function GET(req: NextRequest) {
   try {
+    const user = await requireAuthenticatedUser()
     const { searchParams } = new URL(req.url)
     const projectId = searchParams.get("projectId")
 
-    const where: { projectId?: string } = {}
+    let where: { projectId?: string; workspaceId?: { in: string[] } }
     if (projectId) {
-      const user = await getCurrentUserOrDefault()
-      try {
-        await requireProjectAccess(projectId, user.id, "viewer")
-      } catch {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-      }
-      where.projectId = projectId
+      await requireProjectAccess(projectId, user.id, "viewer")
+      where = { projectId }
+    } else {
+      const workspaceIds = await getUserAccessibleWorkspaceIds(user.id, "viewer")
+      where = { workspaceId: { in: workspaceIds } }
     }
 
     const executions = await prisma.execution.findMany({
@@ -38,16 +37,18 @@ export async function GET(req: NextRequest) {
     })
 
     return NextResponse.json({ data: executions })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err: unknown) {
+    logger.error("Executions GET failed", errorContext(err))
+    return authErrorResponse(err, "Failed to load executions")
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await requireAuthenticatedUser()
     const parsed = await parseJson(req, executionCreateSchema)
     if ("response" in parsed) return parsed.response
-    const { projectId, prompt, agentId, targetBranch } = parsed.data
+    const { projectId, prompt, targetBranch } = parsed.data
 
     if (!projectId || !prompt) {
       return NextResponse.json({ error: "projectId and prompt are required" }, { status: 400 })
@@ -62,12 +63,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
     }
 
-    const user = await getCurrentUserOrDefault()
-    try {
-      await requireProjectAccess(project.id, user.id, "member")
-    } catch {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
+    await requireProjectAccess(project.id, user.id, "member")
 
     const branch = targetBranch || `feature/ai-${Date.now().toString(36)}`
     const title = prompt.length > 70 ? `${prompt.slice(0, 67)}...` : prompt
@@ -290,8 +286,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ data: finalExec }, { status: 201 })
   } catch (err: unknown) {
-    const error = err as { message?: string }
-    console.error("Execution launch error:", err)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    logger.error("Execution launch error", errorContext(err))
+    return authErrorResponse(err, "Failed to launch execution")
   }
 }

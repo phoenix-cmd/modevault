@@ -1,16 +1,44 @@
-import { type NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
-import { getCurrentUserOrDefault } from "@/lib/auth"
+import { type NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
+import { prisma } from "@/lib/db"
+import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { parseJson } from "@/lib/validation"
+import { logger, errorContext } from "@/lib/logger"
 
+const subscriptionUpdateSchema = z.object({
+  providerId: z.string().min(1).max(128).optional(),
+  planId: z.string().max(128).nullable().optional(),
+  customPlanName: z.string().max(160).nullable().optional(),
+  type: z.enum(["consumer", "api"]).optional(),
+  status: z.enum(["active", "paused", "expired", "cancelled", "trial"]).optional(),
+  billingCycle: z.enum(["monthly", "yearly", "custom"]).optional(),
+  price: z.coerce.number().finite().nonnegative().max(10_000_000).optional(),
+  currency: z.string().trim().min(1).max(12).optional(),
+  startDate: z.string().max(64).optional(),
+  renewalDate: z.string().max(64).nullable().optional(),
+  expiryDate: z.string().max(64).nullable().optional(),
+  quotaMessages: z.number().int().nonnegative().nullable().optional(),
+  quotaTokens: z.number().int().nonnegative().nullable().optional(),
+  quotaRequests: z.number().int().nonnegative().nullable().optional(),
+  quotaCredits: z.number().finite().nonnegative().nullable().optional(),
+  quotaResetPeriod: z.string().max(40).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+})
 
-// GET /api/subscriptions/[id] — Get single subscription with usage records
+const subscriptionUsagePatchSchema = z.object({
+  usedMessages: z.number().int().nonnegative().max(1_000_000_000).nullable().optional(),
+  usedTokens: z.number().int().nonnegative().max(2_000_000_000).nullable().optional(),
+  usedRequests: z.number().int().nonnegative().max(1_000_000_000).nullable().optional(),
+  usedCredits: z.number().finite().nonnegative().max(10_000_000).nullable().optional(),
+})
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getCurrentUserOrDefault()
-    const { id } = await params;
+    const user = await requireAuthenticatedUser()
+    const { id } = await params
 
     const subscription = await prisma.subscription.findFirst({
       where: { id, userId: user.id },
@@ -20,49 +48,46 @@ export async function GET(
         usageRecords: { orderBy: { date: "desc" } },
         billingRecords: { orderBy: { billingDate: "desc" } },
       },
-    });
+    })
 
     if (!subscription) {
-      return Response.json(
+      return NextResponse.json(
         { data: null, error: "Subscription not found" },
         { status: 404 }
-      );
+      )
     }
 
-    return Response.json({ data: subscription });
-  } catch (error) {
-    console.error("Subscription GET error:", error);
-    return Response.json(
-      { data: null, error: "Failed to fetch subscription" },
-      { status: 500 }
-    );
+    return NextResponse.json({ data: subscription })
+  } catch (err: unknown) {
+    logger.error("Subscription GET error", errorContext(err))
+    return authErrorResponse(err, "Failed to fetch subscription")
   }
 }
 
-// PUT /api/subscriptions/[id] — Update subscription
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getCurrentUserOrDefault()
-    const { id } = await params;
-    const body = await request.json();
+    const user = await requireAuthenticatedUser()
+    const { id } = await params
+    const parsed = await parseJson(request, subscriptionUpdateSchema)
+    if ("response" in parsed) return parsed.response
+    const body = parsed.data
 
-    // Verify ownership
     const existing = await prisma.subscription.findFirst({
       where: { id, userId: user.id },
-    });
+    })
 
     if (!existing) {
-      return Response.json(
+      return NextResponse.json(
         { data: null, error: "Subscription not found" },
         { status: 404 }
-      );
+      )
     }
 
     const subscription = await prisma.subscription.update({
-      where: { id },
+      where: { id: existing.id },
       data: {
         ...(body.providerId !== undefined && { providerId: body.providerId }),
         ...(body.planId !== undefined && { planId: body.planId }),
@@ -83,93 +108,84 @@ export async function PUT(
         ...(body.notes !== undefined && { notes: body.notes }),
       },
       include: { provider: true, plan: true },
-    });
+    })
 
-    return Response.json({ data: subscription });
-  } catch (error) {
-    console.error("Subscription PUT error:", error);
-    return Response.json(
-      { data: null, error: "Failed to update subscription" },
-      { status: 500 }
-    );
+    return NextResponse.json({ data: subscription })
+  } catch (err: unknown) {
+    logger.error("Subscription PUT error", errorContext(err))
+    return authErrorResponse(err, "Failed to update subscription")
   }
 }
 
-// DELETE /api/subscriptions/[id] — Soft delete (set status to cancelled)
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getCurrentUserOrDefault()
-    const { id } = await params;
+    const user = await requireAuthenticatedUser()
+    const { id } = await params
 
     const existing = await prisma.subscription.findFirst({
       where: { id, userId: user.id },
-    });
+    })
 
     if (!existing) {
-      return Response.json(
+      return NextResponse.json(
         { data: null, error: "Subscription not found" },
         { status: 404 }
-      );
+      )
     }
 
     const subscription = await prisma.subscription.update({
-      where: { id },
+      where: { id: existing.id },
       data: {
         status: "cancelled",
         cancelledAt: new Date(),
       },
-    });
+    })
 
-    return Response.json({ data: subscription });
-  } catch (error) {
-    console.error("Subscription DELETE error:", error);
-    return Response.json(
-      { data: null, error: "Failed to cancel subscription" },
-      { status: 500 }
-    );
+    return NextResponse.json({ data: subscription })
+  } catch (err: unknown) {
+    logger.error("Subscription DELETE error", errorContext(err))
+    return authErrorResponse(err, "Failed to cancel subscription")
   }
 }
 
-// PATCH /api/subscriptions/[id] — Update usage counters
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getCurrentUserOrDefault()
-    const { id } = await params;
-    const body = await request.json();
+    const user = await requireAuthenticatedUser()
+    const { id } = await params
+    const parsed = await parseJson(request, subscriptionUsagePatchSchema)
+    if ("response" in parsed) return parsed.response
+    const body = parsed.data
 
     const existing = await prisma.subscription.findFirst({
       where: { id, userId: user.id },
-    });
+    })
 
     if (!existing) {
-      return Response.json(
+      return NextResponse.json(
         { data: null, error: "Subscription not found" },
         { status: 404 }
-      );
+      )
     }
 
     const subscription = await prisma.subscription.update({
-      where: { id },
+      where: { id: existing.id },
       data: {
         ...(body.usedMessages !== undefined && { usedMessages: body.usedMessages }),
         ...(body.usedTokens !== undefined && { usedTokens: body.usedTokens }),
         ...(body.usedRequests !== undefined && { usedRequests: body.usedRequests }),
         ...(body.usedCredits !== undefined && { usedCredits: body.usedCredits }),
       },
-    });
+    })
 
-    return Response.json({ data: subscription });
-  } catch (error) {
-    console.error("Subscription PATCH error:", error);
-    return Response.json(
-      { data: null, error: "Failed to update usage" },
-      { status: 500 }
-    );
+    return NextResponse.json({ data: subscription })
+  } catch (err: unknown) {
+    logger.error("Subscription PATCH error", errorContext(err))
+    return authErrorResponse(err, "Failed to update usage")
   }
 }

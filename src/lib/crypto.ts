@@ -1,13 +1,34 @@
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto"
+import { createCipheriv, createDecipheriv, createHash, randomBytes, scryptSync } from "node:crypto"
 
 const ALGORITHM = "aes-256-gcm"
 const VERSION = "v1"
+const INSECURE_DEFAULTS = new Set([
+  "modelvault-local-development-secret",
+  "modelvault-dev-secret-change-me",
+  "change-me",
+  "secret",
+])
 
 function getKey(): Buffer {
-  const secret =
+  const configured = (
     process.env.INTEGRATIONS_ENCRYPTION_KEY ||
     process.env.AUTH_SECRET ||
-    "modelvault-local-development-secret"
+    process.env.NEXTAUTH_SECRET ||
+    ""
+  ).trim()
+
+  let secret = configured
+  if (!secret || INSECURE_DEFAULTS.has(secret)) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "CRITICAL: INTEGRATIONS_ENCRYPTION_KEY (or AUTH_SECRET / NEXTAUTH_SECRET) must be configured in production"
+      )
+    }
+    secret = createHash("sha256")
+      .update(`modelvault-local-encryption:${process.cwd()}`)
+      .digest("hex")
+  }
+
   return scryptSync(secret, "modelvault-integrations", 32)
 }
 

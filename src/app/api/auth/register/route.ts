@@ -2,18 +2,31 @@ import { NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/db"
 import { signSession, COOKIE_NAME } from "@/lib/auth"
-import { parseJson, registerSchema } from "@/lib/validation"
+import { parseJson, registerSchema, checkRateLimit, getClientKey } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
 export async function POST(req: NextRequest) {
   try {
+    const clientIp = getClientKey(req)
+    const ipLimit = checkRateLimit(`register:ip:${clientIp}`, 15, 60_000)
+    if (!ipLimit.allowed) {
+      return NextResponse.json(
+        { error: "Too many registration attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(ipLimit.retryAfterSec) } }
+      )
+    }
+
     const parsed = await parseJson(req, registerSchema)
     if ("response" in parsed) return parsed.response
     const { name, email, password } = parsed.data
 
     const existing = await prisma.user.findUnique({ where: { email } })
     if (existing) {
-      return NextResponse.json({ error: "Email is already registered" }, { status: 409 })
+      // Avoid explicit account enumeration oracle
+      return NextResponse.json(
+        { error: "Unable to complete registration with the provided details." },
+        { status: 400 }
+      )
     }
 
     const passwordHash = await bcrypt.hash(password, 10)

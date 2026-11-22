@@ -2,6 +2,7 @@ import { execFile } from "node:child_process"
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { promisify } from "node:util"
+import { gitBranchNameSchema } from "@/lib/validation"
 
 const execFileAsync = promisify(execFile)
 
@@ -15,14 +16,40 @@ export interface WorkspaceTreeNode {
   children?: WorkspaceTreeNode[]
 }
 
-function isSafeRelativePath(relativePath: string): boolean {
-  if (!relativePath || path.isAbsolute(relativePath)) return false
+export function isSafeRelativePath(relativePath: string): boolean {
+  if (!relativePath || typeof relativePath !== "string" || path.isAbsolute(relativePath)) return false
+  if (relativePath.includes("\0")) return false
+  const slashNormalized = relativePath.replace(/\\/g, "/")
+  if (slashNormalized.startsWith("/") || slashNormalized.split("/").includes("..")) return false
   const normalized = path.normalize(relativePath)
   if (normalized.startsWith("..") || normalized.includes(`..${path.sep}`)) return false
   return true
 }
 
+export function assertValidGitBranchName(branchName: string): string {
+  const parsed = gitBranchNameSchema.safeParse(branchName)
+  if (!parsed.success) {
+    throw new Error("Invalid Git branch name")
+  }
+  return parsed.data
+}
+
+function assertSafeRelativeFiles(files?: string[]): string[] {
+  if (!files) return []
+  const out: string[] = []
+  for (const f of files) {
+    if (!isSafeRelativePath(f)) {
+      throw new Error(`Invalid file path: ${f}`)
+    }
+    out.push(f)
+  }
+  return out
+}
+
 export function getProjectWorkspacePath(projectId: string): string {
+  if (!isSafeRelativePath(projectId) || projectId.includes("/") || projectId.includes("\\")) {
+    throw new Error("Invalid project identifier")
+  }
   return path.join(PROJECT_WORKSPACE_ROOT, projectId)
 }
 
@@ -56,7 +83,7 @@ export async function listWorkspaceTree(
         path: entryRelativePath.replace(/\\/g, "/"),
         children: await listWorkspaceTree(rootPath, entryRelativePath),
       })
-    } else {
+    } else if (entry.isFile()) {
       const fileStat = await stat(/* turbopackIgnore: true */ entryAbsolutePath)
       nodes.push({
         name: entry.name,
@@ -82,21 +109,59 @@ export async function readWorkspaceFile(
   if (!isSafeRelativePath(relativePath)) {
     throw new Error("Invalid file path")
   }
-  const absolutePath = path.join(rootPath, relativePath)
+  const resolvedRoot = path.resolve(rootPath)
+  const absolutePath = path.resolve(resolvedRoot, relativePath)
+  if (!absolutePath.startsWith(resolvedRoot + path.sep)) {
+    throw new Error("Invalid file path")
+  }
   return readFile(absolutePath, "utf8")
 }
 
 export async function writeWorkspaceFile(
   rootPath: string,
   relativePath: string,
-  content: string
+  content: string | Buffer
 ): Promise<void> {
   if (!isSafeRelativePath(relativePath)) {
     throw new Error("Invalid file path")
   }
-  const absolutePath = path.join(rootPath, relativePath)
+  const resolvedRoot = path.resolve(rootPath)
+  const absolutePath = path.resolve(resolvedRoot, relativePath)
+  if (!absolutePath.startsWith(resolvedRoot + path.sep)) {
+    throw new Error("Invalid file path")
+  }
   await mkdir(path.dirname(absolutePath), { recursive: true })
-  await writeFile(absolutePath, content, "utf8")
+  if (typeof content === "string") {
+    await writeFile(absolutePath, content, "utf8")
+  } else {
+    await writeFile(absolutePath, content)
+  }
+}
+
+const HARDENED_GIT_GLOBAL_ARGS = [
+  "-c",
+  "core.hooksPath=",
+  "-c",
+  "protocol.file.allow=never",
+  "-c",
+  "protocol.ext.allow=never",
+  "-c",
+  "core.symlinks=false",
+]
+
+function buildGitEnv(): NodeJS.ProcessEnv {
+  return {
+    NODE_ENV: process.env.NODE_ENV || "development",
+    PATH: process.env.PATH,
+    SYSTEMROOT: process.env.SYSTEMROOT,
+    COMSPEC: process.env.COMSPEC,
+    HOME: process.env.HOME || process.env.USERPROFILE,
+    USERPROFILE: process.env.USERPROFILE,
+    TEMP: process.env.TEMP || process.env.TMP,
+    TMP: process.env.TMP || process.env.TEMP,
+    GIT_TERMINAL_PROMPT: "0",
+    GIT_CONFIG_NOSYSTEM: "1",
+  }
 }
 
 async function git(
@@ -104,7 +169,12 @@ async function git(
   args: string[]
 ): Promise<{ stdout: string; stderr: string }> {
   try {
-    return await execFileAsync("git", args, { cwd, maxBuffer: 10 * 1024 * 1024 })
+    return await execFileAsync("git", [...HARDENED_GIT_GLOBAL_ARGS, ...args], {
+      cwd,
+      env: buildGitEnv(),
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: 15_000,
+    })
   } catch (error: unknown) {
     const err = error as { stderr?: string; message?: string }
     throw new Error(err.stderr || err.message || "Git command failed")
@@ -125,9 +195,11 @@ export async function initializeGitRepository(rootPath: string): Promise<void> {
   await git(rootPath, ["init"])
   await git(rootPath, ["config", "user.email", "modelvault@local"])
   await git(rootPath, ["config", "user.name", "MODELVAULT"])
+  await git(rootPath, ["config", "core.hooksPath", ""])
+  await git(rootPath, ["config", "core.symlinks", "false"])
   await git(rootPath, ["add", "-A"])
   try {
-    await git(rootPath, ["commit", "-m", "Initial commit from MODELVAULT workspace"])
+    await git(rootPath, ["commit", "--no-verify", "-m", "Initial commit from MODELVAULT workspace"])
   } catch {
     // Empty repository or nothing to commit; leave initialized.
   }
@@ -150,10 +222,11 @@ export async function getGitCommits(
   rootPath: string,
   limit = 20
 ): Promise<Array<{ sha: string; message: string; author: string; date: string }>> {
+  const safeLimit = Math.min(Math.max(Math.trunc(limit) || 20, 1), 100)
   try {
     const { stdout } = await git(rootPath, [
       "log",
-      `--max-count=${limit}`,
+      `--max-count=${safeLimit}`,
       "--pretty=format:%H%x1f%an%x1f%ad%x1f%s",
       "--date=short",
     ])
@@ -178,7 +251,7 @@ export async function getGitDiff(
   rootPath: string,
   filePath?: string
 ): Promise<string> {
-  const args = ["diff", "--no-color"]
+  const args = ["diff", "--no-color", "--no-ext-diff"]
   if (filePath) {
     if (!isSafeRelativePath(filePath)) throw new Error("Invalid file path")
     args.push("--", filePath)
@@ -212,24 +285,27 @@ export async function getGitStatusFiles(rootPath: string): Promise<GitStatusFile
 }
 
 export async function stageFiles(rootPath: string, files?: string[]): Promise<void> {
-  if (files && files.length > 0) {
-    await git(rootPath, ["add", "--", ...files])
+  const safeFiles = assertSafeRelativeFiles(files)
+  if (safeFiles.length > 0) {
+    await git(rootPath, ["add", "--", ...safeFiles])
   } else {
     await git(rootPath, ["add", "-A"])
   }
 }
 
 export async function unstageFiles(rootPath: string, files?: string[]): Promise<void> {
-  if (files && files.length > 0) {
-    await git(rootPath, ["reset", "HEAD", "--", ...files])
+  const safeFiles = assertSafeRelativeFiles(files)
+  if (safeFiles.length > 0) {
+    await git(rootPath, ["reset", "HEAD", "--", ...safeFiles])
   } else {
     await git(rootPath, ["reset", "HEAD"])
   }
 }
 
 export async function discardFiles(rootPath: string, files: string[]): Promise<void> {
-  if (files.length === 0) return
-  await git(rootPath, ["checkout", "--", ...files])
+  const safeFiles = assertSafeRelativeFiles(files)
+  if (safeFiles.length === 0) return
+  await git(rootPath, ["checkout", "--", ...safeFiles])
 }
 
 export async function commitWorkspace(
@@ -238,7 +314,7 @@ export async function commitWorkspace(
 ): Promise<string> {
   await git(rootPath, ["add", "-A"])
   try {
-    await git(rootPath, ["commit", "-m", message])
+    await git(rootPath, ["commit", "--no-verify", "-m", message])
   } catch {
     // Nothing to commit or commit failed; still return current HEAD if available.
   }
@@ -247,21 +323,22 @@ export async function commitWorkspace(
 }
 
 export async function createBranch(rootPath: string, branchName: string): Promise<void> {
+  const safeBranch = assertValidGitBranchName(branchName)
   try {
-    await git(rootPath, ["checkout", "-b", branchName])
+    await git(rootPath, ["checkout", "-b", safeBranch])
   } catch {
-    // Branch may already exist; try switching to it.
-    await git(rootPath, ["checkout", branchName])
+    await git(rootPath, ["checkout", safeBranch, "--"])
   }
 }
 
 export async function checkoutBranch(rootPath: string, branchName: string): Promise<void> {
-  await git(rootPath, ["checkout", branchName])
+  const safeBranch = assertValidGitBranchName(branchName)
+  await git(rootPath, ["checkout", safeBranch, "--"])
 }
 
 export async function getLatestCommitDiff(rootPath: string): Promise<string> {
   try {
-    const { stdout } = await git(rootPath, ["show", "--format=", "--no-color", "HEAD"])
+    const { stdout } = await git(rootPath, ["show", "--format=", "--no-color", "--no-ext-diff", "HEAD"])
     return stdout
   } catch {
     return ""
@@ -335,15 +412,15 @@ export async function getGitSyncStatus(rootPath: string): Promise<GitSyncStatus>
 export async function gitPush(
   rootPath: string
 ): Promise<{ branch: string; output: string }> {
-  const branch = await getCurrentGitBranch(rootPath)
+  const branch = assertValidGitBranchName(await getCurrentGitBranch(rootPath))
   const remoteUrl = await getGitRemoteUrl(rootPath)
   if (!remoteUrl) throw new Error("No Git remote configured for this workspace")
-  const { stdout } = await git(rootPath, ["push", "-u", "origin", "HEAD"])
+  const { stdout } = await git(rootPath, ["push", "--no-verify", "-u", "origin", "HEAD"])
   return { branch, output: stdout.trim() || `Pushed ${branch} to origin` }
 }
 
 export async function gitPull(rootPath: string): Promise<{ branch: string; output: string }> {
-  const branch = await getCurrentGitBranch(rootPath)
+  const branch = assertValidGitBranchName(await getCurrentGitBranch(rootPath))
   const remoteUrl = await getGitRemoteUrl(rootPath)
   if (!remoteUrl) throw new Error("No Git remote configured for this workspace")
   const { stdout } = await git(rootPath, ["pull", "--ff-only", "origin", branch])

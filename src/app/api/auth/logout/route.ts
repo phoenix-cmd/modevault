@@ -1,7 +1,10 @@
-import { NextResponse } from "next/server"
-import { COOKIE_NAME } from "@/lib/auth"
+import { NextRequest, NextResponse } from "next/server"
+import { COOKIE_NAME, revokeSessionToken } from "@/lib/auth"
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const token = req.cookies.get(COOKIE_NAME)?.value
+  await revokeSessionToken(token)
+
   const response = NextResponse.json({ data: { success: true } })
   response.cookies.set(COOKIE_NAME, "", {
     httpOnly: true,

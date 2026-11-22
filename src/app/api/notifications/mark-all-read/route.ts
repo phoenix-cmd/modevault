@@ -1,22 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
-import { getCurrentUserOrDefault } from "@/lib/auth"
-
+import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { logger, errorContext } from "@/lib/logger"
 
 export async function POST(_request: NextRequest) {
   try {
-    const user = await getCurrentUserOrDefault()
+    const user = await requireAuthenticatedUser()
     await prisma.notification.updateMany({
       where: { userId: user.id, isRead: false },
       data: { isRead: true },
     })
 
     return NextResponse.json({ data: { success: true } })
-  } catch (error) {
-    console.error("Mark all read error:", error)
-    return NextResponse.json(
-      { data: null, error: "Failed to mark notifications as read" },
-      { status: 500 }
-    )
+  } catch (err: unknown) {
+    logger.error("Mark all read error", errorContext(err))
+    return authErrorResponse(err, "Failed to mark notifications as read")
   }
 }

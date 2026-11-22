@@ -1,10 +1,10 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentUserOrDefault } from "@/lib/auth"
+import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
 
 export async function GET(_request: NextRequest) {
   try {
-    const user = await getCurrentUserOrDefault()
+    const user = await requireAuthenticatedUser()
     const now = new Date();
     const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
@@ -140,10 +140,6 @@ export async function GET(_request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Dashboard API error:", error);
-    return Response.json(
-      { data: null, error: "Failed to fetch dashboard data" },
-      { status: 500 }
-    );
+    return authErrorResponse(error, "Failed to fetch dashboard data", "Dashboard API error");
   }
 }

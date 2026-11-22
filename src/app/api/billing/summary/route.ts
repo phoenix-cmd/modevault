@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
-import { getCurrentUserOrDefault } from "@/lib/auth"
+import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
 
 export async function GET(_request: NextRequest) {
   try {
-    const user = await getCurrentUserOrDefault()
+    const user = await requireAuthenticatedUser()
     const records = await prisma.billingRecord.findMany({
       where: { userId: user.id },
       include: {
@@ -68,10 +68,6 @@ export async function GET(_request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("Billing summary error:", error)
-    return NextResponse.json(
-      { data: null, error: "Failed to fetch billing summary" },
-      { status: 500 }
-    )
+    return authErrorResponse(error, "Failed to fetch billing summary", "Billing summary error")
   }
 }

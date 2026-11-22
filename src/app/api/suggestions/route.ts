@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
-import { getCurrentUserOrDefault } from "@/lib/auth"
+import { requireAuthenticatedUser, authErrorResponse, isAuthError } from "@/lib/auth"
 import { generateSuggestions } from "@/lib/suggestions"
 import { logger, errorContext } from "@/lib/logger"
 
 export async function GET() {
   try {
-    const user = await getCurrentUserOrDefault()
+    const user = await requireAuthenticatedUser()
     const suggestions = await generateSuggestions(user.id)
     return NextResponse.json({
       data: {
@@ -14,7 +14,9 @@ export async function GET() {
       },
     })
   } catch (err) {
-    logger.error("Failed to generate suggestions", errorContext(err))
-    return NextResponse.json({ error: "Failed to generate suggestions" }, { status: 500 })
+    if (!isAuthError(err)) {
+      logger.error("Failed to generate suggestions", errorContext(err))
+    }
+    return authErrorResponse(err, "Failed to generate suggestions")
   }
 }

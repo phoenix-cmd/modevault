@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/db"
-import { getCurrentUserOrDefault } from "@/lib/auth"
+import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
 import { encryptSecret, keyPreview } from "@/lib/crypto"
 import { parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
@@ -54,7 +54,7 @@ function safeParse(value: string): unknown {
 
 export async function GET() {
   try {
-    const user = await getCurrentUserOrDefault()
+    const user = await requireAuthenticatedUser()
     const records = await prisma.integrationCredential.findMany({
       where: { userId: user.id },
       orderBy: { providerSlug: "asc" },
@@ -62,16 +62,16 @@ export async function GET() {
     return NextResponse.json({ data: records.map(serialize) })
   } catch (err) {
     logger.error("Failed to load integrations", errorContext(err))
-    return NextResponse.json({ error: "Failed to load integrations" }, { status: 500 })
+    return authErrorResponse(err, "Failed to load integrations")
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await requireAuthenticatedUser()
     const parsed = await parseJson(req, integrationSchema)
     if ("response" in parsed) return parsed.response
     const { providerSlug, apiKey, status, notes, features } = parsed.data
-    const user = await getCurrentUserOrDefault()
 
     const existing = await prisma.integrationCredential.findUnique({
       where: { userId_providerSlug: { userId: user.id, providerSlug } },
@@ -106,23 +106,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ data: serialize(record) }, { status: 201 })
   } catch (err) {
     logger.error("Failed to save integration", errorContext(err))
-    return NextResponse.json({ error: "Failed to save integration" }, { status: 500 })
+    return authErrorResponse(err, "Failed to save integration")
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
+    const user = await requireAuthenticatedUser()
     const providerSlug = new URL(req.url).searchParams.get("providerSlug")
     if (!providerSlug) {
       return NextResponse.json({ error: "providerSlug is required" }, { status: 400 })
     }
-    const user = await getCurrentUserOrDefault()
     await prisma.integrationCredential.deleteMany({
       where: { userId: user.id, providerSlug },
     })
     return NextResponse.json({ data: { providerSlug, disconnected: true } })
   } catch (err) {
     logger.error("Failed to disconnect integration", errorContext(err))
-    return NextResponse.json({ error: "Failed to disconnect integration" }, { status: 500 })
+    return authErrorResponse(err, "Failed to disconnect integration")
   }
 }

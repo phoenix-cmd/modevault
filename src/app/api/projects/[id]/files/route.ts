@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
-import { getCurrentUserOrDefault } from "@/lib/auth"
+import { getCurrentUserOrDefault, authErrorResponse } from "@/lib/auth"
 import { requireProjectAccess } from "@/lib/permissions"
 import {
   listWorkspaceTree,
@@ -75,8 +75,8 @@ export async function POST(req: NextRequest) {
     })
 
     return NextResponse.json({ success: true, record }, { status: 201 })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err: unknown) {
+    return authErrorResponse(err, "Failed to load project files")
   }
 }`,
     astSummary: {
@@ -229,20 +229,12 @@ export async function GET(
     const { searchParams } = new URL(req.url)
     const filePath = searchParams.get("file")
 
-    let project = await prisma.project.findUnique({
+    const project = await prisma.project.findUnique({
       where: { id },
       include: {
         sources: true,
       },
     })
-
-    if (!project) {
-      project = await prisma.project.findFirst({
-        include: {
-          sources: true,
-        },
-      })
-    }
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
@@ -287,7 +279,6 @@ export async function GET(
           branch: project.defaultBranch,
           tree,
           allFiles,
-          workspacePath: source.sourcePath,
         },
       })
     }
@@ -360,8 +351,8 @@ export async function GET(
         allFiles: Object.keys(MOCK_PROJECT_FILES),
       },
     })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err: unknown) {
+    return authErrorResponse(err, "Failed to load project files")
   }
 }
 
@@ -404,7 +395,6 @@ export async function PUT(
     await writeWorkspaceFile(source.sourcePath, file, content)
     return NextResponse.json({ data: { saved: true, file } })
   } catch (err: unknown) {
-    const error = err as { message?: string }
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return authErrorResponse(err, "Failed to save project file")
   }
 }
