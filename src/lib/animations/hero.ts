@@ -1,29 +1,25 @@
-import { waapi } from 'animejs/waapi'
-import { isReducedMotion } from './reveals'
+import { waapi } from "animejs/waapi"
+import { cancelAnimations, isReducedMotion } from "./reveals"
 
 export interface HeroElements {
-  badge?: HTMLElement | null
   title?: HTMLElement | null
   subtitle?: HTMLElement | null
   actions?: HTMLElement | null
-  stats?: HTMLElement | null
-  demo?: HTMLElement | null
+  diagram?: HTMLElement | null
 }
 
 export function animateHeroSequence(elements: HeroElements): () => void {
-  if (typeof window === 'undefined' || isReducedMotion()) {
+  if (typeof window === "undefined" || isReducedMotion()) {
     return () => {}
   }
 
-  const activeAnimations: any[] = []
+  const activeAnimations: Array<{ cancel?: () => void } | null> = []
 
   const targets = [
-    { el: elements.badge, delay: 50, y: 12 },
-    { el: elements.title, delay: 180, y: 24 },
-    { el: elements.subtitle, delay: 320, y: 18 },
-    { el: elements.actions, delay: 440, y: 14 },
-    { el: elements.stats, delay: 540, y: 12 },
-    { el: elements.demo, delay: 650, y: 30 },
+    { el: elements.title, delay: 40, y: 18 },
+    { el: elements.subtitle, delay: 160, y: 14 },
+    { el: elements.actions, delay: 260, y: 12 },
+    { el: elements.diagram, delay: 340, y: 16 },
   ]
 
   targets.forEach(({ el, delay, y }) => {
@@ -31,26 +27,18 @@ export function animateHeroSequence(elements: HeroElements): () => void {
     try {
       const anim = waapi.animate(el, {
         opacity: [0, 1],
-        transform: [`translateY(${y}px)`, 'translateY(0px)'],
-        duration: 750,
+        transform: [`translateY(${y}px)`, "translateY(0px)"],
+        duration: 620,
         delay,
-        ease: 'outQuart',
+        ease: "outQuart",
       })
-      if (anim) activeAnimations.push(anim)
+      activeAnimations.push(anim)
     } catch {
-      // Graceful fallback
+      /* graceful fallback */
     }
   })
 
   return () => {
-    activeAnimations.forEach((anim) => {
-      try {
-        if (anim && typeof anim.cancel === 'function') {
-          anim.cancel()
-        }
-      } catch {
-        // Ignore unmount cancel errors
-      }
-    })
+    cancelAnimations(activeAnimations)
   }
 }

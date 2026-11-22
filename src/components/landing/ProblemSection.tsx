@@ -1,91 +1,205 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import { createScrollObserver, animateFadeUp } from "@/lib/animations/reveals"
+import { animateFadeUp, createScrollObserver } from "@/lib/animations/reveals"
 
 const PROBLEMS = [
   {
     code: "01",
-    title: "Fragmented execution",
-    note: "Coordination",
-    body: "Agents often work in isolation. Plans, implementation, and tests drift apart when context and dependencies are not shared.",
+    index: "001",
+    label: "AGENTS",
+    title: "Fragmented agents.",
+    description:
+      "Developers run different coding agents in isolated sessions without unified coordination, handoff state, or conflict protection.",
   },
   {
     code: "02",
-    title: "Unclear cost and usage",
-    note: "Visibility",
-    body: "Token use, subscriptions, and model choices are difficult to compare when spending is spread across tools and providers.",
+    index: "002",
+    label: "WORKFLOWS",
+    title: "Disconnected workflows.",
+    description:
+      "Planning, implementation, testing, security checks, and human review remain split across disconnected scripts and dashboards.",
   },
   {
     code: "03",
-    title: "Unverified output",
-    note: "Quality",
-    body: "Generated code can be plausible yet incomplete. Without checks and review, defects and security issues reach the main branch.",
+    index: "003",
+    label: "VISIBILITY",
+    title: "Limited visibility.",
+    description:
+      "Engineering leads cannot easily inspect which files each agent touched, which checks ran, or why a change was proposed.",
   },
   {
     code: "04",
-    title: "Limited governance",
-    note: "Control",
-    body: "Teams need clear ownership, permissions, and records of what was generated, reviewed, and approved.",
+    index: "004",
+    label: "RESOURCES",
+    title: "Uncontrolled resources.",
+    description:
+      "Token usage, provider API credits, consumer subscriptions, and project expenditure sit across separate billing portals.",
   },
 ]
 
 export function ProblemSection() {
-  const ref = useRef<HTMLElement>(null)
-  const contentRef = useRef<HTMLDivElement>(null)
+  const sectionRef = useRef<HTMLElement>(null)
+  const headingRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    return createScrollObserver(ref.current, () => {
-      if (contentRef.current) animateFadeUp(contentRef.current, 0, 650)
+    let anim: { cancel?: () => void } | null = null
+    const stopObserver = createScrollObserver(sectionRef.current, () => {
+      anim = animateFadeUp(headingRef.current, 0, 560)
     })
+    return () => {
+      stopObserver()
+      anim?.cancel?.()
+    }
   }, [])
 
   return (
-    <section ref={ref} className="border-b border-[var(--mkt-line)] py-20 sm:py-24">
-      <div ref={contentRef} className="mkt-container">
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-16">
-          <div>
-            <p className="mkt-eyebrow flex items-center gap-3">
-              <span className="text-[var(--mkt-accent)]">01</span>
-              <span className="h-px w-6 bg-[var(--mkt-line-strong)]" aria-hidden />
-              Context
-            </p>
-            <h2 className="mkt-h2 mt-5 text-[2rem] sm:text-[2.6rem]">
-              Faster code generation created
-              <br />
-              <span className="text-[var(--mkt-ink-2)]">new coordination work.</span>
-            </h2>
-            <p className="mkt-lead mt-5 max-w-md text-[15px]">
-              Modelvault treats agents, workflows, and verification as parts of one
-              development system rather than separate tools.
-            </p>
+    <section
+      id="problem"
+      ref={sectionRef}
+      className="relative border-b border-[var(--rig-paper-18)]"
+    >
+      <div className="rig-container !px-0">
+        {/* Top Editorial Header */}
+        <div
+          ref={headingRef}
+          className="border-b border-[var(--rig-paper-18)] px-5 py-12 sm:px-12 sm:py-16"
+        >
+          <span className="rig-badge mb-7">
+            <span className="rig-blink-dot" aria-hidden="true" />
+            The Problem
+          </span>
+          <h2 className="rig-display max-w-4xl text-[clamp(2.4rem,5vw,4.25rem)] font-bold leading-[0.94] text-[var(--rig-paper)]">
+            AI development is powerful.
+            <br />
+            <span className="text-[var(--rig-paper-50)]">
+              Managing it shouldn&apos;t be complicated.
+            </span>
+          </h2>
+        </div>
+
+        {/* Rig 3-column asymmetric hairline grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 lg:grid-rows-2">
+          {/* Left architectural diagram spanning 2 rows */}
+          <div className="flex flex-col items-center justify-center border-b border-[var(--rig-paper-18)] bg-[#101514] p-8 lg:row-span-2 lg:border-b-0 lg:border-r">
+            <div className="w-full max-w-[300px]">
+              <div className="mb-4 flex items-center justify-between rig-mono text-[10px] uppercase tracking-[0.14em] text-[var(--rig-paper-40)]">
+                <span>Uncoordinated Flow</span>
+                <span className="text-[var(--rig-red)]">Bottleneck</span>
+              </div>
+
+              <svg
+                viewBox="0 0 280 260"
+                className="w-full"
+                aria-label="Diagram illustrating four fragmented AI tool streams converging onto an uncoordinated review bottleneck"
+              >
+                {/* Horizontal grid hairlines */}
+                <line x1="0" y1="65" x2="280" y2="65" stroke="rgba(240,237,230,0.08)" />
+                <line x1="0" y1="130" x2="280" y2="130" stroke="rgba(240,237,230,0.08)" />
+                <line x1="0" y1="195" x2="280" y2="195" stroke="rgba(240,237,230,0.08)" />
+
+                {/* Left isolated agent sources */}
+                {[
+                  { y: 30, label: "CLI A" },
+                  { y: 95, label: "IDE B" },
+                  { y: 160, label: "BOT C" },
+                  { y: 225, label: "API $" },
+                ].map((node) => (
+                  <g key={node.label}>
+                    <rect
+                      x="8"
+                      y={node.y - 14}
+                      width="56"
+                      height="28"
+                      fill="#161e1d"
+                      stroke="rgba(240,237,230,0.28)"
+                    />
+                    <text
+                      x="36"
+                      y={node.y + 4}
+                      textAnchor="middle"
+                      fill="rgba(240,237,230,0.75)"
+                      fontSize="10"
+                      fontFamily="var(--font-mono), monospace"
+                    >
+                      {node.label}
+                    </text>
+                    <path
+                      d={`M 64 ${node.y} L 138 ${node.y} L 178 130`}
+                      fill="none"
+                      stroke="rgba(240,237,230,0.28)"
+                      strokeDasharray="4 4"
+                    />
+                  </g>
+                ))}
+
+                {/* Collision gate */}
+                <rect
+                  x="178"
+                  y="98"
+                  width="92"
+                  height="64"
+                  fill="rgba(237, 70, 45, 0.12)"
+                  stroke="oklch(0.6329 0.2075 31.49)"
+                  strokeWidth="1.5"
+                />
+                <text
+                  x="224"
+                  y="125"
+                  textAnchor="middle"
+                  fill="oklch(0.6329 0.2075 31.49)"
+                  fontSize="10"
+                  fontWeight="700"
+                  fontFamily="var(--font-mono), monospace"
+                >
+                  MANUAL
+                </text>
+                <text
+                  x="224"
+                  y="142"
+                  textAnchor="middle"
+                  fill="rgba(240,237,230,0.8)"
+                  fontSize="10"
+                  fontFamily="var(--font-mono), monospace"
+                >
+                  BACKLOG
+                </text>
+              </svg>
+
+              <p className="mt-4 rig-mono text-[10px] uppercase tracking-[0.1em] text-[var(--rig-paper-40)]">
+                Zero shared context across tools
+              </p>
+            </div>
           </div>
 
-          <div className="border-t border-[var(--mkt-line)]">
-            {PROBLEMS.map((item, i) => (
-              <article
-                key={item.code}
-                className={`grid gap-3 py-6 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:gap-6 ${
-                  i !== PROBLEMS.length - 1 ? "border-b border-[var(--mkt-line)]" : ""
-                }`}
-              >
-                <div className="flex items-start justify-between sm:block">
-                  <p className="mkt-mono text-[11px] tracking-[0.1em] text-[var(--mkt-accent)]">
-                    {item.code}
-                  </p>
-                  <p className="mkt-note mt-0 sm:mt-2">{item.note}</p>
+          {/* 4 Hairline Problem Cells */}
+          {PROBLEMS.map((problem, index) => (
+            <div
+              key={problem.code}
+              className={`flex flex-col justify-between p-7 sm:p-9 ${
+                index < 2 ? "border-b border-[var(--rig-paper-18)]" : ""
+              } ${index % 2 === 0 ? "lg:border-r lg:border-[var(--rig-paper-18)]" : ""} ${
+                index === 2 ? "border-b lg:border-b-0 border-[var(--rig-paper-18)]" : ""
+              }`}
+            >
+              <div>
+                <div className="mb-4 flex items-baseline justify-between">
+                  <span className="rig-mono text-[10.5px] font-bold uppercase tracking-[0.14em] text-[var(--rig-blue)]">
+                    {problem.code} — {problem.label}
+                  </span>
+                  <span className="rig-mono text-[10px] tracking-[0.2em] text-[var(--rig-paper-20)]">
+                    {problem.index}
+                  </span>
                 </div>
-                <div>
-                  <h3 className="font-display text-[18px] font-medium tracking-[-0.02em] text-[var(--mkt-ink)]">
-                    {item.title}
-                  </h3>
-                  <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-[var(--mkt-ink-2)]">
-                    {item.body}
-                  </p>
-                </div>
-              </article>
-            ))}
-          </div>
+                <h3 className="rig-display text-[1.45rem] font-semibold leading-[1.08] text-[var(--rig-paper)]">
+                  {problem.title}
+                </h3>
+                <p className="mt-3 text-[0.9rem] leading-[1.65] text-[var(--rig-paper-75)]">
+                  {problem.description}
+                </p>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </section>

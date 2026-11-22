@@ -31,12 +31,13 @@ const PAGE_META: Record<string, { section: string; title: string }> = {
   "/workflows": { section: "Workspace", title: "Workflow Builder" },
   "/studio": { section: "Workspace", title: "Development Studio" },
   "/git": { section: "Workspace", title: "Git Control" },
-  "/models": { section: "AI Intelligence", title: "Model Library" },
-  "/api-usage": { section: "AI Intelligence", title: "Usage & Limits" },
-  "/analytics": { section: "AI Intelligence", title: "Analytics" },
-  "/subscriptions": { section: "AI Intelligence", title: "Subscriptions & Billing" },
-  "/billing": { section: "AI Intelligence", title: "Billing" },
-  "/calendar": { section: "AI Intelligence", title: "Renewals" },
+  "/verify": { section: "Workspace", title: "Verification Center" },
+  "/models": { section: "Intelligence", title: "Model Library" },
+  "/api-usage": { section: "Intelligence", title: "Usage & Limits" },
+  "/analytics": { section: "Intelligence", title: "Analytics" },
+  "/subscriptions": { section: "Intelligence", title: "Subscriptions & Billing" },
+  "/billing": { section: "Intelligence", title: "Billing Ledger" },
+  "/calendar": { section: "Intelligence", title: "Renewals" },
   "/integrations": { section: "Management", title: "Integrations" },
   "/organizations": { section: "Management", title: "Organizations" },
   "/permissions": { section: "Management", title: "Permissions" },
@@ -51,12 +52,13 @@ const SEARCH_PAGES = [
   { label: "Workflow Builder", hint: "Workspace", href: "/workflows" },
   { label: "Development Studio", hint: "Workspace", href: "/studio" },
   { label: "Git Control", hint: "Workspace", href: "/git" },
-  { label: "Model Library", hint: "AI Intelligence", href: "/models" },
-  { label: "Usage & Limits", hint: "AI Intelligence", href: "/api-usage" },
-  { label: "Analytics", hint: "AI Intelligence", href: "/analytics" },
-  { label: "Subscriptions & Billing", hint: "AI Intelligence", href: "/subscriptions" },
-  { label: "Billing", hint: "AI Intelligence", href: "/billing" },
-  { label: "Renewals", hint: "AI Intelligence", href: "/calendar" },
+  { label: "Verification Center", hint: "Workspace", href: "/verify" },
+  { label: "Model Library", hint: "Intelligence", href: "/models" },
+  { label: "Usage & Limits", hint: "Intelligence", href: "/api-usage" },
+  { label: "Analytics", hint: "Intelligence", href: "/analytics" },
+  { label: "Subscriptions & Billing", hint: "Intelligence", href: "/subscriptions" },
+  { label: "Billing Ledger", hint: "Intelligence", href: "/billing" },
+  { label: "Renewals", hint: "Intelligence", href: "/calendar" },
   { label: "Integrations", hint: "Management", href: "/integrations" },
   { label: "Organizations", hint: "Management", href: "/organizations" },
   { label: "Permissions", hint: "Management", href: "/permissions" },
@@ -108,7 +110,7 @@ export function Header({
 
   const meta = PAGE_META[pathname] || { section: "Workspace", title: "Dashboard" }
 
-  const [isDark, setIsDark] = useState(false)
+  const [isLight, setIsLight] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -126,7 +128,7 @@ export function Header({
 
   useEffect(() => {
     setMounted(true)
-    setIsDark(document.documentElement.classList.contains("dark"))
+    setIsLight(document.documentElement.classList.contains("light"))
   }, [])
 
   useEffect(() => {
@@ -229,13 +231,13 @@ export function Header({
   }, [query])
 
   function toggleTheme() {
-    const next = !isDark
-    setIsDark(next)
-    document.documentElement.classList.toggle("dark", next)
+    const nextLight = !isLight
+    setIsLight(nextLight)
+    document.documentElement.classList.toggle("light", nextLight)
     try {
-      localStorage.setItem("mv-theme", next ? "dark" : "light")
+      localStorage.setItem("mv-theme", nextLight ? "light" : "dark")
     } catch {
-      /* storage can be unavailable */
+      /* storage unavailable */
     }
   }
 
@@ -265,7 +267,7 @@ export function Header({
     try {
       await fetch("/api/notifications/mark-all-read", { method: "POST" })
     } catch {
-      /* optimistic update is safe to keep */
+      /* optimistic update safe */
     }
   }
 
@@ -279,7 +281,7 @@ export function Header({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="fixed inset-0 z-[80] flex items-start justify-center bg-ink/20 px-4 pt-[12vh] backdrop-blur-[2px] dark:bg-black/55"
+              className="fixed inset-0 z-[80] flex items-start justify-center bg-black/60 px-4 pt-[12vh] backdrop-blur-[2px]"
               onMouseDown={(event) => {
                 if (event.target === event.currentTarget) setSearchOpen(false)
               }}
@@ -289,7 +291,7 @@ export function Header({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -4, scale: 0.99 }}
                 transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                className="glass-panel w-full max-w-[560px] overflow-hidden rounded-lg shadow-float"
+                className="glass-panel w-full max-w-[560px] overflow-hidden rounded-[2px] shadow-float"
                 role="dialog"
                 aria-modal="true"
                 aria-label="Search MODELVAULT"
@@ -304,7 +306,7 @@ export function Header({
                     placeholder="Search pages, providers, and plans…"
                     className="h-5 flex-1 bg-transparent text-[13.5px] text-ink outline-none placeholder:text-ink-3"
                   />
-                  <kbd className="rounded border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] font-medium text-ink-3">
+                  <kbd className="rounded-[2px] border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] font-medium text-ink-3">
                     ESC
                   </kbd>
                 </div>
@@ -325,22 +327,16 @@ export function Header({
                           onMouseEnter={() => setActiveIndex(index)}
                           onClick={() => goTo(result)}
                           className={cn(
-                            "flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors",
+                            "flex w-full items-center gap-3 rounded-[2px] px-2.5 py-2 text-left transition-colors",
                             index === activeIndex
                               ? "bg-accent-soft text-accent"
                               : "text-ink-2 hover:bg-surface-2"
                           )}
                         >
                           {result.kind === "page" ? (
-                            <LayoutDashboard
-                              className="h-4 w-4 shrink-0 text-ink-3"
-                              strokeWidth={1.6}
-                            />
+                            <LayoutDashboard className="h-4 w-4 shrink-0 text-ink-3" strokeWidth={1.6} />
                           ) : (
-                            <CreditCard
-                              className="h-4 w-4 shrink-0 text-ink-3"
-                              strokeWidth={1.6}
-                            />
+                            <CreditCard className="h-4 w-4 shrink-0 text-ink-3" strokeWidth={1.6} />
                           )}
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-[13px] font-medium text-ink">
@@ -359,7 +355,9 @@ export function Header({
 
                 <div className="flex items-center justify-between border-t border-line px-4 py-2 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
                   <span>↑ ↓ navigate · Enter open</span>
-                  <span className="inline-flex items-center gap-1"><Command className="h-3 w-3" />K</span>
+                  <span className="inline-flex items-center gap-1">
+                    <Command className="h-3 w-3" />K
+                  </span>
                 </div>
               </motion.div>
             </motion.div>
@@ -385,7 +383,7 @@ export function Header({
             {meta.section}
           </span>
           <ChevronRight className="hidden h-3 w-3 text-ink-3/50 sm:inline" strokeWidth={1.8} />
-          <span className="truncate font-display text-[14px] font-medium tracking-[-0.02em] text-ink sm:text-[15px]">
+          <span className="truncate font-display text-[14px] font-semibold tracking-[-0.02em] text-ink sm:text-[15px]">
             {meta.title}
           </span>
         </nav>
@@ -394,11 +392,11 @@ export function Header({
       <div className="flex items-center gap-1 sm:gap-1.5">
         <button
           onClick={() => setSearchOpen(true)}
-          className="hidden h-8 w-[220px] items-center gap-2 rounded border border-line bg-surface px-2.5 text-left text-[12px] text-ink-3 transition-colors hover:border-line-strong hover:text-ink-2 md:flex lg:w-[260px]"
+          className="hidden h-8 w-[220px] items-center gap-2 rounded-[2px] border border-line bg-surface px-2.5 text-left text-[12px] text-ink-3 transition-colors hover:border-line-strong hover:text-ink-2 md:flex lg:w-[260px]"
         >
           <Search className="h-3.5 w-3.5" strokeWidth={1.8} />
           <span className="flex-1">Search</span>
-          <kbd className="rounded border border-line bg-surface-2 px-1 py-0.5 font-mono text-[9.5px] font-medium text-ink-3">
+          <kbd className="rounded-[2px] border border-line bg-surface-2 px-1 py-0.5 font-mono text-[9.5px] font-medium text-ink-3">
             ⌘K
           </kbd>
         </button>
@@ -414,17 +412,17 @@ export function Header({
 
         <Link
           href="/agents"
-          className="hidden h-8 items-center gap-1.5 rounded-md bg-accent px-2.5 text-[12px] font-medium text-accent-ink transition-colors hover:bg-accent-hover sm:inline-flex"
-          title="Quick create"
+          className="btn-primary btn-sm hidden sm:inline-flex"
+          title="Dispatch agent"
         >
-          <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-          <span>Quick create</span>
+          <Plus className="h-3.5 w-3.5" strokeWidth={2.2} />
+          <span>New run</span>
         </Link>
         <Link
           href="/agents"
           className="icon-btn sm:hidden"
-          aria-label="Quick create"
-          title="Quick create"
+          aria-label="Dispatch agent"
+          title="New run"
         >
           <Plus className="h-4 w-4" strokeWidth={2} />
         </Link>
@@ -432,13 +430,13 @@ export function Header({
         <button
           onClick={toggleTheme}
           className="icon-btn"
-          aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
-          title={isDark ? "Light theme" : "Dark theme"}
+          aria-label={isLight ? "Switch to dark charcoal theme" : "Switch to archival paper light theme"}
+          title={isLight ? "Dark charcoal theme" : "Paper light theme"}
         >
-          {isDark ? (
-            <Sun className="h-4 w-4" strokeWidth={1.8} />
-          ) : (
+          {isLight ? (
             <Moon className="h-4 w-4" strokeWidth={1.8} />
+          ) : (
+            <Sun className="h-4 w-4" strokeWidth={1.8} />
           )}
         </button>
 
@@ -451,7 +449,7 @@ export function Header({
           >
             <Bell className="h-4 w-4" strokeWidth={1.8} />
             {unreadCount > 0 && (
-              <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-accent ring-2 ring-canvas" />
+              <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 bg-accent ring-2 ring-canvas" />
             )}
           </button>
 
@@ -467,13 +465,13 @@ export function Header({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -3, scale: 0.99 }}
                   transition={{ duration: 0.14 }}
-                  className="glass-panel absolute right-0 top-[calc(100%+8px)] z-50 w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg shadow-float"
+                  className="glass-panel absolute right-0 top-[calc(100%+8px)] z-50 w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[2px] shadow-float"
                 >
                   <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
                     <div className="flex items-center gap-2">
                       <h3 className="text-[13px] font-medium text-ink">Notifications</h3>
                       {unreadCount > 0 && (
-                        <span className="rounded bg-accent-soft px-1.5 py-0.5 font-mono text-[10px] font-medium text-accent tnum">
+                        <span className="rounded-[2px] bg-accent-soft px-1.5 py-0.5 font-mono text-[10px] font-medium text-accent tnum">
                           {unreadCount}
                         </span>
                       )}
@@ -500,17 +498,17 @@ export function Header({
                           key={item.id}
                           className={cn(
                             "flex gap-2.5 border-b border-line px-4 py-3 last:border-b-0",
-                            !item.isRead && "bg-accent-soft/30"
+                            !item.isRead && "bg-accent-soft/40"
                           )}
                         >
                           <span
                             className={cn(
-                              "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
+                              "mt-1.5 h-1.5 w-1.5 shrink-0",
                               item.severity === "critical"
                                 ? "bg-danger"
                                 : item.severity === "warning"
-                                  ? "bg-warning"
-                                  : "bg-info"
+                                ? "bg-warning"
+                                : "bg-info"
                             )}
                           />
                           <div className="min-w-0 flex-1">
@@ -548,11 +546,11 @@ export function Header({
 
         <Link
           href="/settings"
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-surface font-mono text-[10px] font-medium text-ink-2 transition-colors hover:border-line-strong hover:text-ink"
+          className="flex h-8 w-8 items-center justify-center rounded-[2px] border border-line bg-surface font-mono text-[10px] font-medium text-ink-2 transition-colors hover:border-line-strong hover:text-ink"
           aria-label="User profile"
           title="User profile"
         >
-          AK
+          MV
         </Link>
         <button
           type="button"

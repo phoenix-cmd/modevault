@@ -39,7 +39,7 @@ export default function StudioPage() {
   // Keep the editor surface in step with the site theme.
   useEffect(() => {
     const root = document.documentElement
-    const sync = () => setEditorTheme(root.classList.contains("dark") ? "vs-dark" : "light")
+    const sync = () => setEditorTheme(root.classList.contains("light") ? "light" : "vs-dark")
     sync()
     const observer = new MutationObserver(sync)
     observer.observe(root, { attributes: true, attributeFilter: ["class"] })
@@ -449,19 +449,19 @@ export default function StudioPage() {
                   <div className="flex min-h-0 flex-1 items-center justify-center p-3 sm:p-4">
                     <div
                       className={cn(
-                        "flex h-full flex-col overflow-hidden border border-line bg-white transition-[width] duration-300",
+                        "flex h-full flex-col overflow-hidden border border-line bg-surface transition-[width] duration-300",
                         viewport === "mobile" ? "w-[375px] max-w-full" : viewport === "tablet" ? "w-[720px] max-w-full" : "w-full"
                       )}
                     >
                       <div className="flex h-8 items-center justify-between gap-2 border-b border-line bg-surface-2/60 px-3">
                         <div className="flex min-w-0 items-center gap-2">
-                          <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", previewRunning ? "bg-success" : "bg-soft-grey")} />
+                          <span className={cn("h-1.5 w-1.5 shrink-0", previewRunning ? "bg-success" : "bg-soft-grey")} />
                           <span className="truncate font-mono text-[10px] text-ink-2">{previewRunning ? "Live session" : "Stopped"}</span>
                         </div>
                         <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-ink-3">{viewport}</span>
                       </div>
 
-                      <div className="relative flex-1 overflow-hidden bg-white">
+                      <div className={cn("relative flex-1 overflow-hidden", previewRunning && previewUrl ? "bg-white" : "bg-surface")}>
                         {previewRunning && previewUrl ? (
                           <iframe
                             key={previewFrameKey}

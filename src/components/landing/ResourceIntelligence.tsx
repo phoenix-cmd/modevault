@@ -1,86 +1,139 @@
 "use client"
 
-import { useEffect, useRef } from "react"
-import { createScrollObserver, animateFadeUp } from "@/lib/animations/reveals"
-
-const PROVIDERS = [
-  { provider: "Anthropic", plan: "Team plan (example)", period: "Monthly", included: "Shared usage allowance", tracked: "Seat + usage records", notes: "Invoice uploaded" },
-  { provider: "OpenAI", plan: "API account (example)", period: "Usage-based", included: "Pay-as-you-go", tracked: "Token telemetry", notes: "Budget threshold set" },
-  { provider: "Google", plan: "Developer account (example)", period: "Usage-based", included: "Pay-as-you-go", tracked: "Requests / tokens", notes: "Project attribution" },
-  { provider: "Open-source runtime", plan: "Self-hosted (example)", period: "Infrastructure", included: "N/A", tracked: "Compute estimates", notes: "Internal cost center" },
+const PROVIDER_LEDGER = [
+  {
+    provider: "Anthropic API",
+    allowance: "Tier 4 · $500.00/mo",
+    consumed: "$312.40",
+    pct: 62,
+    tokens: "18.4M tkn",
+    budgetCap: "Enforced ($500)",
+  },
+  {
+    provider: "OpenAI Platform",
+    allowance: "Prepaid Credit · $800.00",
+    consumed: "$418.90",
+    pct: 52,
+    tokens: "21.9M tkn",
+    budgetCap: "Enforced ($800)",
+  },
+  {
+    provider: "Cursor Team",
+    allowance: "Consumer Plan · 12 seats",
+    consumed: "$480.00",
+    pct: 84,
+    tokens: "5,420 reqs",
+    budgetCap: "Seat quota alert",
+  },
+  {
+    provider: "Google Vertex / Gemini",
+    allowance: "Developer · $300.00/mo",
+    consumed: "$84.20",
+    pct: 28,
+    tokens: "14.2M tkn",
+    budgetCap: "Enforced ($300)",
+  },
 ]
 
-const BREAKDOWN = [
-  { label: "Model API usage", value: 46, note: "Share of tracked spend (example)" },
-  { label: "Subscriptions / seats", value: 32, note: "Recurring plans (example)" },
-  { label: "Evaluation & tooling", value: 14, note: "Testing, review, support (example)" },
-  { label: "Unattributed", value: 8, note: "Needs project mapping (example)" },
+const AGENT_BUDGETS = [
+  { project: "checkout-api", agent: "Backend Profile", limit: "$150.00", spent: "$64.10", remaining: "$85.90" },
+  { project: "design-system", agent: "Frontend Profile", limit: "$120.00", spent: "$41.80", remaining: "$78.20" },
+  { project: "auth-service", agent: "Verification Profile", limit: "$80.00", spent: "$19.45", remaining: "$60.55" },
 ]
 
 export function ResourceIntelligence() {
-  const ref = useRef<HTMLElement>(null)
-  const contentRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    return createScrollObserver(ref.current, () => {
-      if (contentRef.current) animateFadeUp(contentRef.current, 0, 650)
-    })
-  }, [])
-
   return (
-    <section id="intelligence" ref={ref} className="border-b border-[var(--mkt-line)] bg-[var(--mkt-bg)] py-20 sm:py-24">
-      <div ref={contentRef} className="mkt-container">
-        <div className="grid gap-8 border-b border-[var(--mkt-line)] pb-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.75fr)] lg:items-end">
-          <div className="max-w-2xl">
-            <p className="mkt-eyebrow flex items-center gap-3">
-              <span className="text-[var(--mkt-accent)]">06</span>
-              <span className="h-px w-6 bg-[var(--mkt-line-strong)]" aria-hidden />
-              Resource intelligence
-            </p>
-            <h2 className="mkt-h2 mt-5 text-[2rem] sm:text-[2.6rem]">
-              Understand spend, usage,
+    <section
+      id="intelligence"
+      className="border-b border-[var(--rig-paper-18)] py-20 sm:py-28"
+    >
+      <div className="rig-container">
+        <div className="flex flex-col justify-between gap-6 border-b border-[var(--rig-paper-18)] pb-10 lg:flex-row lg:items-end">
+          <div>
+            <span className="rig-badge mb-6">Resource Intelligence</span>
+            <h2 className="rig-display text-[clamp(2.4rem,4.6vw,3.9rem)] font-bold leading-[0.94] text-[var(--rig-paper)]">
+              Subscriptions, API credits,
               <br />
-              <span className="text-[var(--mkt-ink-2)]">and allocation in context.</span>
+              <span className="text-[var(--rig-paper-50)]">and agent budgets unified.</span>
             </h2>
           </div>
-          <div className="max-w-md">
-            <p className="mkt-lead text-[15px]">
-              Compare providers, subscriptions, and usage records with clear units and
-              attribution. Treat forecasts as estimates, not guarantees.
-            </p>
-            <p className="mkt-note mt-4 border-l border-[var(--mkt-accent-border)] pl-3 text-[var(--mkt-accent-strong)]">
-              Demonstration data — not live provider usage or financial records.
-            </p>
-          </div>
+          <p className="max-w-md text-[0.95rem] leading-[1.68] text-[var(--rig-paper-75)]">
+            Separate fixed subscription seats from metered token consumption, prepaid API balances, and per-project agent spend ceilings.
+          </p>
         </div>
 
-        <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)]">
-          <div>
-            <div className="flex items-end justify-between gap-4">
-              <p className="mkt-eyebrow">Provider & plan comparison · example</p>
-              <p className="mkt-note">Sample records</p>
+        {/* Summary Band */}
+        <div className="grid grid-cols-2 border-b border-[var(--rig-paper-18)] lg:grid-cols-4 lg:divide-x lg:divide-[var(--rig-paper-18)]">
+          {[
+            { label: "Provider Subscriptions", value: "$480.00", meta: "12 tracked seats (illustrative)" },
+            { label: "Metered API Credits", value: "$815.50", meta: "Across 3 active providers" },
+            { label: "Token Consumption", value: "54.5M", meta: "Input + output volume" },
+            { label: "Agent Budget Guard", value: "98.4%", meta: "Runs within cap" },
+          ].map((m) => (
+            <div key={m.label} className="py-6 lg:px-6 lg:first:pl-0">
+              <p className="rig-mono text-[10px] uppercase tracking-[0.14em] text-[var(--rig-paper-40)]">
+                {m.label}
+              </p>
+              <p className="mt-2 rig-mono text-[26px] font-medium tracking-[-0.04em] text-[var(--rig-paper)] tabular-nums">
+                {m.value}
+              </p>
+              <p className="mt-1 text-[11px] text-[var(--rig-paper-50)]">{m.meta}</p>
             </div>
-            <div className="mt-4 overflow-x-auto border-t border-[var(--mkt-line)]">
-              <table className="w-full min-w-[720px] border-collapse text-left">
+          ))}
+        </div>
+
+        {/* Analytical Tables */}
+        <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+          {/* Provider & Subscription Usage Table */}
+          <div className="border border-[var(--rig-paper-18)] bg-[#101514]">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--rig-paper-12)] px-4 py-3 rig-mono text-[10.5px] uppercase tracking-[0.1em]">
+              <span className="text-[var(--rig-paper)]">Provider Usage & Allowances</span>
+              <span className="text-[var(--rig-yellow)]">Illustrative Data</span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left text-[12.5px]">
                 <thead>
-                  <tr className="border-b border-[var(--mkt-line)] text-[var(--mkt-ink-3)]">
-                    <th className="py-3 pr-4 font-mono text-[10px] font-medium uppercase tracking-[0.12em]">Provider</th>
-                    <th className="py-3 pr-4 font-mono text-[10px] font-medium uppercase tracking-[0.12em]">Plan / account</th>
-                    <th className="py-3 pr-4 font-mono text-[10px] font-medium uppercase tracking-[0.12em]">Billing</th>
-                    <th className="py-3 pr-4 font-mono text-[10px] font-medium uppercase tracking-[0.12em]">Included</th>
-                    <th className="py-3 pr-4 font-mono text-[10px] font-medium uppercase tracking-[0.12em]">Tracked</th>
-                    <th className="py-3 font-mono text-[10px] font-medium uppercase tracking-[0.12em]">Note</th>
+                  <tr className="border-b border-[var(--rig-paper-12)] rig-mono text-[10px] uppercase tracking-[0.12em] text-[var(--rig-paper-40)]">
+                    <th className="px-4 py-2.5">Provider</th>
+                    <th className="px-4 py-2.5">Allowance</th>
+                    <th className="px-4 py-2.5">Utilization</th>
+                    <th className="px-4 py-2.5 text-right">Volume</th>
+                    <th className="px-4 py-2.5 text-right">Spend</th>
                   </tr>
                 </thead>
-                <tbody className="text-[13px] text-[var(--mkt-ink-2)]">
-                  {PROVIDERS.map((row) => (
-                    <tr key={row.provider} className="border-b border-[var(--mkt-line)] align-top">
-                      <td className="py-3.5 pr-4 font-medium text-[var(--mkt-ink)]">{row.provider}</td>
-                      <td className="py-3.5 pr-4">{row.plan}</td>
-                      <td className="py-3.5 pr-4">{row.period}</td>
-                      <td className="py-3.5 pr-4">{row.included}</td>
-                      <td className="py-3.5 pr-4">{row.tracked}</td>
-                      <td className="py-3.5 text-[var(--mkt-ink-3)]">{row.notes}</td>
+                <tbody>
+                  {PROVIDER_LEDGER.map((row) => (
+                    <tr key={row.provider} className="border-b border-[var(--rig-paper-12)] last:border-b-0">
+                      <td className="px-4 py-3 font-medium text-[var(--rig-paper)]">
+                        {row.provider}
+                        <span className="mt-0.5 block rig-mono text-[10px] text-[var(--rig-paper-40)]">
+                          {row.budgetCap}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 rig-mono text-[11px] text-[var(--rig-paper-60)]">
+                        {row.allowance}
+                      </td>
+                      <td className="px-4 py-3 min-w-[120px]">
+                        <div className="h-[3px] w-full bg-[var(--rig-paper-12)]">
+                          <div
+                            className="h-full"
+                            style={{
+                              width: `${row.pct}%`,
+                              backgroundColor: row.pct >= 80 ? "var(--rig-yellow)" : "var(--rig-blue)",
+                            }}
+                          />
+                        </div>
+                        <span className="mt-1 block rig-mono text-[10px] text-[var(--rig-paper-40)]">
+                          {row.pct}% used
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right rig-mono text-[11px] text-[var(--rig-paper-60)] tabular-nums">
+                        {row.tokens}
+                      </td>
+                      <td className="px-4 py-3 text-right rig-mono text-[11.5px] font-medium text-[var(--rig-paper)] tabular-nums">
+                        {row.consumed}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -88,35 +141,38 @@ export function ResourceIntelligence() {
             </div>
           </div>
 
-          <div className="lg:pt-7">
-            <div className="border border-[var(--mkt-line)] bg-[var(--mkt-paper)] p-5 sm:p-6">
-              <div className="flex items-center justify-between gap-3">
-                <p className="mkt-eyebrow">Spend breakdown · example</p>
-                <p className="mkt-note">Proportions only</p>
-              </div>
-              <div className="mt-5 space-y-4">
-                {BREAKDOWN.map((item) => (
-                  <div key={item.label}>
-                    <div className="flex items-baseline justify-between gap-3">
-                      <p className="text-[13px] font-medium text-[var(--mkt-ink)]">{item.label}</p>
-                      <p className="mkt-mono text-[12px] text-[var(--mkt-ink-2)]">{item.value}%</p>
-                    </div>
-                    <div className="mt-2 h-px w-full bg-[var(--mkt-line)]">
-                      <div className="h-px bg-[var(--mkt-accent)]" style={{ width: `${item.value}%` }} />
-                    </div>
-                    <p className="mt-1.5 text-[12px] text-[var(--mkt-ink-3)]">{item.note}</p>
-                  </div>
-                ))}
-              </div>
+          {/* Project Expenditure & Agent Budgets Table */}
+          <div className="border border-[var(--rig-paper-18)] bg-[#101514]">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--rig-paper-12)] px-4 py-3 rig-mono text-[10.5px] uppercase tracking-[0.1em]">
+              <span className="text-[var(--rig-paper)]">Project Expenditure & Agent Budgets</span>
+              <span className="text-[var(--rig-paper-40)]">Sample Ledger</span>
+            </div>
 
-              <div className="mt-6 border-t border-[var(--mkt-line)] pt-5">
-                <p className="mkt-eyebrow">Usage timeline notes</p>
-                <ul className="mt-3 space-y-2 text-[13px] leading-relaxed text-[var(--mkt-ink-2)]">
-                  <li>Record usage by project, agent run, or environment where possible.</li>
-                  <li>Compare committed subscriptions against observed utilization.</li>
-                  <li>Flag unattributed spend for follow-up rather than assuming a source.</li>
-                </ul>
-              </div>
+            <div className="divide-y divide-[var(--rig-paper-12)]">
+              {AGENT_BUDGETS.map((b) => (
+                <div key={b.project} className="flex items-center justify-between gap-4 px-4 py-4">
+                  <div>
+                    <p className="rig-mono text-[12px] font-medium text-[var(--rig-paper)]">
+                      {b.project}
+                    </p>
+                    <p className="mt-0.5 text-[12px] text-[var(--rig-paper-50)]">
+                      {b.agent} · Cap {b.limit}
+                    </p>
+                  </div>
+                  <div className="text-right rig-mono">
+                    <p className="text-[13px] font-medium text-[var(--rig-paper)] tabular-nums">
+                      {b.spent}
+                    </p>
+                    <p className="mt-0.5 text-[10px] text-[var(--rig-green)] tabular-nums">
+                      {b.remaining} left
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t border-[var(--rig-paper-12)] bg-[#0b0f0e] px-4 py-3 rig-mono text-[10.5px] text-[var(--rig-paper-50)]">
+              Representative values only — live account figures load inside Usage &amp; Subscriptions once configured.
             </div>
           </div>
         </div>

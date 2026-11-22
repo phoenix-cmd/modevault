@@ -53,10 +53,13 @@ export default function AgentCenterPage() {
   const [diffTheme, setDiffTheme] = useState<"vs-dark" | "light">("vs-dark")
 
   useEffect(() => {
-    // Match the editor surface to the active site theme on first mount.
-    setDiffTheme(
-      document.documentElement.classList.contains("dark") ? "vs-dark" : "light"
-    )
+    // Match the editor surface to the active site theme and react to theme switches.
+    const root = document.documentElement
+    const sync = () => setDiffTheme(root.classList.contains("light") ? "light" : "vs-dark")
+    sync()
+    const observer = new MutationObserver(sync)
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] })
+    return () => observer.disconnect()
   }, [])
 
   // Line Comments state
@@ -667,16 +670,24 @@ export class ApiClient {
                 <p className="mt-1.5 line-clamp-2 max-w-3xl text-[12.5px] leading-relaxed text-ink-2">{selectedExecution.prompt}</p>
               </div>
 
-              {selectedExecution.status === "awaiting_approval" && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <button onClick={() => handleApprovalAction("reject")} className="btn-ghost btn-sm">Reject</button>
-                  <button onClick={() => handleApprovalAction("request_revision")} className="btn-secondary btn-sm">Request revision</button>
-                  <button onClick={() => handleApprovalAction("approve")} className="btn-primary btn-sm">
-                    <Check className="h-3.5 w-3.5" strokeWidth={2.2} />
-                    Approve and merge
-                  </button>
-                </div>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href="/verify"
+                  className="btn-secondary btn-sm"
+                >
+                  Open Verification Center
+                </a>
+                {selectedExecution.status === "awaiting_approval" && (
+                  <>
+                    <button onClick={() => handleApprovalAction("reject")} className="btn-ghost btn-sm">Reject</button>
+                    <button onClick={() => handleApprovalAction("request_revision")} className="btn-secondary btn-sm">Request revision</button>
+                    <button onClick={() => handleApprovalAction("approve")} className="btn-primary btn-sm">
+                      <Check className="h-3.5 w-3.5" strokeWidth={2.2} />
+                      Approve and merge
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
 
             <div className="flex overflow-x-auto border-b border-line px-3 sm:px-4">

@@ -1,52 +1,64 @@
-"use client"
-
 import Link from "next/link"
-import { useEffect, useRef } from "react"
-import { ArrowRight } from "lucide-react"
-import { createScrollObserver, animateFadeUp } from "@/lib/animations/reveals"
 
 export function FinalCTA() {
-  const ref = useRef<HTMLElement>(null)
-  const contentRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    return createScrollObserver(ref.current, () => {
-      if (contentRef.current) animateFadeUp(contentRef.current, 0, 650)
-    })
-  }, [])
-
   return (
-    <section ref={ref} className="bg-[var(--mkt-bg)] py-20 sm:py-24">
-      <div ref={contentRef} className="mkt-container">
-        <div className="grid gap-10 border-t border-[var(--mkt-line-strong)] pt-10 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-          <div className="max-w-3xl">
-            <p className="mkt-eyebrow text-[var(--mkt-accent)]">Modelvault</p>
-            <h2 className="mkt-display mt-5 text-[2.4rem] sm:text-[3.5rem] lg:text-[4rem]">
-              Bring agents, workflows,
-              <br />
-              and review into one place.
-            </h2>
-            <p className="mkt-lead mt-5 max-w-xl text-[15px]">
-              Open the workspace to explore projects, runs, usage, and delivery in a
-              single environment.
-            </p>
-          </div>
+    <section className="relative overflow-hidden border-b border-[var(--rig-paper-18)] py-28 text-center sm:py-40">
+      <div className="rig-perspective-grid" aria-hidden="true" />
 
-          <div className="flex flex-col gap-3 sm:flex-row lg:flex-col lg:items-stretch">
-            <Link href="/overview" className="mkt-btn-primary h-11 px-6">
-              Open workspace
-              <ArrowRight className="h-4 w-4" strokeWidth={2} />
-            </Link>
-            <Link href="/register" className="mkt-btn-secondary h-11 px-6">
-              Create an account
-            </Link>
-          </div>
+      {/* Oversized architectural watermark */}
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 180 180"
+        fill="none"
+        className="pointer-events-none absolute -bottom-24 -right-24 h-[520px] w-[520px] text-[var(--rig-paper)] opacity-[0.035] hidden md:block"
+      >
+        <path
+          d="M18 18h88v28H46v116H18V18Zm44 52h100v28H90v64H62V70Zm48 52h52v40h-52v-40Z"
+          fill="currentColor"
+        />
+      </svg>
+
+      <div className="rig-container relative z-10 flex flex-col items-center">
+        {/* Centered MODELVAULT geometric emblem */}
+        <div className="mb-10 flex h-14 w-14 items-center justify-center border border-[var(--rig-paper-20)] bg-[#101514]">
+          <svg
+            width="28"
+            height="28"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M3 4h11v4H7v12H3V4Zm7 7h11v9h-4v-5h-7v-4Z"
+              fill="#ebe7de"
+            />
+            <rect x="17" y="4" width="4" height="4" fill="var(--rig-blue)" />
+          </svg>
         </div>
 
-        <div className="mt-10 flex flex-wrap gap-x-8 gap-y-3 border-t border-[var(--mkt-line)] pt-6">
-          <p className="mkt-note">Clear task ownership</p>
-          <p className="mkt-note">Traceable checks and review</p>
-          <p className="mkt-note">Usage and cost context</p>
+        <h2 className="rig-display max-w-[640px] text-[clamp(3rem,7vw,5.75rem)] font-bold leading-[0.9] text-[var(--rig-paper)]">
+          Build with agents.
+          <br />
+          Stay in control.
+        </h2>
+
+        <p className="mt-7 max-w-[460px] rig-mono text-[13px] leading-relaxed text-[var(--rig-paper-50)]">
+          One workspace for multi-agent execution, verification, Git control, and AI spend.
+        </p>
+
+        <div className="mt-10 flex w-full max-w-[500px] flex-col gap-3 sm:flex-row sm:justify-center">
+          <Link
+            href="/register"
+            className="rig-btn-chamfer rig-btn-blue flex-1 !py-4 !text-[13px]"
+          >
+            Get started
+          </Link>
+          <Link
+            href="#faq"
+            className="rig-btn-outline flex-1 !py-4 !text-[13px]"
+          >
+            Explore documentation
+          </Link>
         </div>
       </div>
     </section>

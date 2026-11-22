@@ -40,7 +40,7 @@ function Toggle({
       }`}
     >
       <span
-        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-150 ${
+        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-surface shadow-sm transition-transform duration-150 ${
           checked ? "translate-x-[18px]" : "translate-x-[3px]"
         }`}
       />

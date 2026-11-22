@@ -1,8 +1,8 @@
-import { waapi } from 'animejs/waapi'
+import { waapi } from "animejs/waapi"
 
 export function isReducedMotion(): boolean {
-  if (typeof window === 'undefined') return false
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (typeof window === "undefined") return false
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches
 }
 
 export function createScrollObserver(
@@ -10,7 +10,7 @@ export function createScrollObserver(
   onVisible: () => void,
   options?: IntersectionObserverInit
 ): () => void {
-  if (typeof window === 'undefined' || !element) {
+  if (typeof window === "undefined" || !element) {
     return () => {}
   }
 
@@ -19,20 +19,23 @@ export function createScrollObserver(
     return () => {}
   }
 
-  const observer = new IntersectionObserver((entries) => {
-    for (const entry of entries) {
-      if (entry.isIntersecting) {
-        onVisible()
-        observer.unobserve(entry.target)
-        observer.disconnect()
-        break
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          onVisible()
+          observer.unobserve(entry.target)
+          observer.disconnect()
+          break
+        }
       }
+    },
+    {
+      threshold: 0.12,
+      rootMargin: "0px 0px -40px 0px",
+      ...options,
     }
-  }, {
-    threshold: 0.15,
-    rootMargin: '0px 0px -50px 0px',
-    ...options,
-  })
+  )
 
   observer.observe(element)
 
@@ -42,19 +45,19 @@ export function createScrollObserver(
 }
 
 export function animateFadeUp(
-  target: HTMLElement | HTMLElement[],
-  delay: number = 0,
-  duration: number = 650
+  target: HTMLElement | HTMLElement[] | null,
+  delay = 0,
+  duration = 560
 ) {
-  if (typeof window === 'undefined' || !target || isReducedMotion()) return null
+  if (typeof window === "undefined" || !target || isReducedMotion()) return null
 
   try {
     return waapi.animate(target, {
       opacity: [0, 1],
-      transform: ['translateY(20px)', 'translateY(0px)'],
+      transform: ["translateY(14px)", "translateY(0px)"],
       duration,
       delay,
-      ease: 'outQuart',
+      ease: "outQuart",
     })
   } catch {
     return null
@@ -63,25 +66,37 @@ export function animateFadeUp(
 
 export function animateStagger(
   targets: HTMLElement[],
-  staggerMs: number = 80,
-  duration: number = 600
+  staggerMs = 70,
+  duration = 500
 ) {
-  if (typeof window === 'undefined' || !targets.length || isReducedMotion()) return []
+  if (typeof window === "undefined" || !targets.length || isReducedMotion()) {
+    return []
+  }
 
-  const animations: any[] = []
+  const animations: Array<{ cancel?: () => void }> = []
   targets.forEach((target, index) => {
     try {
       const anim = waapi.animate(target, {
         opacity: [0, 1],
-        transform: ['translateY(16px)', 'translateY(0px)'],
+        transform: ["translateY(12px)", "translateY(0px)"],
         duration,
         delay: index * staggerMs,
-        ease: 'outQuart',
+        ease: "outQuart",
       })
       if (anim) animations.push(anim)
     } catch {
-      // Graceful fallback
+      /* ignore animation failures */
     }
   })
   return animations
+}
+
+export function cancelAnimations(animations: Array<{ cancel?: () => void } | null>) {
+  for (const anim of animations) {
+    try {
+      anim?.cancel?.()
+    } catch {
+      /* ignore */
+    }
+  }
 }

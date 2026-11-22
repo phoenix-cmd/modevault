@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowRight } from "lucide-react"
+import { BrandMark } from "@/components/landing/Navbar"
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -38,105 +39,120 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="mkt min-h-screen">
-      <div className="mkt-container flex min-h-screen flex-col">
-        <header className="flex h-16 items-center justify-between border-b border-[var(--mkt-line)]">
-          <Link href="/" className="flex items-center gap-3 text-[var(--mkt-ink)]">
-            <span className="inline-flex h-7 w-7 items-center justify-center border border-[var(--mkt-line-strong)] bg-[var(--mkt-paper)]">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <circle cx="3.5" cy="8" r="1.25" stroke="currentColor" strokeWidth="1.2" />
-                <circle cx="12.5" cy="4" r="1.25" stroke="currentColor" strokeWidth="1.2" />
-                <circle cx="12.5" cy="12" r="1.25" stroke="currentColor" strokeWidth="1.2" />
-                <path d="M4.7 7.4 11.3 4.7M4.7 8.6l6.6 2.7M12.5 5.3v5.4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-              </svg>
-            </span>
-            <span className="font-display text-[15px] font-medium tracking-[-0.02em]">Modelvault</span>
+    <div className="rig-page min-h-screen">
+      <div className="rig-scanlines" aria-hidden="true" />
+      <div className="rig-grain" aria-hidden="true" />
+      <div className="h-[3px] w-full bg-[var(--rig-blue)]" aria-hidden="true" />
+
+      <div className="rig-container relative z-10 flex min-h-[calc(100vh-3px)] flex-col">
+        <header className="flex h-16 items-center justify-between border-b border-[var(--rig-paper-18)]">
+          <Link href="/" aria-label="MODELVAULT Home">
+            <BrandMark />
           </Link>
-          <Link href="/login" className="mkt-link text-[13px]">
+          <Link
+            href="/login"
+            className="rig-mono text-[11.5px] uppercase tracking-[0.08em] text-[var(--rig-paper-60)] transition-colors hover:text-[var(--rig-blue)]"
+          >
             Sign in
           </Link>
         </header>
 
-        <main className="grid flex-1 items-center gap-12 py-12 lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-16">
+        <main className="grid flex-1 items-center gap-12 py-12 lg:grid-cols-[minmax(0,1fr)_430px] lg:gap-16">
           <div className="max-w-xl">
-            <p className="mkt-eyebrow flex items-center gap-3 text-[var(--mkt-accent)]">
-              <span className="h-px w-8 bg-[var(--mkt-accent-border)]" aria-hidden />
-              New account
-            </p>
-            <h1 className="mkt-display mt-6 text-[2.4rem] sm:text-[3.2rem]">
+            <span className="rig-badge mb-6">
+              <span className="rig-blink-dot" aria-hidden="true" />
+              New Workspace
+            </span>
+            <h1 className="rig-display text-[2.6rem] font-bold leading-[0.94] text-[var(--rig-paper)] sm:text-[3.6rem]">
               Create a workspace
               <br />
               for coordinated work.
             </h1>
-            <p className="mkt-lead mt-5 max-w-md text-[15px]">
-              Set up an account to organize projects, runs, reviews, and usage in
-              one place.
+            <p className="mt-5 max-w-md text-[15px] leading-[1.68] text-[var(--rig-paper-75)]">
+              Set up an account to organize repositories, agent executions, verification gates, and API spend in one system.
             </p>
           </div>
 
-          <div className="w-full border border-[var(--mkt-line)] bg-[var(--mkt-paper)] p-6 sm:p-7">
-            <p className="mkt-eyebrow">Account details</p>
-            <h2 className="mt-3 font-display text-[24px] font-medium tracking-[-0.02em] text-[var(--mkt-ink)]">
+          <div className="w-full border border-[var(--rig-paper-18)] bg-[#101514] p-6 sm:p-8">
+            <p className="rig-mono text-[10px] uppercase tracking-[0.14em] text-[var(--rig-blue)]">
+              01 // Account Details
+            </p>
+            <h2 className="mt-2.5 rig-display text-[24px] font-semibold tracking-[-0.025em] text-[var(--rig-paper)]">
               Create your account
             </h2>
 
             <form onSubmit={handleSubmit} className="mt-6 space-y-4">
               <label className="block">
-                <span className="mkt-label">Name</span>
+                <span className="mb-1.5 block rig-mono text-[10px] uppercase tracking-[0.12em] text-[var(--rig-paper-50)]">
+                  Name
+                </span>
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="mkt-field"
+                  className="rig-field"
                   autoComplete="name"
                   required
                 />
               </label>
 
               <label className="block">
-                <span className="mkt-label">Email</span>
+                <span className="mb-1.5 block rig-mono text-[10px] uppercase tracking-[0.12em] text-[var(--rig-paper-50)]">
+                  Email
+                </span>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="mkt-field"
+                  className="rig-field"
                   autoComplete="email"
                   required
                 />
               </label>
 
               <label className="block">
-                <span className="mkt-label">Password</span>
+                <span className="mb-1.5 block rig-mono text-[10px] uppercase tracking-[0.12em] text-[var(--rig-paper-50)]">
+                  Password
+                </span>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="mkt-field"
+                  className="rig-field"
                   autoComplete="new-password"
                   minLength={8}
                   required
                 />
-                <p className="mt-1.5 text-[11px] text-[var(--mkt-ink-3)]">Minimum 8 characters.</p>
+                <p className="mt-1.5 rig-mono text-[10px] text-[var(--rig-paper-40)]">
+                  Minimum 8 characters.
+                </p>
               </label>
 
               {error && (
-                <div className="border border-[color:color-mix(in_srgb,var(--mkt-danger)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--mkt-danger)_8%,transparent)] px-3 py-2 text-[12px] text-[var(--mkt-danger)]">
+                <div className="border border-[var(--rig-red)]/40 bg-[#ed462d]/10 px-3 py-2 text-[12px] text-[#f0ae8d]">
                   {error}
                 </div>
               )}
 
-              <button type="submit" disabled={loading} className="mkt-btn-primary w-full">
+              <button
+                type="submit"
+                disabled={loading}
+                className="rig-btn-chamfer rig-btn-blue w-full"
+              >
                 <span>{loading ? "Creating account…" : "Create account"}</span>
-                {!loading && <ArrowRight className="h-4 w-4" strokeWidth={2} />}
+                {!loading && <ArrowRight className="h-4 w-4" strokeWidth={2.2} />}
               </button>
 
-              <a href="/api/auth/github" className="mkt-btn-secondary w-full">
+              <a href="/api/auth/github" className="rig-btn-outline w-full">
                 Continue with GitHub
               </a>
             </form>
 
-            <p className="mt-6 border-t border-[var(--mkt-line)] pt-5 text-[13px] text-[var(--mkt-ink-3)]">
+            <p className="mt-6 border-t border-[var(--rig-paper-12)] pt-5 text-[13px] text-[var(--rig-paper-50)]">
               Already have an account?{" "}
-              <Link href="/login" className="font-medium text-[var(--mkt-accent)] hover:underline">
+              <Link
+                href="/login"
+                className="font-medium text-[var(--rig-blue)] hover:underline"
+              >
                 Sign in
               </Link>
             </p>

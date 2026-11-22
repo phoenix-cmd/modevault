@@ -1,84 +1,114 @@
 import Link from "next/link"
+import { BrandMark } from "./Navbar"
 
-const PRODUCT = [
-  { label: "Workspace", href: "/overview" },
-  { label: "Agents", href: "/agents" },
-  { label: "Workflows", href: "/workflows" },
-  { label: "Studio", href: "/studio" },
-  { label: "Git", href: "/git" },
-]
-
-const OPERATIONS = [
-  { label: "Models", href: "/models" },
-  { label: "Subscriptions", href: "/subscriptions" },
-  { label: "Usage", href: "/api-usage" },
-  { label: "Billing", href: "/billing" },
-  { label: "Permissions", href: "/permissions" },
+const FOOTER_COLS = [
+  {
+    title: "Product",
+    links: [
+      { label: "Overview", href: "/overview" },
+      { label: "Agent Center", href: "/agents" },
+      { label: "Workflow Builder", href: "/workflows" },
+      { label: "Dev Studio", href: "/studio" },
+    ],
+  },
+  {
+    title: "Documentation",
+    links: [
+      { label: "Architecture FAQ", href: "#faq" },
+      { label: "Code Verification", href: "#verification" },
+      { label: "Resource Ledger", href: "#intelligence" },
+    ],
+  },
+  {
+    title: "Integrations",
+    links: [
+      { label: "Supported Agents", href: "#integrations" },
+      { label: "Provider Keys", href: "/integrations" },
+      { label: "Model Library", href: "/models" },
+    ],
+  },
+  {
+    title: "Security",
+    links: [
+      { label: "Verification Center", href: "/verify" },
+      { label: "Permissions", href: "/permissions" },
+      { label: "Git Control", href: "/git" },
+    ],
+  },
+  {
+    title: "Company",
+    links: [
+      { label: "Organizations", href: "/organizations" },
+      { label: "Sign in", href: "/login" },
+      { label: "Create account", href: "/register" },
+    ],
+  },
+  {
+    title: "Legal",
+    links: [
+      { label: "Usage & Billing", href: "/billing" },
+      { label: "Settings", href: "/settings" },
+    ],
+  },
 ]
 
 export function Footer() {
   return (
-    <footer className="border-t border-[var(--mkt-line)] bg-[var(--mkt-paper)]">
-      <div className="mkt-container py-14 sm:py-16">
-        <div className="grid gap-10 border-b border-[var(--mkt-line)] pb-12 md:grid-cols-[minmax(0,1.2fr)_repeat(2,minmax(0,0.5fr))] md:gap-12">
-          <div className="max-w-md">
-            <Link href="/" className="inline-flex items-center gap-3 text-[var(--mkt-ink)]">
-              <span className="inline-flex h-7 w-7 items-center justify-center border border-[var(--mkt-line-strong)] bg-[var(--mkt-bg)]">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <circle cx="3.5" cy="8" r="1.25" stroke="currentColor" strokeWidth="1.2" />
-                  <circle cx="12.5" cy="4" r="1.25" stroke="currentColor" strokeWidth="1.2" />
-                  <circle cx="12.5" cy="12" r="1.25" stroke="currentColor" strokeWidth="1.2" />
-                  <path d="M4.7 7.4 11.3 4.7M4.7 8.6l6.6 2.7M12.5 5.3v5.4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-                </svg>
-              </span>
-              <span className="font-display text-[15px] font-medium tracking-[-0.02em]">Modelvault</span>
+    <footer className="relative z-10 overflow-hidden bg-[#0a0a0a] pt-16 pb-20 text-[var(--rig-paper)]">
+      {/* Subtle architectural watermark */}
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 180 180"
+        fill="none"
+        className="pointer-events-none absolute -bottom-24 -right-12 hidden w-[460px] text-[var(--rig-paper)] opacity-[0.04] md:block"
+      >
+        <path
+          d="M18 18h88v28H46v116H18V18Zm44 52h100v28H90v64H62V70Zm48 52h52v40h-52v-40Z"
+          fill="currentColor"
+        />
+      </svg>
+
+      <div className="rig-container relative z-10">
+        <div className="grid grid-cols-2 gap-10 md:grid-cols-4 lg:grid-cols-[2fr_repeat(6,1fr)]">
+          {/* Brand */}
+          <div className="col-span-2 md:col-span-4 lg:col-span-1">
+            <Link href="/" aria-label="MODELVAULT Home">
+              <BrandMark />
             </Link>
-            <p className="mt-4 text-[13px] leading-relaxed text-[var(--mkt-ink-2)]">
-              A workspace for coordinating coding agents, structuring development
-              workflows, and reviewing changes before delivery.
-            </p>
-            <p className="mkt-note mt-5">
-              Software development, orchestrated.
+            <p className="mt-4 max-w-[260px] text-[13px] leading-[1.65] text-[var(--rig-paper-50)]">
+              Your AI development command center. Coordinate coding agents, workflows, and spend.
             </p>
           </div>
 
-          <div>
-            <p className="mkt-eyebrow">Product</p>
-            <ul className="mt-4 space-y-2.5">
-              {PRODUCT.map((item) => (
-                <li key={item.href}>
-                  <Link href={item.href} className="mkt-link text-[13px]">
-                    {item.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <p className="mkt-eyebrow">Operations</p>
-            <ul className="mt-4 space-y-2.5">
-              {OPERATIONS.map((item) => (
-                <li key={item.href}>
-                  <Link href={item.href} className="mkt-link text-[13px]">
-                    {item.label}
-                  </Link>
-                </li>
-              ))}
-              <li>
-                <Link href="/login" className="mkt-link text-[13px]">
-                  Sign in
-                </Link>
-              </li>
-            </ul>
-          </div>
+          {FOOTER_COLS.map((col) => (
+            <div key={col.title}>
+              <h3 className="mb-4 rig-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-[var(--rig-paper-40)]">
+                {col.title}
+              </h3>
+              <ul className="space-y-2.5">
+                {col.links.map((link) => (
+                  <li key={link.label}>
+                    <Link
+                      href={link.href}
+                      className="text-[13px] text-[var(--rig-paper-60)] transition-colors hover:text-[var(--rig-blue)]"
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
 
-        <div className="flex flex-col gap-3 pt-6 text-[12px] text-[var(--mkt-ink-3)] sm:flex-row sm:items-center sm:justify-between">
-          <p>© 2026 Modelvault. Public site presentation.</p>
-          <p className="mkt-mono text-[10px] uppercase tracking-[0.08em]">
-            Built for clear, verifiable software work
-          </p>
+        <div className="mt-16 flex flex-col items-start justify-between gap-4 border-t border-[var(--rig-paper-18)] pt-8 rig-mono text-[11px] uppercase tracking-[0.1em] sm:flex-row sm:items-center">
+          <span className="text-[var(--rig-paper-40)]">
+            &copy; 2026 MODELVAULT Inc. All rights reserved.
+          </span>
+          <span className="inline-flex items-center gap-2.5 text-[var(--rig-paper-60)]">
+            <span className="rig-blink-dot" aria-hidden="true" />
+            System ready · Local workspace
+          </span>
         </div>
       </div>
     </footer>

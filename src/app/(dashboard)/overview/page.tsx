@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Plus } from "lucide-react"
+import { ArrowRight, Plus } from "lucide-react"
 import { SummaryCards, SummaryCardsSkeleton } from "@/components/dashboard/summary-cards"
 import { UsageOverview, UsageOverviewSkeleton } from "@/components/dashboard/usage-overview"
 import { SpendingCharts, SpendingChartsSkeleton } from "@/components/dashboard/spending-charts"
@@ -13,6 +13,7 @@ import {
 } from "@/components/dashboard/suggestions-card"
 import { PageHeader } from "@/components/ui/page-header"
 import { PROVIDERS } from "@/lib/providers"
+import { cn, formatNumber } from "@/lib/utils"
 import type { Suggestion } from "@/lib/suggestions"
 import type {
   DashboardSummary,
@@ -40,6 +41,25 @@ interface DashboardApiData {
   }>
 }
 
+interface ExecutionRow {
+  id: string
+  title: string
+  status: string
+  targetBranch?: string | null
+  totalTokens?: number | null
+  estimatedCost?: number | null
+  project?: { id: string; name: string } | null
+  tasks?: Array<{ id: string; status: string }>
+}
+
+interface ProjectRow {
+  id: string
+  name: string
+  framework?: string | null
+  language?: string | null
+  executions?: Array<{ id: string }>
+}
+
 export default function OverviewPage() {
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
@@ -48,10 +68,11 @@ export default function OverviewPage() {
   const [spendingHistory, setSpendingHistory] = useState<SpendingDataPoint[]>([])
   const [providerSpending, setProviderSpending] = useState<ProviderSpendingData[]>([])
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  const [executions, setExecutions] = useState<ExecutionRow[]>([])
+  const [projects, setProjects] = useState<ProjectRow[]>([])
   const [reportingPeriod, setReportingPeriod] = useState("—")
 
   useEffect(() => {
-    // Resolve after hydration so the prerender stays deterministic.
     // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only clock value
     setReportingPeriod(
       new Date().toLocaleString("default", {
@@ -66,19 +87,25 @@ export default function OverviewPage() {
       try {
         setLoading(true)
 
-        const [dashRes, subRes, suggestionRes] = await Promise.all([
+        const [dashRes, subRes, suggestionRes, execRes, projRes] = await Promise.all([
           fetch("/api/dashboard"),
           fetch("/api/subscriptions"),
           fetch("/api/suggestions"),
+          fetch("/api/executions"),
+          fetch("/api/projects"),
         ])
 
-        const [dashJson, subJson, suggestionJson] = await Promise.all([
+        const [dashJson, subJson, suggestionJson, execJson, projJson] = await Promise.all([
           dashRes.json(),
           subRes.json(),
           suggestionRes.json().catch(() => ({ data: null })),
+          execRes.json().catch(() => ({ data: [] })),
+          projRes.json().catch(() => ({ data: [] })),
         ])
 
         setSuggestions((suggestionJson?.data?.suggestions as Suggestion[]) || [])
+        setExecutions(Array.isArray(execJson?.data) ? execJson.data : [])
+        setProjects(Array.isArray(projJson?.data) ? projJson.data : [])
 
         if (dashJson.data) {
           const d = dashJson.data as DashboardApiData
@@ -118,25 +145,23 @@ export default function OverviewPage() {
                 provider: name,
                 providerSlug: known?.slug ?? "openai",
                 amount: Math.round(Number(amount)),
-                color: "#5b61d6",
+                color: "var(--mv-chart-1)",
               }
             })
             setProviderSpending(provPoints)
           }
 
           if (d.recentActivity) {
-            const mappedActivities: ActivityItem[] = d.recentActivity.map(
-              (a) => ({
-                id: a.id,
-                type: a.type === "billing" ? "billing" : a.type === "sync" ? "sync" : "alert",
-                title: a.title,
-                description: a.description || "",
-                provider: null,
-                providerSlug: null,
-                timestamp: a.date,
-                severity: "info",
-              })
-            )
+            const mappedActivities: ActivityItem[] = d.recentActivity.map((a) => ({
+              id: a.id,
+              type: a.type === "billing" ? "billing" : a.type === "sync" ? "sync" : "alert",
+              title: a.title,
+              description: a.description || "",
+              provider: null,
+              providerSlug: null,
+              timestamp: a.date,
+              severity: "info",
+            }))
             setActivities(mappedActivities)
           }
         }
@@ -186,19 +211,25 @@ export default function OverviewPage() {
 
   const trackedProviders = new Set(subscriptions.map((s) => s.providerId || s.providerName)).size
   const meteredSubscriptions = subscriptions.filter(
-    (s) => (s.quotaMessages ?? 0) > 0 || (s.quotaRequests ?? 0) > 0 || (s.quotaTokens ?? 0) > 0 || (s.quotaCredits ?? 0) > 0
+    (s) =>
+      (s.quotaMessages ?? 0) > 0 ||
+      (s.quotaRequests ?? 0) > 0 ||
+      (s.quotaTokens ?? 0) > 0 ||
+      (s.quotaCredits ?? 0) > 0
   ).length
+  const runningExecutions = executions.filter((e) => e.status === "running").length
+  const awaitingApproval = executions.filter((e) => e.status === "awaiting_approval").length
 
   return (
     <div className="mx-auto max-w-7xl space-y-8 pb-16">
       <PageHeader
         eyebrow={`Workspace · ${reportingPeriod}`}
         title="Overview"
-        description="Operational summary of spend, resource quotas, and recorded activity across connected providers and subscriptions."
+        description="Operational console for agent executions, pending approvals, project activity, resource quotas, and recorded spend."
         action={
           <>
-            <Link href="/analytics" className="btn-secondary">
-              Open analytics
+            <Link href="/agents" className="btn-secondary">
+              Agent Center
             </Link>
             <Link href="/subscriptions" className="btn-primary">
               <Plus className="h-3.5 w-3.5" strokeWidth={2.2} />
@@ -213,6 +244,107 @@ export default function OverviewPage() {
       ) : (
         <SummaryCards data={summary} />
       )}
+
+      {/* Operations Register: Executions, Approvals & Projects */}
+      <section aria-label="Operations and projects" className="border-t border-line pt-6">
+        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-4">
+          <div>
+            <h2 className="font-display text-[16px] font-medium tracking-[-0.02em] text-ink">
+              Agent operations &amp; approvals
+            </h2>
+            <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">
+              {executions.length} runs · {runningExecutions} running · {awaitingApproval} awaiting approval · {projects.length} projects
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/verify"
+              className="inline-flex items-center gap-1 font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink-2 transition-colors hover:text-accent"
+            >
+              Verify queue
+              <ArrowRight className="h-3 w-3" />
+            </Link>
+            <Link
+              href="/agents"
+              className="inline-flex items-center gap-1 font-mono text-[10.5px] uppercase tracking-[0.08em] text-accent transition-opacity hover:opacity-80"
+            >
+              Open Agent Center
+              <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="space-y-2 border-y border-line py-5">
+            <div className="skeleton h-4 w-full" />
+            <div className="skeleton h-4 w-5/6" />
+            <div className="skeleton h-4 w-2/3" />
+          </div>
+        ) : executions.length === 0 ? (
+          <EmptyPanel message="No agent runs recorded yet. Open Agent Center to dispatch the first execution against a project." />
+        ) : (
+          <div className="overflow-x-auto border-y border-line">
+            <table className="data-table min-w-[740px]">
+              <thead>
+                <tr>
+                  <th>Execution</th>
+                  <th>Project</th>
+                  <th>Branch</th>
+                  <th>Tasks</th>
+                  <th className="text-right">Tokens</th>
+                  <th className="text-right">Est. cost</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {executions.slice(0, 6).map((exec) => (
+                  <tr key={exec.id}>
+                    <td className="max-w-[260px]">
+                      <Link
+                        href="/agents"
+                        className="block truncate font-medium text-ink transition-colors hover:text-accent"
+                      >
+                        {exec.title}
+                      </Link>
+                    </td>
+                    <td className="whitespace-nowrap font-mono text-[11px] text-ink-2">
+                      {exec.project?.name || "—"}
+                    </td>
+                    <td className="whitespace-nowrap font-mono text-[11px] text-ink-3">
+                      {exec.targetBranch || "—"}
+                    </td>
+                    <td className="whitespace-nowrap font-mono text-[11px] tabular-nums text-ink-2">
+                      {exec.tasks?.length ?? 0} stages
+                    </td>
+                    <td className="text-right font-mono text-[11px] tabular-nums text-ink-2">
+                      {formatNumber(Number(exec.totalTokens || 0))}
+                    </td>
+                    <td className="text-right font-mono text-[11px] tabular-nums text-ink">
+                      ${Number(exec.estimatedCost || 0).toFixed(3)}
+                    </td>
+                    <td>
+                      <span
+                        className={cn(
+                          "badge",
+                          exec.status === "completed"
+                            ? "bg-success-soft text-success"
+                            : exec.status === "awaiting_approval"
+                            ? "bg-accent-soft text-accent"
+                            : exec.status === "failed"
+                            ? "bg-danger-soft text-danger"
+                            : "bg-surface-2 text-ink-3"
+                        )}
+                      >
+                        {String(exec.status || "unknown").replaceAll("_", " ")}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <div className="grid gap-8 border-t border-line pt-8 lg:grid-cols-[minmax(0,1.7fr)_minmax(320px,1fr)]">
         <div className="min-w-0 space-y-10">

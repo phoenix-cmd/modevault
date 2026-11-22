@@ -25,8 +25,8 @@ type NodeTone = "default" | "accent" | "success" | "terminal"
 
 function workflowNodeStyle(tone: NodeTone = "default"): React.CSSProperties {
   const base: React.CSSProperties = {
-    borderRadius: "4px",
-    fontFamily: "var(--font-jetbrains), monospace",
+    borderRadius: "2px",
+    fontFamily: "var(--font-mono), monospace",
     fontSize: "11px",
     fontWeight: 500,
     padding: "9px 12px",
@@ -55,9 +55,9 @@ function workflowNodeStyle(tone: NodeTone = "default"): React.CSSProperties {
   if (tone === "terminal") {
     return {
       ...base,
-      backgroundColor: "var(--mv-canvas)",
+      backgroundColor: "var(--mv-bg)",
       border: "1px dashed var(--mv-border-strong)",
-      color: "var(--mv-ink-2)",
+      color: "var(--mv-text-2)",
     }
   }
 
@@ -65,7 +65,7 @@ function workflowNodeStyle(tone: NodeTone = "default"): React.CSSProperties {
     ...base,
     backgroundColor: "var(--mv-surface)",
     border: "1px solid var(--mv-border-strong)",
-    color: "var(--mv-ink)",
+    color: "var(--mv-text)",
   }
 }
 
@@ -141,6 +141,15 @@ export default function WorkflowsPage() {
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [customPrompt, setCustomPrompt] = useState("")
   const [validationMessage, setValidationMessage] = useState<string | null>(null)
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+
+  const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null
+  const updateSelectedNodeLabel = (nextLabel: string) => {
+    if (!selectedNodeId) return
+    setNodes((nds) =>
+      nds.map((n) => (n.id === selectedNodeId ? { ...n, data: { ...n.data, label: nextLabel } } : n))
+    )
+  }
 
   const onConnect = useCallback(
     (params: Edge | Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -313,13 +322,15 @@ export default function WorkflowsPage() {
             </div>
           </div>
 
-          <div className="relative h-[680px] w-full overflow-hidden border border-line bg-canvas">
+          <div className="relative h-[680px] w-full overflow-hidden border border-line bg-sidebar">
             <ReactFlow
               nodes={nodes}
               edges={edges}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
+              onNodeClick={(_e, node) => setSelectedNodeId(node.id)}
+              onPaneClick={() => setSelectedNodeId(null)}
               fitView
               proOptions={{ hideAttribution: true }}
             >
@@ -332,10 +343,10 @@ export default function WorkflowsPage() {
                   if (label.includes("merge") || label.includes("approve")) return "var(--mv-success)"
                   return "var(--mv-border-strong)"
                 }}
-                maskColor="color-mix(in srgb, var(--mv-canvas) 72%, transparent)"
+                maskColor="color-mix(in srgb, var(--mv-bg) 72%, transparent)"
                 style={{
                   border: "1px solid var(--mv-border)",
-                  borderRadius: "4px",
+                  borderRadius: "2px",
                   backgroundColor: "var(--mv-surface)",
                 }}
               />
@@ -461,6 +472,34 @@ export default function WorkflowsPage() {
               <GitBranch className="h-3.5 w-3.5" strokeWidth={1.7} />
               <span>Run dispatches to <span className="font-mono text-ink-2">/api/workflows/execute</span> and opens Agent Center.</span>
             </div>
+          </section>
+
+          <section className="space-y-3 border-t border-line pt-5">
+            <h3 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">Node inspector</h3>
+            {selectedNode ? (
+              <div className="space-y-3 border-t border-line pt-3">
+                <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">
+                  <span>ID {selectedNode.id}</span>
+                  <span>
+                    {edges.filter((e) => e.source === selectedNode.id).length} out ·{" "}
+                    {edges.filter((e) => e.target === selectedNode.id).length} in
+                  </span>
+                </div>
+                <label className="block">
+                  <span className="label">Stage label</span>
+                  <input
+                    type="text"
+                    value={String(selectedNode.data?.label || "")}
+                    onChange={(e) => updateSelectedNodeLabel(e.target.value)}
+                    className="field field-sm font-mono"
+                  />
+                </label>
+              </div>
+            ) : (
+              <p className="border-t border-line pt-3 text-[12px] leading-relaxed text-ink-3">
+                Click any node on the canvas to edit its label and inspect edge dependencies.
+              </p>
+            )}
           </section>
         </aside>
       </div>

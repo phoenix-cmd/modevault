@@ -1,190 +1,238 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import { createScrollObserver, animateFadeUp } from "@/lib/animations/reveals"
+import { useState } from "react"
 
 const FILES = [
-  { name: "src/app/auth/callback/page.tsx", active: true },
-  { name: "src/app/api/auth/oauth/route.ts", active: false },
-  { name: "src/lib/auth/pkce.ts", active: false },
-  { name: "tests/pkce.test.ts", active: false },
+  "src/app/api/billing/webhook/route.ts",
+  "src/lib/billing/idempotency.ts",
+  "tests/webhook.test.ts",
 ]
 
-const CODE = `import { verifyCodeChallenge } from "@/lib/auth/pkce"
-
-export async function GET(request: Request) {
-  const url = new URL(request.url)
-  const code = url.searchParams.get("code")
-  const verifier = await readVerifierCookie()
-
-  if (!code || !verifier) {
-    return redirect("/login?error=missing_code")
-  }
-
-  const challenge = await readStoredChallenge()
-  const valid = await verifyCodeChallenge(verifier, challenge)
-
-  if (!valid) {
-    return redirect("/login?error=invalid_verifier")
-  }
-
-  return completeSession(code)
-}`
-
-const DIFF = `@@ src/lib/auth/pkce.ts
-- const computed = base64url(hash)
-- return computed === challenge
-+ const computed = base64url(hash)
-+ return timingSafeEqual(computed, challenge)
-
-@@ tests/pkce.test.ts
-+ it("rejects a mismatched verifier", async () => {
-+   await expect(verifyCodeChallenge("bad", challenge))
-+     .resolves.toBe(false)
-+ })`
-
 export function DevelopmentStudio() {
-  const [tab, setTab] = useState<"editor" | "diff" | "preview">("editor")
-  const ref = useRef<HTMLElement>(null)
-  const contentRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    return createScrollObserver(ref.current, () => {
-      if (contentRef.current) animateFadeUp(contentRef.current, 0, 650)
-    })
-  }, [])
+  const [selectedFile, setSelectedFile] = useState(FILES[0])
+  const [bottomTab, setBottomTab] = useState<"terminal" | "activity" | "git">("terminal")
+  const [mobilePane, setMobilePane] = useState<"code" | "preview" | "git">("code")
 
   return (
-    <section id="studio" ref={ref} className="border-b border-[var(--mkt-line)] bg-[var(--mkt-bg)] py-20 sm:py-24">
-      <div ref={contentRef} className="mkt-container">
-        <div className="grid gap-8 border-b border-[var(--mkt-line)] pb-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.7fr)] lg:items-end">
-          <div className="max-w-2xl">
-            <p className="mkt-eyebrow flex items-center gap-3">
-              <span className="text-[var(--mkt-accent)]">04</span>
-              <span className="h-px w-6 bg-[var(--mkt-line-strong)]" aria-hidden />
-              Development studio
-            </p>
-            <h2 className="mkt-h2 mt-5 text-[2rem] sm:text-[2.6rem]">
-              Code, changes, and preview
+    <section
+      id="studio"
+      className="border-b border-[var(--rig-paper-18)] py-20 sm:py-28"
+    >
+      <div className="rig-container">
+        <div className="flex flex-col justify-between gap-6 border-b border-[var(--rig-paper-18)] pb-10 lg:flex-row lg:items-end">
+          <div>
+            <span className="rig-badge mb-6">Development Studio</span>
+            <h2 className="rig-display text-[clamp(2.4rem,4.6vw,3.9rem)] font-bold leading-[0.94] text-[var(--rig-paper)]">
+              Inspect every line, diff,
               <br />
-              <span className="text-[var(--mkt-ink-2)]">in one working frame.</span>
+              <span className="text-[var(--rig-paper-50)]">and running preview.</span>
             </h2>
           </div>
-          <p className="mkt-lead max-w-md text-[15px]">
-            Inspect files, review diffs, and examine a running view alongside agent
-            activity and command output. Shown here as an interface demonstration.
+          <p className="max-w-md text-[0.95rem] leading-[1.68] text-[var(--rig-paper-75)]">
+            File tree, code editor, live agent stream, terminal output, staged Git changes, and live sandbox preview combined in one restrained surface.
           </p>
         </div>
 
-        <div className="mt-10 border border-[var(--mkt-line)] bg-[var(--mkt-paper)]">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--mkt-line)] px-4 py-2.5 sm:px-5">
-            <div className="flex items-center gap-4">
-              <span className="mkt-mono text-[11px] uppercase tracking-[0.1em] text-[var(--mkt-ink-3)]">
-                Workspace
-              </span>
-              <span className="mkt-mono text-[11px] text-[var(--mkt-ink-2)]">
-                modelvault / feat/oauth-pkce
+        {/* Mobile pane switcher */}
+        <div className="mt-6 flex gap-2 lg:hidden">
+          {(["code", "preview", "git"] as const).map((pane) => (
+            <button
+              key={pane}
+              type="button"
+              onClick={() => setMobilePane(pane)}
+              className={`border px-3 py-1.5 rig-mono text-[11px] uppercase tracking-[0.08em] ${
+                mobilePane === pane
+                  ? "border-[var(--rig-blue)] bg-[var(--rig-blue-dim)] text-[var(--rig-paper)]"
+                  : "border-[var(--rig-paper-18)] text-[var(--rig-paper-50)]"
+              }`}
+            >
+              {pane}
+            </button>
+          ))}
+        </div>
+
+        {/* Studio Workspace Container */}
+        <div className="mt-6 border border-[var(--rig-paper-18)] bg-[#0f1413]">
+          {/* Studio Topbar */}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--rig-paper-18)] bg-[#0a0d0c] px-4 py-2.5 rig-mono text-[11px]">
+            <div className="flex items-center gap-3">
+              <span className="text-[var(--rig-blue)] font-bold">MV STUDIO</span>
+              <span className="text-[var(--rig-paper-30)]">/</span>
+              <span className="text-[var(--rig-paper)]">billing-core</span>
+              <span className="hidden text-[var(--rig-paper-40)] sm:inline">
+                branch: feat/webhook-idempotency
               </span>
             </div>
-            <div className="flex items-center gap-1 border border-[var(--mkt-line)] bg-[var(--mkt-bg)] p-0.5">
-              {(["editor", "diff", "preview"] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setTab(t)}
-                  className={`px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.08em] transition-colors ${
-                    tab === t
-                      ? "bg-[var(--mkt-paper)] text-[var(--mkt-ink)]"
-                      : "text-[var(--mkt-ink-3)] hover:text-[var(--mkt-ink-2)]"
-                  }`}
-                  aria-pressed={tab === t}
-                >
-                  {t}
-                </button>
-              ))}
+            <span className="uppercase tracking-[0.1em] text-[var(--rig-paper-40)]">
+              Illustrative Studio Interface
+            </span>
+          </div>
+
+          {/* 3-Column IDE Upper Surface */}
+          <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)_320px]">
+            {/* File Explorer */}
+            <div className="hidden border-r border-[var(--rig-paper-12)] bg-[#0b0f0e] p-3 lg:block">
+              <p className="mb-2.5 px-2 rig-mono text-[10px] uppercase tracking-[0.12em] text-[var(--rig-paper-40)]">
+                Explorer
+              </p>
+              <div className="space-y-1">
+                {FILES.map((file) => {
+                  const active = selectedFile === file
+                  return (
+                    <button
+                      key={file}
+                      type="button"
+                      onClick={() => setSelectedFile(file)}
+                      className={`block w-full truncate px-2.5 py-1.5 text-left rig-mono text-[11px] transition-colors ${
+                        active
+                          ? "border-l-2 border-[var(--rig-blue)] bg-[var(--rig-blue-dim)] text-[var(--rig-paper)]"
+                          : "text-[var(--rig-paper-50)] hover:text-[var(--rig-paper)]"
+                      }`}
+                    >
+                      {file.split("/").pop()}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="mt-6 border-t border-[var(--rig-paper-12)] pt-3 px-2">
+                <p className="rig-mono text-[10px] uppercase tracking-[0.1em] text-[var(--rig-paper-40)]">
+                  Git Changes (2)
+                </p>
+                <p className="mt-1.5 rig-mono text-[10.5px] text-[var(--rig-green)]">
+                  M route.ts (+18/-4)
+                </p>
+                <p className="mt-1 rig-mono text-[10.5px] text-[var(--rig-blue)]">
+                  A idempotency.ts
+                </p>
+              </div>
+            </div>
+
+            {/* Code Editor */}
+            <div
+              className={`border-b border-[var(--rig-paper-12)] p-4 lg:border-b-0 ${
+                mobilePane !== "code" ? "hidden lg:block" : ""
+              }`}
+            >
+              <div className="mb-3 flex items-center justify-between border-b border-[var(--rig-paper-12)] pb-2 rig-mono text-[10.5px] text-[var(--rig-paper-50)]">
+                <span>{selectedFile}</span>
+                <span>TypeScript</span>
+              </div>
+              <div className="space-y-1 overflow-x-auto rig-mono text-[11.5px] leading-[22px]">
+                <div className="flex gap-3 text-[var(--rig-paper-50)]">
+                  <span className="w-6 text-right select-none text-[#646b76]">01</span>
+                  <code><span className="text-[var(--rig-blue)]">export async function</span> POST(req: Request) {"{"}</code>
+                </div>
+                <div className="flex gap-3 text-[var(--rig-paper-75)]">
+                  <span className="w-6 text-right select-none text-[#646b76]">02</span>
+                  <code>  const raw = await req.text();</code>
+                </div>
+                <div className="flex gap-3 bg-[#56d887]/10 text-[#a8dcb1]">
+                  <span className="w-6 text-right select-none text-[#646b76]">03</span>
+                  <code>  const verified = verifyWebhookSignature(raw, req.headers);</code>
+                </div>
+                <div className="flex gap-3 text-[var(--rig-paper-75)]">
+                  <span className="w-6 text-right select-none text-[#646b76]">04</span>
+                  <code>  if (!verified) return Response.json({"{"} error: &quot;Invalid&quot; {"}"}, {"{"} status: 401 {"}"});</code>
+                </div>
+                <div className="flex gap-3 text-[var(--rig-paper-75)]">
+                  <span className="w-6 text-right select-none text-[#646b76]">05</span>
+                  <code>  await processIdempotentInvoice(JSON.parse(raw));</code>
+                </div>
+                <div className="flex gap-3 text-[var(--rig-paper-50)]">
+                  <span className="w-6 text-right select-none text-[#646b76]">06</span>
+                  <code>  return Response.json({"{"} received: true {"}"});</code>
+                </div>
+                <div className="flex gap-3 text-[var(--rig-paper-50)]">
+                  <span className="w-6 text-right select-none text-[#646b76]">07</span>
+                  <code>{"}"}</code>
+                </div>
+              </div>
+            </div>
+
+            {/* Live Sandbox Preview */}
+            <div
+              className={`border-t border-[var(--rig-paper-12)] bg-[#121817] p-4 lg:border-t-0 lg:border-l ${
+                mobilePane !== "preview" ? "hidden lg:block" : ""
+              }`}
+            >
+              <div className="mb-3 flex items-center justify-between border-b border-[var(--rig-paper-12)] pb-2 rig-mono text-[10.5px]">
+                <span className="text-[var(--rig-paper-50)]">LIVE PREVIEW</span>
+                <span className="text-[var(--rig-green)]">:3001 ALIVE</span>
+              </div>
+              <div className="border border-[var(--rig-paper-18)] bg-[#161e1d] p-4">
+                <div className="flex items-center justify-between border-b border-[var(--rig-paper-12)] pb-2.5">
+                  <span className="rig-mono text-[10px] uppercase tracking-[0.1em] text-[var(--rig-blue)]">
+                    Webhook Inspector
+                  </span>
+                  <span className="rig-mono text-[10px] text-[var(--rig-green)]">200 OK</span>
+                </div>
+                <p className="mt-3 text-[13px] font-semibold text-[var(--rig-paper)]">
+                  Invoice #INV-2091 processed
+                </p>
+                <p className="mt-1 rig-mono text-[11px] text-[var(--rig-paper-50)]">
+                  Idempotency key locked · HMAC valid
+                </p>
+                <div className="mt-4 border-t border-[var(--rig-paper-12)] pt-2.5 flex justify-between rig-mono text-[10.5px] text-[var(--rig-paper-40)]">
+                  <span>Replay safe</span>
+                  <span>14ms</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="grid min-h-[420px] lg:grid-cols-[220px_minmax(0,1fr)]">
-            <aside className="border-b border-[var(--mkt-line)] p-4 lg:border-b-0 lg:border-r">
-              <p className="mkt-eyebrow">Files</p>
-              <ul className="mt-3 space-y-1.5">
-                {FILES.map((f) => (
-                  <li
-                    key={f.name}
-                    className={`truncate border-l px-2 py-1.5 font-mono text-[11px] ${
-                      f.active
-                        ? "border-[var(--mkt-accent)] bg-[var(--mkt-accent-soft)] text-[var(--mkt-ink)]"
-                        : "border-transparent text-[var(--mkt-ink-2)]"
+          {/* Bottom Drawer: Terminal / Agent Activity / Git */}
+          <div
+            className={`border-t border-[var(--rig-paper-18)] bg-[#0a0d0c] ${
+              mobilePane === "git" ? "block" : ""
+            }`}
+          >
+            <div className="flex items-center justify-between border-b border-[var(--rig-paper-12)] px-4">
+              <div className="flex gap-5">
+                {(
+                  [
+                    { id: "terminal", label: "Terminal" },
+                    { id: "activity", label: "Agent Activity" },
+                    { id: "git", label: "Git Changes" },
+                  ] as const
+                ).map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setBottomTab(t.id)}
+                    className={`border-b-2 py-2 rig-mono text-[10.5px] uppercase tracking-[0.1em] transition-colors ${
+                      bottomTab === t.id
+                        ? "border-[var(--rig-blue)] text-[var(--rig-paper)]"
+                        : "border-transparent text-[var(--rig-paper-40)] hover:text-[var(--rig-paper)]"
                     }`}
-                    title={f.name}
                   >
-                    {f.name.split("/").slice(-2).join("/")}
-                  </li>
+                    {t.label}
+                  </button>
                 ))}
-              </ul>
-
-              <div className="mt-6 border-t border-[var(--mkt-line)] pt-4">
-                <p className="mkt-eyebrow">Activity</p>
-                <ul className="mt-3 space-y-2 text-[12px] text-[var(--mkt-ink-2)]">
-                  <li>Plan: tasks outlined</li>
-                  <li>Backend: route updated</li>
-                  <li>Tests: checks prepared</li>
-                </ul>
-                <p className="mkt-note mt-4">Example state</p>
               </div>
-            </aside>
+              <span className="hidden rig-mono text-[10px] text-[var(--rig-paper-40)] sm:inline">
+                Sandbox Node 20
+              </span>
+            </div>
 
-            <div className="flex flex-col">
-              <div className="flex-1 overflow-auto bg-[var(--mkt-bg)] p-4 sm:p-5">
-                {tab === "editor" && (
-                  <pre className="mkt-mono whitespace-pre text-[12px] leading-relaxed text-[var(--mkt-ink)]">
-                    <code>{CODE}</code>
-                  </pre>
-                )}
-                {tab === "diff" && (
-                  <pre className="mkt-mono whitespace-pre text-[12px] leading-relaxed text-[var(--mkt-ink)]">
-                    <code>{DIFF}</code>
-                  </pre>
-                )}
-                {tab === "preview" && (
-                  <div className="mx-auto max-w-md border border-[var(--mkt-line)] bg-[var(--mkt-paper)] p-5">
-                    <p className="mkt-eyebrow">Preview · example</p>
-                    <h3 className="mt-3 font-display text-[22px] font-medium tracking-[-0.02em] text-[var(--mkt-ink)]">
-                      Sign-in callback
-                    </h3>
-                    <p className="mt-2 text-[13px] leading-relaxed text-[var(--mkt-ink-2)]">
-                      Verifying the authorization response and completing the session.
-                    </p>
-                    <div className="mt-5 space-y-2 border-t border-[var(--mkt-line)] pt-4 text-[12px] text-[var(--mkt-ink-2)]">
-                      <div className="flex justify-between"><span>Code parameter</span><span className="mkt-mono text-[var(--mkt-success)]">present</span></div>
-                      <div className="flex justify-between"><span>Verifier check</span><span className="mkt-mono text-[var(--mkt-success)]">valid</span></div>
-                      <div className="flex justify-between"><span>Session</span><span className="mkt-mono">ready</span></div>
-                    </div>
-                    <button type="button" className="mkt-btn-primary mt-5 h-9 w-full" disabled>
-                      Continue to workspace
-                    </button>
-                    <p className="mkt-note mt-3 text-center">Static demonstration view</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="grid border-t border-[var(--mkt-line)] sm:grid-cols-[minmax(0,1fr)_auto]">
-                <div className="border-b border-[var(--mkt-line)] px-4 py-3 sm:border-b-0 sm:border-r">
-                  <p className="mkt-eyebrow">Terminal · example output</p>
-                  <p className="mkt-mono mt-2 text-[11px] leading-relaxed text-[var(--mkt-ink-2)]">
-                    $ pnpm test pkce
-                    <br />
-                    <span className="text-[var(--mkt-success)]">✓</span> verifier validation checks
-                    <br />
-                    <span className="text-[var(--mkt-success)]">✓</span> callback error states
-                  </p>
+            <div className="p-4 rig-mono text-[11px] leading-relaxed">
+              {bottomTab === "terminal" && (
+                <div className="space-y-1 text-[var(--rig-paper-75)]">
+                  <p className="text-[var(--rig-paper-40)]">$ npm run test -- tests/webhook.test.ts</p>
+                  <p className="text-[var(--rig-green)]">PASS tests/webhook.test.ts (4 assertions in 38ms)</p>
                 </div>
-                <div className="px-4 py-3">
-                  <p className="mkt-eyebrow">Git</p>
-                  <p className="mt-2 text-[12px] text-[var(--mkt-ink-2)]">2 files changed · review pending</p>
+              )}
+              {bottomTab === "activity" && (
+                <div className="space-y-1 text-[var(--rig-paper-75)]">
+                  <p>[14:02:11] Implementation agent edited src/app/api/billing/webhook/route.ts</p>
+                  <p className="text-[var(--rig-blue)]">[14:02:13] Verifier confirmed HMAC guard before parse</p>
                 </div>
-              </div>
+              )}
+              {bottomTab === "git" && (
+                <div className="space-y-1 text-[var(--rig-paper-75)]">
+                  <p>branch: feat/webhook-idempotency (clean index)</p>
+                  <p className="text-[var(--rig-green)]">2 files staged · ready for human diff approval</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

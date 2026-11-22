@@ -1,152 +1,235 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { createScrollObserver, animateFadeUp } from "@/lib/animations/reveals"
+import { createScrollObserver } from "@/lib/animations/reveals"
+import { animateConnectorGroup } from "@/lib/animations/workflow"
 
-const STEPS = [
+interface Stage {
+  id: string
+  step: string
+  label: string
+  status: "done" | "active" | "gate"
+  owner: string
+  duration: string
+  description: string
+  checks: string[]
+}
+
+const PIPELINE: Stage[] = [
   {
     id: "plan",
-    title: "Plan",
-    mode: "Decomposition",
-    body: "Turn a request or issue into bounded tasks, dependencies, and acceptance checks.",
+    step: "01",
+    label: "Plan",
+    status: "done",
+    owner: "Orchestrator",
+    duration: "1.4s",
+    description: "Decomposes ticket into isolated file scopes and validates budget headroom.",
+    checks: ["DAG topological check", "Token cap estimated"],
   },
   {
     id: "develop",
-    title: "Develop",
-    mode: "Implementation",
-    body: "Execute tasks in parallel where safe, with clear file ownership and shared context.",
+    step: "02",
+    label: "Develop",
+    status: "done",
+    owner: "Coding Agents",
+    duration: "4.6s",
+    description: "Executes parallel diffs across assigned route handlers and UI views.",
+    checks: ["Worktree isolated", "Types preserved"],
   },
   {
     id: "integrate",
-    title: "Integrate",
-    mode: "Composition",
-    body: "Combine outputs, resolve conflicts, and prepare a coherent change set.",
+    step: "03",
+    label: "Integrate",
+    status: "done",
+    owner: "Git Engine",
+    duration: "0.7s",
+    description: "Combines agent outputs onto a single feature branch and flags merge conflicts.",
+    checks: ["0 conflicts", "Clean rebase"],
   },
   {
     id: "test",
-    title: "Test",
-    mode: "Validation",
-    body: "Run automated checks and surface regressions before review.",
+    step: "04",
+    label: "Test",
+    status: "active",
+    owner: "Test Runner",
+    duration: "2.3s",
+    description: "Runs suite assertions against the updated worktree; failed tests route back to Develop.",
+    checks: ["Unit assertions queued", "Exit code captured"],
   },
   {
     id: "verify",
-    title: "Verify",
-    mode: "Assurance",
-    body: "Inspect findings, apply remediation, and record evidence for the change.",
+    step: "05",
+    label: "Verify",
+    status: "gate",
+    owner: "Verification Center",
+    duration: "1.1s",
+    description: "Inspects generated diffs for risky patterns, missing guards, and secret literals.",
+    checks: ["Diff heuristics", "Scope recorded"],
   },
   {
     id: "review",
-    title: "Review",
-    mode: "Human gate",
-    body: "Provide diffs, context, and results so a reviewer can approve or request changes.",
+    step: "06",
+    label: "Review",
+    status: "gate",
+    owner: "Human Lead",
+    duration: "Manual",
+    description: "Mandatory approval checkpoint with line comments before code reaches main.",
+    checks: ["Side-by-side diff", "Explicit approve"],
   },
   {
     id: "deliver",
-    title: "Deliver",
-    mode: "Release",
-    body: "Merge or ship the reviewed change according to repository and team policy.",
+    step: "07",
+    label: "Deliver",
+    status: "gate",
+    owner: "Release Hook",
+    duration: "12s",
+    description: "Finalizes branch commit, updates cost ledger, and dispatches preview build.",
+    checks: ["Ledger reconciled", "Branch tagged"],
   },
 ]
 
 export function WorkflowShowcase() {
-  const [active, setActive] = useState("develop")
-  const ref = useRef<HTMLElement>(null)
-  const contentRef = useRef<HTMLDivElement>(null)
-  const step = STEPS.find((s) => s.id === active) || STEPS[1]
+  const [selectedId, setSelectedId] = useState<string>("test")
+  const sectionRef = useRef<HTMLElement>(null)
+  const lineRef = useRef<SVGPathElement>(null)
+  const branchRef = useRef<SVGPathElement>(null)
 
   useEffect(() => {
-    return createScrollObserver(ref.current, () => {
-      if (contentRef.current) animateFadeUp(contentRef.current, 0, 650)
+    let cancelDraw: (() => void) | null = null
+    const stopObserver = createScrollObserver(sectionRef.current, () => {
+      cancelDraw = animateConnectorGroup([lineRef.current, branchRef.current], 150)
     })
+    return () => {
+      stopObserver()
+      cancelDraw?.()
+    }
   }, [])
 
+  const current = PIPELINE.find((s) => s.id === selectedId) || PIPELINE[3]
+
   return (
-    <section id="workflows" ref={ref} className="border-b border-[var(--mkt-line)] bg-[var(--mkt-paper)] py-20 sm:py-24">
-      <div ref={contentRef} className="mkt-container">
-        <div className="flex flex-col gap-6 border-b border-[var(--mkt-line)] pb-10 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl">
-            <p className="mkt-eyebrow flex items-center gap-3">
-              <span className="text-[var(--mkt-accent)]">03</span>
-              <span className="h-px w-6 bg-[var(--mkt-line-strong)]" aria-hidden />
-              Workflow automation
-            </p>
-            <h2 className="mkt-h2 mt-5 text-[2rem] sm:text-[2.6rem]">
-              A defined path from
+    <section
+      id="workflows"
+      ref={sectionRef}
+      className="border-b border-[var(--rig-paper-18)] py-20 sm:py-28"
+    >
+      <div className="rig-container">
+        <div className="flex flex-col justify-between gap-6 border-b border-[var(--rig-paper-18)] pb-10 lg:flex-row lg:items-end">
+          <div>
+            <span className="rig-badge mb-6">Workflow Automation</span>
+            <h2 className="rig-display text-[clamp(2.4rem,4.6vw,3.9rem)] font-bold leading-[0.94] text-[var(--rig-paper)]">
+              From request to verified merge.
               <br />
-              <span className="text-[var(--mkt-ink-2)]">intent to delivery.</span>
+              <span className="text-[var(--rig-paper-50)]">Every stage connected.</span>
             </h2>
           </div>
-          <p className="mkt-lead max-w-md text-[15px]">
-            Workflows make each stage explicit so autonomous steps, checks, and human
-            approvals happen in a predictable order.
+          <p className="max-w-md text-[0.95rem] leading-[1.68] text-[var(--rig-paper-75)]">
+            Chain agent execution, Git integration, testing, verification, and human approval into a single inspectable DAG workflow.
           </p>
         </div>
 
-        <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-          <div>
-            <div className="flex items-center justify-between">
-              <p className="mkt-eyebrow">Lifecycle · example workflow</p>
-              <p className="mkt-note text-[var(--mkt-accent)]">Demonstration</p>
+        {/* SVG Pipeline Backbone (desktop visual connector) */}
+        <div className="mt-10 hidden lg:block" aria-hidden="true">
+          <svg viewBox="0 0 1120 44" className="h-11 w-full">
+            <path
+              ref={lineRef}
+              d="M 40 20 L 1080 20"
+              fill="none"
+              stroke="oklch(0.6014 0.1657 253.83)"
+              strokeWidth="1.5"
+            />
+            <path
+              ref={branchRef}
+              d="M 560 20 L 560 38 L 220 38 L 220 20"
+              fill="none"
+              stroke="oklch(0.6973 0.1443 72.87)"
+              strokeWidth="1.25"
+              strokeDasharray="4 4"
+            />
+          </svg>
+        </div>
+
+        {/* 7-Stage Pipeline Nodes */}
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:mt-2 lg:grid-cols-7">
+          {PIPELINE.map((stage) => {
+            const active = stage.id === selectedId
+            return (
+              <button
+                key={stage.id}
+                type="button"
+                onClick={() => setSelectedId(stage.id)}
+                aria-pressed={active}
+                className={`flex min-h-[122px] flex-col justify-between border p-3.5 text-left transition-colors ${
+                  active
+                    ? "border-[var(--rig-blue)] bg-[var(--rig-blue-dim)]"
+                    : "border-[var(--rig-paper-18)] bg-[#101514] hover:border-[var(--rig-paper-30)]"
+                }`}
+              >
+                <div className="flex w-full items-center justify-between rig-mono text-[10px]">
+                  <span className={active ? "text-[var(--rig-blue)]" : "text-[var(--rig-paper-40)]"}>
+                    {stage.step}
+                  </span>
+                  <span
+                    className={`uppercase tracking-[0.06em] ${
+                      stage.status === "done"
+                        ? "text-[var(--rig-green)]"
+                        : stage.status === "active"
+                        ? "text-[var(--rig-blue)]"
+                        : "text-[var(--rig-yellow)]"
+                    }`}
+                  >
+                    {stage.status}
+                  </span>
+                </div>
+
+                <div>
+                  <p className="rig-display text-[1.05rem] font-semibold text-[var(--rig-paper)]">
+                    {stage.label}
+                  </p>
+                  <p className="mt-0.5 rig-mono text-[10px] text-[var(--rig-paper-50)]">
+                    {stage.owner}
+                  </p>
+                </div>
+
+                <div className="border-t border-[var(--rig-paper-12)] pt-2 rig-mono text-[10px] text-[var(--rig-paper-40)]">
+                  {stage.duration}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Selected Stage Specification Panel */}
+        <div className="mt-6 border border-[var(--rig-paper-18)] bg-[#101514] p-5 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--rig-paper-12)] pb-3">
+            <div className="flex items-center gap-3">
+              <span className="rig-mono text-[11px] font-bold text-[var(--rig-blue)]">
+                {`STAGE ${current.step} // ${current.label.toUpperCase()}`}
+              </span>
+              <span className="rig-mono text-[11px] text-[var(--rig-paper-50)]">
+                Owner: {current.owner}
+              </span>
             </div>
-            <ol className="mt-4 border-t border-[var(--mkt-line)]">
-              {STEPS.map((s, i) => {
-                const isActive = s.id === active
-                return (
-                  <li key={s.id} className="border-b border-[var(--mkt-line)]">
-                    <button
-                      type="button"
-                      onClick={() => setActive(s.id)}
-                      className={`grid w-full grid-cols-[3rem_minmax(0,1fr)_auto] items-start gap-4 py-4 text-left transition-colors sm:grid-cols-[3.5rem_minmax(0,1fr)_auto] ${
-                        isActive ? "bg-[var(--mkt-bg)]" : "hover:bg-[color:color-mix(in_srgb,var(--mkt-bg)_55%,transparent)]"
-                      }`}
-                      aria-pressed={isActive}
-                    >
-                      <span className="mkt-mono pt-0.5 text-[11px] tracking-[0.1em] text-[var(--mkt-ink-3)]">
-                        {String(i + 1).padStart(2, "0")}
-                      </span>
-                      <span>
-                        <span className="block font-display text-[18px] font-medium tracking-[-0.02em] text-[var(--mkt-ink)]">
-                          {s.title}
-                        </span>
-                        <span className="mt-1 block text-[13px] leading-relaxed text-[var(--mkt-ink-2)]">
-                          {s.body}
-                        </span>
-                      </span>
-                      <span className={`mkt-chip mt-0.5 ${isActive ? "border-[var(--mkt-accent-border)] text-[var(--mkt-accent-strong)]" : ""}`}>
-                        {s.mode}
-                      </span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ol>
+            <span className="rig-mono text-[10.5px] uppercase tracking-[0.1em] text-[var(--rig-yellow)]">
+              On failure -&gt; return to Develop
+            </span>
           </div>
 
-          <aside className="lg:pt-8">
-            <div className="border border-[var(--mkt-line)] bg-[var(--mkt-bg)] p-5 sm:p-6">
-              <p className="mkt-eyebrow text-[var(--mkt-accent)]">Selected stage</p>
-              <h3 className="mt-2 font-display text-[28px] font-medium tracking-[-0.03em] text-[var(--mkt-ink)]">
-                {step.title}
-              </h3>
-              <p className="mkt-mono mt-1 text-[11px] uppercase tracking-[0.1em] text-[var(--mkt-ink-3)]">
-                {step.mode}
-              </p>
-              <p className="mt-5 text-[14px] leading-relaxed text-[var(--mkt-ink-2)]">{step.body}</p>
-
-              <div className="mt-6 border-t border-[var(--mkt-line)] pt-5">
-                <p className="mkt-eyebrow">Common controls</p>
-                <ul className="mt-3 space-y-2 text-[13px] text-[var(--mkt-ink-2)]">
-                  <li className="flex gap-2"><span className="text-[var(--mkt-accent)]">—</span><span>Entry conditions and required inputs</span></li>
-                  <li className="flex gap-2"><span className="text-[var(--mkt-accent)]">—</span><span>Status, logs, and produced artifacts</span></li>
-                  <li className="flex gap-2"><span className="text-[var(--mkt-accent)]">—</span><span>Approval or retry paths when checks fail</span></li>
-                </ul>
-              </div>
-
-              <div className="mt-6 border border-[var(--mkt-line)] bg-[var(--mkt-paper)] px-4 py-3">
-                <p className="mkt-note">Visualized without animation dependency — structure remains clear in static form.</p>
-              </div>
+          <div className="mt-4 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+            <p className="max-w-2xl text-[0.95rem] leading-[1.65] text-[var(--rig-paper-75)]">
+              {current.description}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {current.checks.map((chk) => (
+                <span
+                  key={chk}
+                  className="border border-[var(--rig-paper-18)] bg-[#161e1d] px-2.5 py-1 rig-mono text-[10.5px] text-[var(--rig-paper)]"
+                >
+                  {chk}
+                </span>
+              ))}
             </div>
-          </aside>
+          </div>
         </div>
       </div>
     </section>

@@ -27,9 +27,9 @@ export function ProviderIcon({
   className,
 }: ProviderIconProps) {
   const sizeMap = {
-    sm: "h-7 w-7 rounded-[6px]",
-    md: "h-8 w-8 rounded-[7px]",
-    lg: "h-10 w-10 rounded-lg",
+    sm: "h-7 w-7 rounded-[2px]",
+    md: "h-8 w-8 rounded-[2px]",
+    lg: "h-10 w-10 rounded-[2px]",
   }
 
   const iconSizeMap = {
@@ -39,18 +39,19 @@ export function ProviderIcon({
   }
 
   const colors: Record<string, string> = {
-    openai: "#0f8a6d",
-    anthropic: "#a27446",
-    google: "#3568c9",
-    "github-copilot": "#6552a8",
-    cursor: "#0d8f7a",
-    perplexity: "#1f8f88",
-    openrouter: "#4d55b8",
-    windsurf: "#177a5b",
-    huggingface: "#b47412",
+    openai: "#56d887",
+    anthropic: "#d89b34",
+    google: "#317ef5",
+    "github-copilot": "#8ba8cb",
+    github: "#8ba8cb",
+    cursor: "#56d887",
+    perplexity: "#6ec7c0",
+    openrouter: "#729bff",
+    windsurf: "#56d887",
+    huggingface: "#d89b34",
   }
 
-  const color = brandColor || colors[slug] || "#4a4fbf"
+  const color = brandColor || colors[slug] || "#317ef5"
 
   const icon = (() => {
     switch (slug) {
@@ -61,6 +62,7 @@ export function ProviderIcon({
       case "google":
         return <Sparkles className={iconSizeMap[size]} />
       case "github-copilot":
+      case "github":
         return <GitBranch className={iconSizeMap[size]} />
       case "cursor":
         return <MousePointer className={iconSizeMap[size]} />
@@ -85,8 +87,8 @@ export function ProviderIcon({
         className
       )}
       style={{
-        backgroundColor: `${color}0f`,
-        borderColor: `${color}24`,
+        backgroundColor: `${color}18`,
+        borderColor: `${color}45`,
         color,
       }}
       aria-hidden="true"

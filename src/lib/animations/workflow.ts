@@ -1,15 +1,15 @@
-import { waapi } from 'animejs/waapi'
-import { isReducedMotion } from './reveals'
+import { waapi } from "animejs/waapi"
+import { cancelAnimations, isReducedMotion } from "./reveals"
 
 export function animateWorkflowConnector(
   svgPath: SVGPathElement | null,
-  duration: number = 800,
-  delay: number = 0
+  duration = 700,
+  delay = 0
 ) {
-  if (typeof window === 'undefined' || !svgPath || isReducedMotion()) return null
+  if (typeof window === "undefined" || !svgPath || isReducedMotion()) return null
 
   try {
-    const length = svgPath.getTotalLength ? svgPath.getTotalLength() : 300
+    const length = svgPath.getTotalLength ? svgPath.getTotalLength() : 280
     svgPath.style.strokeDasharray = `${length}`
     svgPath.style.strokeDashoffset = `${length}`
 
@@ -17,25 +17,45 @@ export function animateWorkflowConnector(
       strokeDashoffset: [length, 0],
       duration,
       delay,
-      ease: 'inOutSine',
+      ease: "inOutSine",
     })
   } catch {
     return null
   }
 }
 
+export function animateConnectorGroup(
+  paths: Array<SVGPathElement | null>,
+  staggerMs = 110
+): () => void {
+  if (typeof window === "undefined" || isReducedMotion()) {
+    return () => {}
+  }
+
+  const anims: Array<{ cancel?: () => void } | null> = []
+  paths.forEach((p, idx) => {
+    if (!p) return
+    anims.push(animateWorkflowConnector(p, 650, idx * staggerMs))
+  })
+
+  return () => {
+    cancelAnimations(anims)
+  }
+}
+
 export function animateNodeActivation(
   nodeElement: HTMLElement | null,
-  delay: number = 0
+  delay = 0
 ) {
-  if (typeof window === 'undefined' || !nodeElement || isReducedMotion()) return null
+  if (typeof window === "undefined" || !nodeElement || isReducedMotion()) return null
 
   try {
     return waapi.animate(nodeElement, {
-      transform: ['scale(0.97)', 'scale(1.02)', 'scale(1)'],
-      duration: 500,
+      opacity: [0.6, 1],
+      transform: ["translateY(4px)", "translateY(0px)"],
+      duration: 380,
       delay,
-      ease: 'outBack',
+      ease: "outCubic",
     })
   } catch {
     return null

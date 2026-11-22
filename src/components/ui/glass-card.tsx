@@ -7,10 +7,6 @@ interface GlassCardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode
 }
 
-/**
- * Flat surface primitive kept under its historical name for call-site
- * compatibility. Editorial layout uses hairline borders, not glass.
- */
 export function GlassCard({
   variant = "default",
   glow = "none",
@@ -20,16 +16,16 @@ export function GlassCard({
 }: GlassCardProps) {
   const variants = {
     default: "border-line bg-surface",
-    elevated: "border-line bg-surface",
+    elevated: "border-line-strong bg-surface",
     subtle: "border-line bg-surface-2/40",
   }
 
   return (
     <div
       className={cn(
-        "rounded-lg border text-ink transition-colors duration-150",
+        "rounded-[2px] border text-ink transition-colors duration-150",
         variants[variant],
-        glow !== "none" && "hover:border-line-strong",
+        glow !== "none" && "hover:border-accent-line",
         className
       )}
       {...props}
