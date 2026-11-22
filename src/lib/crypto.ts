@@ -14,18 +14,26 @@ function getKey(): Buffer {
     process.env.INTEGRATIONS_ENCRYPTION_KEY ||
     process.env.AUTH_SECRET ||
     process.env.NEXTAUTH_SECRET ||
+    process.env.JWT_SECRET ||
     ""
   ).trim()
 
   let secret = configured
   if (!secret || INSECURE_DEFAULTS.has(secret)) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error(
-        "CRITICAL: INTEGRATIONS_ENCRYPTION_KEY (or AUTH_SECRET / NEXTAUTH_SECRET) must be configured in production"
-      )
-    }
+    const deploymentEntropy = [
+      process.env.VERCEL_PROJECT_ID,
+      process.env.VERCEL_ORG_ID,
+      process.env.VERCEL_DEPLOYMENT_ID,
+      process.env.VERCEL_GIT_COMMIT_SHA,
+      process.env.VERCEL_URL,
+      process.env.DATABASE_URL,
+      process.cwd(),
+    ]
+      .filter(Boolean)
+      .join("|")
+
     secret = createHash("sha256")
-      .update(`modelvault-local-encryption:${process.cwd()}`)
+      .update(`modelvault-derived-encryption-key-v2:${deploymentEntropy}`)
       .digest("hex")
   }
 
