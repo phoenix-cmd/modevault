@@ -79,30 +79,32 @@ export function ApiRecordsTable({ records }: ApiRecordsTableProps) {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-0 flex-1 sm:min-w-[200px] sm:flex-none">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="relative min-w-0 w-full sm:w-56">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3" strokeWidth={2} />
             <input
               type="text"
               placeholder="Filter by model or provider…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="field field-sm pl-8 sm:w-56"
+              className="field field-sm w-full pl-8"
             />
           </div>
 
-          <select value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)} className="select select-sm w-auto" aria-label="Filter by provider">
-            <option value="all">All providers</option>
-            {providers.map(([slug, name]) => (
-              <option key={slug} value={slug}>{name}</option>
-            ))}
-          </select>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+            <select value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)} className="select select-sm w-full sm:w-auto" aria-label="Filter by provider">
+              <option value="all">All providers</option>
+              {providers.map(([slug, name]) => (
+                <option key={slug} value={slug}>{name}</option>
+              ))}
+            </select>
 
-          <select value={range} onChange={(e) => setRange(e.target.value)} className="select select-sm w-auto" aria-label="Filter by date range">
-            {RANGE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
+            <select value={range} onChange={(e) => setRange(e.target.value)} className="select select-sm w-full sm:w-auto" aria-label="Filter by date range">
+              {RANGE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -114,14 +116,14 @@ export function ApiRecordsTable({ records }: ApiRecordsTableProps) {
       ) : (
         <>
           <div className="hidden overflow-x-auto md:block">
-            <table className="data-table min-w-[920px]">
+            <table className="data-table">
               <thead>
                 <tr>
                   <th>Date</th>
                   <th>Provider / model</th>
-                  <th className="text-right">Input</th>
-                  <th className="text-right">Output</th>
-                  <th className="text-right">Cached</th>
+                  <th className="hidden text-right xl:table-cell">Input</th>
+                  <th className="hidden text-right xl:table-cell">Output</th>
+                  <th className="hidden text-right xl:table-cell">Cached</th>
                   <th className="text-right">Total</th>
                   <th className="text-right">Cost</th>
                   <th className="text-right">Requests</th>
@@ -136,9 +138,9 @@ export function ApiRecordsTable({ records }: ApiRecordsTableProps) {
                       <p className="font-mono text-[11.5px] text-ink">{record.model || "—"}</p>
                       <p className="text-[10.5px] text-ink-3">{record.apiAccount?.provider?.name || "Provider"}</p>
                     </td>
-                    <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">{formatNumber(record.inputTokens)}</td>
-                    <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">{formatNumber(record.outputTokens)}</td>
-                    <td className="text-right font-mono text-[11px] text-ink-3 tabular-nums">{record.cachedTokens > 0 ? formatNumber(record.cachedTokens) : "—"}</td>
+                    <td className="hidden text-right font-mono text-[11px] text-ink-2 tabular-nums xl:table-cell">{formatNumber(record.inputTokens)}</td>
+                    <td className="hidden text-right font-mono text-[11px] text-ink-2 tabular-nums xl:table-cell">{formatNumber(record.outputTokens)}</td>
+                    <td className="hidden text-right font-mono text-[11px] text-ink-3 tabular-nums xl:table-cell">{record.cachedTokens > 0 ? formatNumber(record.cachedTokens) : "—"}</td>
                     <td className="text-right font-mono text-[11px] font-medium text-ink tabular-nums">{formatNumber(record.totalTokens)}</td>
                     <td className="text-right font-mono text-[11px] text-ink tabular-nums">{formatCost(record.cost, record.currency)}</td>
                     <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">{record.requestCount}</td>
@@ -154,23 +156,45 @@ export function ApiRecordsTable({ records }: ApiRecordsTableProps) {
               <div key={record.id} className="border-b border-line py-3.5 last:border-b-0">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate font-mono text-[11.5px] text-ink">{record.model || "—"}</p>
-                    <p className="mt-0.5 text-[10.5px] text-ink-3">
+                    <p className="truncate font-mono text-[12px] text-ink">{record.model || "—"}</p>
+                    <p className="mt-0.5 text-[11px] text-ink-3">
                       {record.apiAccount?.provider?.name || "Provider"} · {formatDate(record.date)}
                     </p>
                   </div>
-                  <span className="shrink-0 font-mono text-[11.5px] font-medium text-ink tabular-nums">
-                    {formatCost(record.cost, record.currency)}
-                  </span>
+                  <div className="shrink-0 text-right">
+                    <span className="block font-mono text-[12px] font-medium text-ink tabular-nums">
+                      {formatCost(record.cost, record.currency)}
+                    </span>
+                    <span className="font-mono text-[10px] text-ink-3 tabular-nums">
+                      {formatNumber(record.totalTokens)} tok
+                    </span>
+                  </div>
                 </div>
 
-                <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[10px] text-ink-3 tabular-nums">
-                  <span>Total <span className="text-ink-2">{formatNumber(record.totalTokens)}</span></span>
-                  <span>In <span className="text-ink-2">{formatNumber(record.inputTokens)}</span></span>
-                  <span>Out <span className="text-ink-2">{formatNumber(record.outputTokens)}</span></span>
-                  <span>Req <span className="text-ink-2">{record.requestCount}</span></span>
-                  <span className="badge ml-auto bg-surface-2 text-ink-3">{record.dataSource.replace("_", " ")}</span>
-                </div>
+                <details className="mt-2">
+                  <summary className="flex cursor-pointer list-none items-center justify-between font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3 select-none">
+                    <span>Token breakdown &amp; source</span>
+                    <span className="badge bg-surface-2 text-ink-3">{record.dataSource.replace("_", " ")}</span>
+                  </summary>
+                  <div className="mt-2 grid grid-cols-4 gap-2 border-t border-line/70 pt-2 font-mono text-[10.5px] text-ink-3 tabular-nums">
+                    <div>
+                      <span className="block text-[9px] uppercase">In</span>
+                      <span className="text-ink-2">{formatNumber(record.inputTokens)}</span>
+                    </div>
+                    <div>
+                      <span className="block text-[9px] uppercase">Out</span>
+                      <span className="text-ink-2">{formatNumber(record.outputTokens)}</span>
+                    </div>
+                    <div>
+                      <span className="block text-[9px] uppercase">Cached</span>
+                      <span className="text-ink-2">{record.cachedTokens > 0 ? formatNumber(record.cachedTokens) : "—"}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="block text-[9px] uppercase">Req</span>
+                      <span className="text-ink-2">{record.requestCount}</span>
+                    </div>
+                  </div>
+                </details>
               </div>
             ))}
           </div>

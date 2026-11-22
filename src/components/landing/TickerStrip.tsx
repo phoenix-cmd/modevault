@@ -1,5 +1,7 @@
 "use client"
 
+import { useEffect, useRef } from "react"
+
 const TICKER_ITEMS = [
   { label: "MULTI-AGENT EXECUTION", href: "#orchestration" },
   { label: "WORKFLOW AUTOMATION", href: "#workflows" },
@@ -11,8 +13,26 @@ const TICKER_ITEMS = [
 ]
 
 export function TickerStrip() {
+  const tickerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = tickerRef.current
+    if (!el || typeof IntersectionObserver === "undefined") return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        el.classList.toggle("is-offscreen", !entry.isIntersecting)
+      },
+      { threshold: 0 }
+    )
+    observer.observe(el)
+    return () => {
+      observer.disconnect()
+    }
+  }, [])
+
   return (
     <div
+      ref={tickerRef}
       className="rig-ticker relative z-20 overflow-hidden border-t border-black/15 py-3"
       aria-label="Platform capabilities"
     >

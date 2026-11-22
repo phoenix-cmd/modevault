@@ -280,7 +280,7 @@ export default function ModelLibraryPage() {
             ) : (
               <>
                 <div className="hidden overflow-x-auto border-t border-line md:block">
-                  <table className="data-table min-w-[860px]">
+                  <table className="data-table">
                     <thead>
                       <tr>
                         <th>Model</th>
@@ -288,9 +288,9 @@ export default function ModelLibraryPage() {
                         <th className="text-right">Context</th>
                         <th className="text-right">Input / 1M</th>
                         <th className="text-right">Output / 1M</th>
-                        <th className="text-right">Cached / 1M</th>
-                        <th className="text-right">Speed</th>
-                        <th className="text-right">Latency</th>
+                        <th className="hidden text-right lg:table-cell">Cached / 1M</th>
+                        <th className="hidden text-right xl:table-cell">Speed</th>
+                        <th className="hidden text-right xl:table-cell">Latency</th>
                         <th>Status</th>
                       </tr>
                     </thead>
@@ -305,9 +305,9 @@ export default function ModelLibraryPage() {
                           <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">{m.context}</td>
                           <td className="text-right font-mono text-[11px] text-ink tabular-nums">${m.inputPricePerM.toFixed(2)}</td>
                           <td className="text-right font-mono text-[11px] text-ink tabular-nums">${m.outputPricePerM.toFixed(2)}</td>
-                          <td className="text-right font-mono text-[11px] text-ink-3 tabular-nums">${m.cachedPricePerM.toFixed(2)}</td>
-                          <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">{m.speedTokensPerSec} t/s</td>
-                          <td className="text-right font-mono text-[11px] text-ink-2 tabular-nums">{m.latencyMs} ms</td>
+                          <td className="hidden text-right font-mono text-[11px] text-ink-3 tabular-nums lg:table-cell">${m.cachedPricePerM.toFixed(2)}</td>
+                          <td className="hidden text-right font-mono text-[11px] text-ink-2 tabular-nums xl:table-cell">{m.speedTokensPerSec} t/s</td>
+                          <td className="hidden text-right font-mono text-[11px] text-ink-2 tabular-nums xl:table-cell">{m.latencyMs} ms</td>
                           <td>
                             <span className="badge bg-surface-2 text-ink-3">{m.status}</span>
                           </td>
@@ -342,6 +342,22 @@ export default function ModelLibraryPage() {
                           </div>
                         ))}
                       </div>
+                      <details className="mt-2.5">
+                        <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3 select-none">
+                          Latency &amp; throughput specs
+                        </summary>
+                        <div className="mt-2 space-y-1.5 border-t border-line/70 pt-2 font-mono text-[10.5px] text-ink-3">
+                          <div className="flex justify-between gap-3">
+                            <span>Throughput</span>
+                            <span className="tabular-nums text-ink-2">{m.speedTokensPerSec} t/s</span>
+                          </div>
+                          <div className="flex justify-between gap-3">
+                            <span>Latency</span>
+                            <span className="tabular-nums text-ink-2">{m.latencyMs} ms</span>
+                          </div>
+                          {m.bestFor && <p className="pt-1 font-sans text-[11.5px] text-ink-2">{m.bestFor}</p>}
+                        </div>
+                      </details>
                     </li>
                   ))}
                 </ul>
@@ -376,12 +392,12 @@ export default function ModelLibraryPage() {
                   </p>
                 </div>
 
-                <label className="flex items-center gap-2 font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-3">
+                <label className="flex w-full flex-col gap-1.5 font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-3 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
                   Target
                   <select
                     value={selectedBenchmarkModel}
                     onChange={(e) => setSelectedBenchmarkModel(e.target.value)}
-                    className="select select-sm w-auto font-sans text-[12px] normal-case tracking-normal"
+                    className="select select-sm w-full font-sans text-[12px] normal-case tracking-normal sm:w-auto"
                   >
                     {models.map((m) => (
                       <option key={m.id} value={m.id}>

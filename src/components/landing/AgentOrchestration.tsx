@@ -91,13 +91,13 @@ export function AgentOrchestration() {
   return (
     <section
       id="orchestration"
-      className="border-b border-[var(--rig-paper-18)] pt-20 sm:pt-28"
+      className="scroll-mt-20 border-b border-[var(--rig-paper-18)] pt-16 sm:pt-28"
     >
       <div className="rig-container !px-0">
         {/* Centered Header */}
-        <div className="mx-auto max-w-[680px] px-5 text-center sm:px-0">
+        <div className="mx-auto max-w-[680px] px-4 text-center sm:px-6">
           <span className="rig-badge mb-6">Agent Orchestration Loop</span>
-          <h2 className="rig-display text-[clamp(2.4rem,4.6vw,3.9rem)] font-bold leading-[0.94] text-[var(--rig-paper)]">
+          <h2 className="rig-display text-[clamp(1.9rem,4.5vw,3.9rem)] font-bold leading-[0.95] text-[var(--rig-paper)]">
             Coordinated execution
             <br />
             inside the loop.
@@ -108,7 +108,7 @@ export function AgentOrchestration() {
         </div>
 
         {/* Rig 2fr 3fr Interactive Vertical Stepper */}
-        <div className="mt-14 grid items-stretch border-t border-[var(--rig-paper-18)] lg:grid-cols-[2fr_3fr]">
+        <div className="mt-12 grid items-stretch border-t border-[var(--rig-paper-18)] sm:mt-14 lg:grid-cols-[2fr_3fr]">
           {/* Left Interactive Steps */}
           <div className="flex flex-col">
             {LOOP_STEPS.map((step) => {
@@ -119,7 +119,7 @@ export function AgentOrchestration() {
                   type="button"
                   onClick={() => setActiveId(step.id)}
                   aria-expanded={isActive}
-                  className="relative w-full border-b border-[var(--rig-paper-18)] px-6 py-6 text-left transition-colors last:border-b-0 focus-visible:outline-2 sm:px-8"
+                  className="relative min-h-[44px] w-full border-b border-[var(--rig-paper-18)] px-4 py-5 text-left transition-colors last:border-b-0 focus-visible:outline-2 sm:px-8 sm:py-6"
                 >
                   {/* Left 2px active bar */}
                   <span
@@ -156,7 +156,7 @@ export function AgentOrchestration() {
           </div>
 
           {/* Right Technical Schematic Viewport */}
-          <div className="flex flex-col justify-between border-t border-[var(--rig-paper-18)] bg-[#101514] p-7 sm:p-10 lg:border-t-0 lg:border-l">
+          <div className="flex flex-col justify-between border-t border-[var(--rig-paper-18)] bg-[#101514] p-5 sm:p-10 lg:border-t-0 lg:border-l">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--rig-paper-12)] pb-3 rig-mono text-[10.5px] uppercase tracking-[0.12em]">
               <span className="text-[var(--rig-blue)]">{activeStep.diagramLabel}</span>
               <span className="text-[var(--rig-paper-40)]">Illustrative Loop</span>
@@ -203,7 +203,7 @@ export function AgentOrchestration() {
             </div>
 
             <div className="border-t border-[var(--rig-paper-12)] pt-3 rig-mono text-[10.5px] uppercase tracking-[0.1em] text-[var(--rig-paper-40)]">
-              Click any step on the left to inspect its runtime state
+              Select any step to inspect its runtime state
             </div>
           </div>
         </div>

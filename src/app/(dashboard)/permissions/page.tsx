@@ -242,7 +242,7 @@ export default function PermissionsPage() {
         </div>
 
         <div className="hidden overflow-x-auto border-t border-line md:block">
-          <table className="data-table min-w-[860px]">
+          <table className="data-table">
             <thead>
               <tr>
                 <th>Member</th>
@@ -328,17 +328,17 @@ export default function PermissionsPage() {
                 <span className="badge shrink-0 bg-surface-2 text-ink-2">{member.role}</span>
               </div>
 
-              <div className="mt-3 grid grid-cols-3 gap-2 pl-10">
-                <label className="flex items-center gap-1.5 text-[11px] text-ink-2">
-                  <input type="checkbox" checked={member.canDispatch} onChange={() => toggle(member.id, "canDispatch")} className="h-3.5 w-3.5 accent-accent" />
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <label className="flex min-h-[42px] items-center justify-center gap-1.5 border border-line bg-surface-2/30 px-2 text-[11px] text-ink-2">
+                  <input type="checkbox" checked={member.canDispatch} onChange={() => toggle(member.id, "canDispatch")} className="h-4 w-4 accent-accent" />
                   Dispatch
                 </label>
-                <label className="flex items-center gap-1.5 text-[11px] text-ink-2">
-                  <input type="checkbox" checked={member.canMerge} onChange={() => toggle(member.id, "canMerge")} className="h-3.5 w-3.5 accent-accent" />
+                <label className="flex min-h-[42px] items-center justify-center gap-1.5 border border-line bg-surface-2/30 px-2 text-[11px] text-ink-2">
+                  <input type="checkbox" checked={member.canMerge} onChange={() => toggle(member.id, "canMerge")} className="h-4 w-4 accent-accent" />
                   Merge
                 </label>
-                <label className="flex items-center gap-1.5 text-[11px] text-ink-2">
-                  <input type="checkbox" checked={member.canViewBilling} onChange={() => toggle(member.id, "canViewBilling")} className="h-3.5 w-3.5 accent-accent" />
+                <label className="flex min-h-[42px] items-center justify-center gap-1.5 border border-line bg-surface-2/30 px-2 text-[11px] text-ink-2">
+                  <input type="checkbox" checked={member.canViewBilling} onChange={() => toggle(member.id, "canViewBilling")} className="h-4 w-4 accent-accent" />
                   Billing
                 </label>
               </div>
@@ -413,13 +413,13 @@ export default function PermissionsPage() {
       </section>
 
       {inviteOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[1px] animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 backdrop-blur-[1px] animate-fade-in sm:p-4">
           <div
             ref={inviteDialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="invite-modal-title"
-            className="panel w-full max-w-md shadow-float"
+            className="panel max-h-[90dvh] w-full max-w-md overflow-y-auto shadow-float"
           >
             <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
               <div>

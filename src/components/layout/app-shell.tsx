@@ -13,6 +13,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       const saved = localStorage.getItem("mv-sidebar-collapsed")
       if (saved === "1") {
         queueMicrotask(() => setCollapsed(true))
+      } else if (
+        saved === null &&
+        window.matchMedia("(min-width: 1024px) and (max-width: 1279px)").matches
+      ) {
+        queueMicrotask(() => setCollapsed(true))
       }
     } catch {
       /* ignore */
@@ -32,7 +37,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div data-app="vault" className="min-h-screen bg-canvas text-ink">
+    <div data-app="vault" className="min-h-screen overflow-x-clip bg-canvas text-ink">
       <Sidebar
         mobileOpen={mobileOpen}
         collapsed={collapsed}
@@ -42,7 +47,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div
         className={[
-          "flex min-h-screen flex-col transition-[padding-left] duration-200 ease-out",
+          "flex min-h-screen min-w-0 flex-col transition-[padding-left] duration-200 ease-out",
           collapsed ? "lg:pl-[4.25rem]" : "lg:pl-60",
         ].join(" ")}
       >
@@ -51,7 +56,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           sidebarCollapsed={collapsed}
           onToggleSidebar={toggleCollapsed}
         />
-        <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 pb-16 pt-6 sm:px-6 lg:px-8 lg:py-8">
+        <main className="mx-auto w-full max-w-[1440px] min-w-0 flex-1 px-4 pb-16 pt-5 sm:px-6 lg:px-8 lg:py-8">
           {children}
         </main>
       </div>

@@ -9,6 +9,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts"
+import { useMediaQuery } from "@/lib/use-media-query"
 import { formatCurrency, formatNumber } from "@/lib/utils"
 
 const CHART_ACCENT = "var(--mv-chart-1)"
@@ -78,26 +79,28 @@ function TrendTooltip({
 }
 
 export function ApiTokenChart({ dailyTrend, byModel }: ApiTokenChartProps) {
+  const isMobile = useMediaQuery("(max-width: 639px)")
   const topModels = [...byModel].sort((a, b) => b.cost - a.cost).slice(0, 5)
   const maxCost = Math.max(...topModels.map((m) => m.cost), 0.0001)
+  const recentTrend = dailyTrend.slice(-7)
 
   return (
     <section className="grid gap-8 border-t border-line pt-5 lg:grid-cols-3">
-      <div className="lg:col-span-2">
+      <div className="min-w-0 lg:col-span-2">
         <div className="flex items-start justify-between gap-4 pb-4">
           <div>
             <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">Token consumption</h2>
             <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">Daily ingest and generation over recent activity.</p>
           </div>
-          <span className="flex items-center gap-1.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] text-ink-3">
+          <span className="flex shrink-0 items-center gap-1.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] text-ink-3">
             <span className="h-1.5 w-1.5 rounded-full" style={{ background: CHART_ACCENT }} />
             Tokens
           </span>
         </div>
 
-        <div className="h-[260px] w-full border-t border-line pt-4">
+        <div className="h-[210px] w-full border-t border-line pt-4 sm:h-[260px]">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={dailyTrend} margin={{ top: 4, right: 12, left: -14, bottom: 0 }}>
+            <LineChart data={dailyTrend} margin={{ top: 4, right: 12, left: isMobile ? -8 : -14, bottom: 0 }}>
               <CartesianGrid stroke={GRID_COLOR} strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="date"
@@ -105,6 +108,8 @@ export function ApiTokenChart({ dailyTrend, byModel }: ApiTokenChartProps) {
                 axisLine={false}
                 tickLine={false}
                 dy={6}
+                interval="preserveStartEnd"
+                minTickGap={isMobile ? 36 : 20}
                 tickFormatter={(value: string) => {
                   const parts = value.split("-")
                   return parts.length >= 3 ? `${parts[1]}/${parts[2]}` : value
@@ -114,7 +119,8 @@ export function ApiTokenChart({ dailyTrend, byModel }: ApiTokenChartProps) {
                 tick={{ fill: AXIS_COLOR, fontSize: 10.5 }}
                 axisLine={false}
                 tickLine={false}
-                width={48}
+                width={isMobile ? 40 : 48}
+                tickCount={isMobile ? 4 : 5}
                 tickFormatter={(value: number) => formatNumber(value)}
               />
               <Tooltip content={<TrendTooltip />} cursor={{ stroke: CURSOR_COLOR, strokeDasharray: "4 4" }} />
@@ -122,6 +128,23 @@ export function ApiTokenChart({ dailyTrend, byModel }: ApiTokenChartProps) {
             </LineChart>
           </ResponsiveContainer>
         </div>
+
+        {recentTrend.length > 0 && (
+          <details className="mt-3 border-t border-line pt-2.5 sm:hidden">
+            <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3 select-none">
+              View daily summary ({recentTrend.length} days)
+            </summary>
+            <div className="mt-2 divide-y divide-line border-t border-line font-mono text-[11px]">
+              {recentTrend.map((point) => (
+                <div key={point.date} className="grid grid-cols-[4.5rem_1fr_1fr] items-center gap-2 py-2 tabular-nums">
+                  <span className="text-ink-3">{point.date.slice(5)}</span>
+                  <span className="text-right text-ink-2">{formatNumber(point.tokens)} tok</span>
+                  <span className="text-right font-medium text-ink">{formatCurrency(point.cost, "USD")}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
       </div>
 
       <div className="border-t border-line pt-4 lg:border-t-0 lg:pt-0">

@@ -215,7 +215,7 @@ export default function BillingPage() {
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="select select-sm w-auto"
+            className="select select-sm w-full sm:w-auto"
             aria-label="Filter by type"
           >
             <option value="all">All types</option>
@@ -248,13 +248,13 @@ export default function BillingPage() {
         ) : (
           <>
             <div className="hidden overflow-x-auto md:block">
-              <table className="data-table min-w-[760px]">
+              <table className="data-table">
                 <thead>
                   <tr>
                     <th>Date</th>
                     <th>Description</th>
                     <th>Type</th>
-                    <th>Method</th>
+                    <th className="hidden lg:table-cell">Method</th>
                     <th>Status</th>
                     <th className="text-right">Amount</th>
                   </tr>
@@ -280,7 +280,7 @@ export default function BillingPage() {
                           {TYPE_LABEL[record.type] || record.type}
                         </span>
                       </td>
-                      <td className="text-[12px] text-ink-2">{record.paymentMethod || "—"}</td>
+                      <td className="hidden text-[12px] text-ink-2 lg:table-cell">{record.paymentMethod || "—"}</td>
                       <td>
                         <span
                           className={cn(
@@ -350,13 +350,13 @@ export default function BillingPage() {
       </section>
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[1px] animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 backdrop-blur-[1px] animate-fade-in sm:p-4">
           <div
             ref={modalRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="billing-modal-title"
-            className="panel relative max-h-[90vh] w-full max-w-lg overflow-y-auto shadow-float"
+            className="panel relative max-h-[90dvh] w-full max-w-lg overflow-y-auto shadow-float"
           >
             <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
               <div>
@@ -389,7 +389,7 @@ export default function BillingPage() {
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label className="label">Amount</label>
                     <input
@@ -413,7 +413,7 @@ export default function BillingPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label className="label">Type</label>
                     <select value={type} onChange={(e) => setType(e.target.value)} className="select">
@@ -432,7 +432,7 @@ export default function BillingPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label className="label">Payment method</label>
                     <input

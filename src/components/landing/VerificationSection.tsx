@@ -89,17 +89,18 @@ const CASES: CodeCase[] = [
 
 export function VerificationSection() {
   const [selectedId, setSelectedId] = useState<string>("sql")
+  const [mobilePane, setMobilePane] = useState<"both" | "issue" | "fix">("both")
   const item = CASES.find((c) => c.id === selectedId) || CASES[0]
 
   return (
     <section
       id="verification"
-      className="border-b border-[var(--rig-paper-18)] py-20 sm:py-28"
+      className="scroll-mt-20 border-b border-[var(--rig-paper-18)] py-16 sm:py-28"
     >
       <div className="rig-container">
         <div className="mx-auto max-w-[720px] text-center">
           <span className="rig-badge mb-6">Code Demonstration</span>
-          <h2 className="rig-display text-[clamp(2.4rem,4.8vw,4.1rem)] font-bold leading-[0.95] text-[var(--rig-paper)]">
+          <h2 className="rig-display text-[clamp(1.9rem,4.6vw,4.1rem)] font-bold leading-[0.95] text-[var(--rig-paper)]">
             Clear findings.
             <br />
             Actionable fixes.
@@ -119,7 +120,7 @@ export function VerificationSection() {
                 type="button"
                 onClick={() => setSelectedId(c.id)}
                 aria-pressed={active}
-                className={`border px-3.5 py-2 rig-mono text-[11px] uppercase tracking-[0.08em] transition-colors ${
+                className={`min-h-[44px] border px-3.5 py-2 rig-mono text-[11px] uppercase tracking-[0.08em] transition-colors ${
                   active
                     ? "border-[var(--rig-blue)] bg-[var(--rig-blue-dim)] text-[var(--rig-paper)]"
                     : "border-[var(--rig-paper-18)] bg-[#101514] text-[var(--rig-paper-50)] hover:text-[var(--rig-paper)]"
@@ -131,10 +132,33 @@ export function VerificationSection() {
           })}
         </div>
 
+        {/* Mobile Issue / Fix Focus Toggle */}
+        <div className="mt-4 flex gap-2 lg:hidden" role="group" aria-label="Comparison view">
+          {[
+            { id: "both" as const, label: "Both" },
+            { id: "issue" as const, label: "01 / Issue" },
+            { id: "fix" as const, label: "02 / Fix" },
+          ].map((mode) => (
+            <button
+              key={mode.id}
+              type="button"
+              onClick={() => setMobilePane(mode.id)}
+              aria-pressed={mobilePane === mode.id}
+              className={`min-h-[42px] flex-1 border rig-mono text-[10.5px] uppercase tracking-[0.08em] transition-colors ${
+                mobilePane === mode.id
+                  ? "border-[var(--rig-blue)] bg-[var(--rig-blue-dim)] text-[var(--rig-paper)]"
+                  : "border-[var(--rig-paper-18)] bg-[#101514] text-[var(--rig-paper-50)]"
+              }`}
+            >
+              {mode.label}
+            </button>
+          ))}
+        </div>
+
         {/* Side-by-Side Before & After Demonstration */}
-        <div className="mt-8 border border-[var(--rig-paper-18)] bg-[#101214]">
+        <div className="mt-6 border border-[var(--rig-paper-18)] bg-[#101214] lg:mt-8">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--rig-paper-12)] px-4 py-2.5 rig-mono text-[11px]">
-            <span className="text-[var(--rig-paper-75)]">{item.file}</span>
+            <span className="min-w-0 truncate text-[var(--rig-paper-75)]">{item.file}</span>
             <span className="text-[var(--rig-yellow)] uppercase tracking-[0.1em]">
               Illustrative Example · Not a live security certification
             </span>
@@ -142,7 +166,11 @@ export function VerificationSection() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2">
             {/* 01 / THE ISSUE */}
-            <div className="border-b border-[var(--rig-paper-12)] p-5 sm:p-6 lg:border-b-0 lg:border-r">
+            <div
+              className={`border-b border-[var(--rig-paper-12)] p-4 sm:p-6 lg:border-b-0 lg:border-r ${
+                mobilePane === "fix" ? "hidden lg:block" : ""
+              }`}
+            >
               <div className="mb-4 flex items-center justify-between gap-2">
                 <span className="rig-mono text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--rig-red)]">
                   01 / The Issue
@@ -181,7 +209,7 @@ export function VerificationSection() {
             </div>
 
             {/* 02 / THE FIX */}
-            <div className="p-5 sm:p-6">
+            <div className={`p-4 sm:p-6 ${mobilePane === "issue" ? "hidden lg:block" : ""}`}>
               <div className="mb-4 flex items-center justify-between gap-2">
                 <span className="rig-mono text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--rig-green)]">
                   02 / The Fix

@@ -118,13 +118,13 @@ export function UsageModal({
   const hasQuota = fields.some((field) => field.quota !== null)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[1px] animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 backdrop-blur-[1px] animate-fade-in sm:p-4">
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="usage-modal-title"
-        className="panel relative w-full max-w-md shadow-float"
+        className="panel relative max-h-[90dvh] w-full max-w-md overflow-y-auto shadow-float"
       >
         <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
           <div className="flex items-start gap-2.5">

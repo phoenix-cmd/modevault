@@ -254,15 +254,15 @@ export default function IntegrationsPage() {
         ) : (
           <>
             <div className="hidden overflow-x-auto border-t border-line md:block">
-              <table className="data-table min-w-[860px]">
+              <table className="data-table">
                 <thead>
                   <tr>
                     <th>Provider</th>
                     <th>Status</th>
-                    <th className="text-center">Sub quotas</th>
+                    <th className="hidden text-center xl:table-cell">Sub quotas</th>
                     <th className="text-center">API tokens</th>
                     <th className="text-center">Invoices</th>
-                    <th>Last sync</th>
+                    <th className="hidden lg:table-cell">Last sync</th>
                     <th className="text-right">Action</th>
                   </tr>
                 </thead>
@@ -282,7 +282,7 @@ export default function IntegrationsPage() {
                         </div>
                       </td>
                       <td><StatusBadge status={item.status} /></td>
-                      <td className="text-center">
+                      <td className="hidden text-center xl:table-cell">
                         {item.features.subscriptionQuotas ? (
                           <Check className="mx-auto h-3.5 w-3.5 text-success" strokeWidth={2.2} />
                         ) : (
@@ -303,7 +303,7 @@ export default function IntegrationsPage() {
                           <Minus className="mx-auto h-3.5 w-3.5 text-ink-3/50" strokeWidth={2} />
                         )}
                       </td>
-                      <td className="whitespace-nowrap font-mono text-[10.5px] text-ink-3">{item.lastSync || "Never"}</td>
+                      <td className="hidden whitespace-nowrap font-mono text-[10.5px] text-ink-3 lg:table-cell">{item.lastSync || "Never"}</td>
                       <td className="text-right">
                         <button
                           onClick={() => openModal(item)}
@@ -325,23 +325,26 @@ export default function IntegrationsPage() {
                     <div className="flex min-w-0 items-center gap-2.5">
                       <ProviderIcon slug={item.slug} size="sm" />
                       <div className="min-w-0">
-                        <p className="text-[13px] font-medium text-ink">{item.name}</p>
+                        <p className="truncate text-[13px] font-medium text-ink">{item.name}</p>
                         <p className="mt-0.5 text-[11px] text-ink-3">{item.lastSync ? `Synced ${item.lastSync}` : "Never synced"}</p>
                       </div>
                     </div>
                     <StatusBadge status={item.status} />
                   </div>
-                  <p className="mt-2 line-clamp-2 pl-10 text-[11.5px] leading-relaxed text-ink-3">{item.notes}</p>
-                  <div className="mt-3 flex items-center justify-between pl-10">
+                  <p className="mt-2 line-clamp-2 text-[11.5px] leading-relaxed text-ink-3 sm:pl-10">{item.notes}</p>
+                  <div className="mt-3 flex items-center justify-between gap-2 sm:pl-10">
                     <div className="flex items-center gap-3 font-mono text-[9.5px] uppercase tracking-[0.08em] text-ink-3">
                       <span className={item.features.apiTokens ? "text-ink-2" : ""}>API</span>
                       <span className={item.features.invoices ? "text-ink-2" : ""}>Invoices</span>
                       <span className={item.features.subscriptionQuotas ? "text-ink-2" : ""}>Quotas</span>
                     </div>
-                    <button onClick={() => openModal(item)} className="btn-ghost btn-sm">
+                    <button onClick={() => openModal(item)} className="btn-secondary btn-sm shrink-0">
                       {item.status === "connected" ? "Manage" : "Connect"}
                     </button>
                   </div>
+                  {item.keyPreview && (
+                    <p className="mt-2 font-mono text-[10px] text-ink-3 sm:pl-10">Key preview: {item.keyPreview}</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -350,13 +353,13 @@ export default function IntegrationsPage() {
       </section>
 
       {modalOpen && selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[1px] animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 backdrop-blur-[1px] animate-fade-in sm:p-4">
           <div
             ref={modalRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="integration-modal-title"
-            className="panel relative w-full max-w-lg shadow-float"
+            className="panel relative max-h-[90dvh] w-full max-w-lg overflow-y-auto shadow-float"
           >
             <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
               <div className="flex items-center gap-2.5">

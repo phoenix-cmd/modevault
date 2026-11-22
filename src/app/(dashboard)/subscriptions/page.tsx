@@ -194,8 +194,8 @@ export default function SubscriptionsPage() {
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="select select-sm w-auto" aria-label="Filter by status">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="select select-sm w-full sm:w-auto" aria-label="Filter by status">
                 <option value="all">All statuses</option>
                 <option value="active">Active</option>
                 <option value="paused">Paused</option>
@@ -203,20 +203,20 @@ export default function SubscriptionsPage() {
                 <option value="cancelled">Cancelled</option>
               </select>
 
-              <select value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)} className="select select-sm w-auto" aria-label="Filter by provider">
+              <select value={providerFilter} onChange={(e) => setProviderFilter(e.target.value)} className="select select-sm w-full sm:w-auto" aria-label="Filter by provider">
                 <option value="all">All providers</option>
                 {PROVIDER_LIST.map((p) => (
                   <option key={p.slug} value={p.slug}>{p.name}</option>
                 ))}
               </select>
 
-              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="select select-sm w-auto" aria-label="Filter by category">
+              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="select select-sm w-full sm:w-auto" aria-label="Filter by category">
                 <option value="all">All categories</option>
                 <option value="consumer">Consumer</option>
                 <option value="api">API account</option>
               </select>
 
-              <div className="segmented" role="group" aria-label="View mode">
+              <div className="segmented justify-self-end" role="group" aria-label="View mode">
                 <button
                   onClick={() => setViewMode("list")}
                   className={`segmented-item ${viewMode === "list" ? "segmented-item-active" : ""}`}

@@ -283,66 +283,133 @@ export default function OverviewPage() {
         ) : executions.length === 0 ? (
           <EmptyPanel message="No agent runs recorded yet. Open Agent Center to dispatch the first execution against a project." />
         ) : (
-          <div className="overflow-x-auto border-y border-line">
-            <table className="data-table min-w-[740px]">
-              <thead>
-                <tr>
-                  <th>Execution</th>
-                  <th>Project</th>
-                  <th>Branch</th>
-                  <th>Tasks</th>
-                  <th className="text-right">Tokens</th>
-                  <th className="text-right">Est. cost</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {executions.slice(0, 6).map((exec) => (
-                  <tr key={exec.id}>
-                    <td className="max-w-[260px]">
+          <>
+            <div className="hidden overflow-x-auto border-y border-line md:block">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Execution</th>
+                    <th>Project</th>
+                    <th className="hidden xl:table-cell">Branch</th>
+                    <th className="hidden lg:table-cell">Tasks</th>
+                    <th className="text-right">Tokens</th>
+                    <th className="text-right">Est. cost</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {executions.slice(0, 6).map((exec) => (
+                    <tr key={exec.id}>
+                      <td className="max-w-[260px]">
+                        <Link
+                          href="/agents"
+                          className="block truncate font-medium text-ink transition-colors hover:text-accent"
+                        >
+                          {exec.title}
+                        </Link>
+                      </td>
+                      <td className="whitespace-nowrap font-mono text-[11px] text-ink-2">
+                        {exec.project?.name || "—"}
+                      </td>
+                      <td className="hidden whitespace-nowrap font-mono text-[11px] text-ink-3 xl:table-cell">
+                        {exec.targetBranch || "—"}
+                      </td>
+                      <td className="hidden whitespace-nowrap font-mono text-[11px] tabular-nums text-ink-2 lg:table-cell">
+                        {exec.tasks?.length ?? 0} stages
+                      </td>
+                      <td className="text-right font-mono text-[11px] tabular-nums text-ink-2">
+                        {formatNumber(Number(exec.totalTokens || 0))}
+                      </td>
+                      <td className="text-right font-mono text-[11px] tabular-nums text-ink">
+                        ${Number(exec.estimatedCost || 0).toFixed(3)}
+                      </td>
+                      <td>
+                        <span
+                          className={cn(
+                            "badge",
+                            exec.status === "completed"
+                              ? "bg-success-soft text-success"
+                              : exec.status === "awaiting_approval"
+                              ? "bg-accent-soft text-accent"
+                              : exec.status === "failed"
+                              ? "bg-danger-soft text-danger"
+                              : "bg-surface-2 text-ink-3"
+                          )}
+                        >
+                          {String(exec.status || "unknown").replaceAll("_", " ")}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="divide-y divide-line border-y border-line md:hidden">
+              {executions.slice(0, 6).map((exec) => (
+                <div key={exec.id} className="py-3.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
                       <Link
                         href="/agents"
-                        className="block truncate font-medium text-ink transition-colors hover:text-accent"
+                        className="block text-[13px] font-medium leading-snug text-ink transition-colors hover:text-accent"
                       >
                         {exec.title}
                       </Link>
-                    </td>
-                    <td className="whitespace-nowrap font-mono text-[11px] text-ink-2">
-                      {exec.project?.name || "—"}
-                    </td>
-                    <td className="whitespace-nowrap font-mono text-[11px] text-ink-3">
-                      {exec.targetBranch || "—"}
-                    </td>
-                    <td className="whitespace-nowrap font-mono text-[11px] tabular-nums text-ink-2">
-                      {exec.tasks?.length ?? 0} stages
-                    </td>
-                    <td className="text-right font-mono text-[11px] tabular-nums text-ink-2">
-                      {formatNumber(Number(exec.totalTokens || 0))}
-                    </td>
-                    <td className="text-right font-mono text-[11px] tabular-nums text-ink">
-                      ${Number(exec.estimatedCost || 0).toFixed(3)}
-                    </td>
-                    <td>
-                      <span
-                        className={cn(
-                          "badge",
-                          exec.status === "completed"
-                            ? "bg-success-soft text-success"
-                            : exec.status === "awaiting_approval"
-                            ? "bg-accent-soft text-accent"
-                            : exec.status === "failed"
-                            ? "bg-danger-soft text-danger"
-                            : "bg-surface-2 text-ink-3"
-                        )}
-                      >
-                        {String(exec.status || "unknown").replaceAll("_", " ")}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      <p className="mt-1 font-mono text-[10.5px] text-ink-3">
+                        {exec.project?.name || "Workspace"} ·{" "}
+                        <span className="tabular-nums text-ink-2">
+                          ${Number(exec.estimatedCost || 0).toFixed(3)}
+                        </span>
+                      </p>
+                    </div>
+                    <span
+                      className={cn(
+                        "badge shrink-0",
+                        exec.status === "completed"
+                          ? "bg-success-soft text-success"
+                          : exec.status === "awaiting_approval"
+                          ? "bg-accent-soft text-accent"
+                          : exec.status === "failed"
+                          ? "bg-danger-soft text-danger"
+                          : "bg-surface-2 text-ink-3"
+                      )}
+                    >
+                      {String(exec.status || "unknown").replaceAll("_", " ")}
+                    </span>
+                  </div>
+
+                  <details className="mt-2 group">
+                    <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3 select-none hover:text-ink-2">
+                      Run telemetry &amp; branch details
+                    </summary>
+                    <div className="mt-2 grid grid-cols-3 gap-2 border-t border-line/70 pt-2 font-mono text-[10.5px]">
+                      <div className="min-w-0">
+                        <span className="block text-[9px] uppercase tracking-[0.08em] text-ink-3">
+                          Branch
+                        </span>
+                        <span className="truncate block text-ink-2">{exec.targetBranch || "—"}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[9px] uppercase tracking-[0.08em] text-ink-3">
+                          Tasks
+                        </span>
+                        <span className="tabular-nums text-ink-2">{exec.tasks?.length ?? 0} stages</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="block text-[9px] uppercase tracking-[0.08em] text-ink-3">
+                          Tokens
+                        </span>
+                        <span className="tabular-nums text-ink-2">
+                          {formatNumber(Number(exec.totalTokens || 0))}
+                        </span>
+                      </div>
+                    </div>
+                  </details>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </section>
 

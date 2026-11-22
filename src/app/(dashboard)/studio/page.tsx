@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
 import {
   Play,
   RotateCw,
@@ -11,12 +12,23 @@ import {
   ExternalLink,
   Save,
   PanelBottom,
+  PanelLeft,
   Square,
+  AlertTriangle,
 } from "lucide-react"
-import Editor from "@monaco-editor/react"
 import { PageHeader } from "@/components/ui/page-header"
 import { StatBand } from "@/components/ui/stat-band"
+import { useMediaQuery } from "@/lib/use-media-query"
 import { cn } from "@/lib/utils"
+
+const Editor = dynamic(() => import("@monaco-editor/react"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full min-h-[300px] items-center justify-center font-mono text-[11px] uppercase tracking-[0.12em] text-ink-3">
+      Loading Monaco editor…
+    </div>
+  ),
+})
 
 export default function StudioPage() {
   const [projects, setProjects] = useState<any[]>([])
@@ -28,6 +40,12 @@ export default function StudioPage() {
   const [previewRunning, setPreviewRunning] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [previewFrameKey, setPreviewFrameKey] = useState(0)
+  const isMdUp = useMediaQuery("(min-width: 768px)")
+  const isXlUp = useMediaQuery("(min-width: 1280px)")
+  const [explorerOverride, setExplorerOverride] = useState<boolean | null>(null)
+  const explorerOpen = explorerOverride ?? isXlUp
+  const [mobileTab, setMobileTab] = useState<"files" | "code" | "preview" | "tools">("code")
+
   const [viewport, setViewport] = useState<"desktop" | "tablet" | "mobile">("desktop")
   const [activePane, setActivePane] = useState<"split" | "editor" | "preview">("split")
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -35,6 +53,11 @@ export default function StudioPage() {
   const [showDevTools, setShowDevTools] = useState(true)
   const [editorTheme, setEditorTheme] = useState<"vs-dark" | "light">("vs-dark")
   const [filesLoading, setFilesLoading] = useState(true)
+
+  const showFilesPane = !isMdUp && mobileTab === "files"
+  const showEditorPane = isMdUp ? activePane === "editor" || activePane === "split" : mobileTab === "code"
+  const showPreviewPane = isMdUp ? activePane === "preview" || activePane === "split" : mobileTab === "preview"
+  const showDevToolsPanel = isMdUp ? showDevTools : mobileTab === "tools"
 
   // Keep the editor surface in step with the site theme.
   useEffect(() => {
@@ -223,7 +246,17 @@ export default function StudioPage() {
         description="Edit project files with Monaco, manage a sandboxed preview session, and inspect local sample DevTools output in a single workspace."
         action={
           <div className="flex flex-wrap items-center gap-2">
-            <button onClick={() => setShowDevTools(!showDevTools)} className="btn-secondary btn-sm">
+            <button
+              onClick={() => setExplorerOverride(!explorerOpen)}
+              className="btn-secondary btn-sm hidden md:inline-flex"
+            >
+              <PanelLeft className="h-3.5 w-3.5" strokeWidth={1.8} />
+              {explorerOpen ? "Hide files" : "Files"}
+            </button>
+            <button
+              onClick={() => setShowDevTools(!showDevTools)}
+              className="btn-secondary btn-sm hidden md:inline-flex"
+            >
               <PanelBottom className="h-3.5 w-3.5" strokeWidth={1.8} />
               {showDevTools ? "Hide DevTools" : "Show DevTools"}
             </button>
@@ -290,212 +323,283 @@ export default function StudioPage() {
             </label>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="segmented" role="group" aria-label="Preview viewport">
+          <div className="flex w-full flex-wrap items-center justify-between gap-2 md:w-auto">
+            <div className="segmented w-full md:hidden" role="group" aria-label="Mobile studio panels">
               {[
-                { id: "desktop" as const, label: "Desktop", Icon: Monitor },
-                { id: "tablet" as const, label: "Tablet", Icon: Tablet },
-                { id: "mobile" as const, label: "Mobile", Icon: Smartphone },
-              ].map(({ id, label, Icon }) => (
+                { id: "files" as const, label: "Files" },
+                { id: "code" as const, label: "Code" },
+                { id: "preview" as const, label: "Preview" },
+                { id: "tools" as const, label: "Tools" },
+              ].map((tab) => (
                 <button
-                  key={id}
-                  onClick={() => setViewport(id)}
-                  aria-pressed={viewport === id}
-                  aria-label={label}
-                  title={label}
-                  className={cn("segmented-item h-8 w-8 px-0", viewport === id && "segmented-item-active")}
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setMobileTab(tab.id)}
+                  aria-pressed={mobileTab === tab.id}
+                  className={cn("segmented-item flex-1", mobileTab === tab.id && "segmented-item-active")}
                 >
-                  <Icon className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  {tab.label}
                 </button>
               ))}
             </div>
-            <div className="segmented" role="group" aria-label="Workspace pane">
-              {(["split", "editor", "preview"] as const).map((pane) => (
-                <button
-                  key={pane}
-                  onClick={() => setActivePane(pane)}
-                  aria-pressed={activePane === pane}
-                  className={cn("segmented-item px-2.5 capitalize", activePane === pane && "segmented-item-active")}
-                >
-                  {pane}
-                </button>
-              ))}
+
+            <div className="hidden items-center gap-2 md:flex">
+              <div className="segmented" role="group" aria-label="Preview viewport">
+                {[
+                  { id: "desktop" as const, label: "Desktop", Icon: Monitor },
+                  { id: "tablet" as const, label: "Tablet", Icon: Tablet },
+                  { id: "mobile" as const, label: "Mobile", Icon: Smartphone },
+                ].map(({ id, label, Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => setViewport(id)}
+                    aria-pressed={viewport === id}
+                    aria-label={label}
+                    title={label}
+                    className={cn("segmented-item h-8 w-8 px-0", viewport === id && "segmented-item-active")}
+                  >
+                    <Icon className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  </button>
+                ))}
+              </div>
+              <div className="segmented" role="group" aria-label="Workspace pane">
+                {(["split", "editor", "preview"] as const).map((pane) => (
+                  <button
+                    key={pane}
+                    onClick={() => setActivePane(pane)}
+                    aria-pressed={activePane === pane}
+                    className={cn("segmented-item px-2.5 capitalize", activePane === pane && "segmented-item-active")}
+                  >
+                    {pane}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="flex min-h-[720px] flex-col">
+        <div className="flex min-h-[420px] flex-col md:min-h-[680px]">
           <div className="flex min-h-0 flex-1 overflow-hidden">
-            <aside className="hidden w-60 shrink-0 flex-col overflow-hidden border-r border-line bg-surface-2/10 md:flex">
-              <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
-                <span className="font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">Explorer</span>
-                <span className="font-mono text-[10px] tabular-nums text-ink-3">{String(fileList.length).padStart(2, "0")}</span>
-              </div>
-              <div className="flex-1 overflow-y-auto py-1">
-                {filesLoading && (
-                  <div className="space-y-2 px-3 py-3">
-                    {Array.from({ length: 8 }).map((_, i) => (
-                      <div key={i} className="skeleton h-3 w-full" />
-                    ))}
-                  </div>
+            {((isMdUp && explorerOpen) || showFilesPane) && (
+              <aside
+                className={cn(
+                  "flex shrink-0 flex-col overflow-hidden bg-surface-2/10",
+                  showFilesPane ? "w-full min-h-[380px]" : "w-60 border-r border-line"
                 )}
-                {!filesLoading && fileList.length === 0 && (
-                  <div className="px-3 py-8">
-                    <p className="text-[12.5px] font-medium text-ink">No workspace files</p>
-                    <p className="mt-1 text-[11.5px] leading-relaxed text-ink-3">Select a project with an extracted workspace to browse files.</p>
-                  </div>
-                )}
-                {fileList.map((file) => {
-                  const isSelected = selectedFile === file
-                  const parts = file.split("/")
-                  const name = parts.pop()
-                  const folder = parts.join("/")
-                  return (
-                    <button
-                      key={file}
-                      onClick={() => setSelectedFile(file)}
-                      title={file}
-                      className={cn(
-                        "relative flex w-full items-center gap-2 px-3 py-2 text-left transition-colors",
-                        isSelected ? "bg-surface-2/80 text-ink" : "text-ink-2 hover:bg-surface-2/50 hover:text-ink"
-                      )}
-                    >
-                      <span className={cn("absolute inset-y-1 left-0 w-[2px] rounded-full bg-accent transition-opacity", isSelected ? "opacity-100" : "opacity-0")} />
-                      <FileCode className={cn("h-3.5 w-3.5 shrink-0", isSelected ? "text-accent" : "text-ink-3")} strokeWidth={1.8} />
-                      <span className="min-w-0">
-                        <span className="block truncate font-mono text-[10.5px]">{name}</span>
-                        {folder && <span className="block truncate font-mono text-[9px] text-ink-3">{folder}</span>}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-              <div className="border-t border-line px-3 py-2.5 font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-3">
-                {activeProject?.name || "No project"} · {previewRunning ? "preview live" : "preview stopped"}
-              </div>
-            </aside>
-
-            <div className="flex min-w-0 flex-1 flex-col overflow-hidden md:flex-row">
-              {(activePane === "editor" || activePane === "split") && (
-                <div
-                  className={cn(
-                    "flex min-h-0 min-w-0 flex-col overflow-hidden bg-surface",
-                    activePane === "split" ? "h-1/2 w-full border-b border-line md:h-auto md:w-1/2 md:border-b-0 md:border-r" : "h-full w-full"
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-3 border-b border-line bg-surface-2/20 px-3 py-2">
-                    <div className="min-w-0">
-                      <p className="truncate font-mono text-[10.5px] text-ink">{selectedFile || "No file selected"}</p>
-                      <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-ink-3">Monaco editor · {editorLanguage}</p>
-                    </div>
-                    <button onClick={handleSave} className="btn-secondary btn-sm" disabled={!projectId || !selectedFile}>
-                      <Save className="h-3 w-3" strokeWidth={1.8} />
-                      {saveSuccess ? "Saved" : "Save"}
-                    </button>
-                  </div>
-                  <div className="min-h-0 flex-1">
-                    <Editor
-                      height="100%"
-                      language={editorLanguage}
-                      theme={editorTheme}
-                      value={code}
-                      onChange={(v) => setCode(v || "")}
-                      options={{
-                        fontSize: 12.5,
-                        minimap: { enabled: false },
-                        scrollBeyondLastLine: false,
-                        automaticLayout: true,
-                        lineNumbers: "on",
-                        fontFamily: "var(--font-jetbrains), monospace",
-                        padding: { top: 12, bottom: 12 },
-                      }}
-                    />
-                  </div>
+              >
+                <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
+                  <span className="font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">Explorer</span>
+                  <span className="font-mono text-[10px] tabular-nums text-ink-3">{String(fileList.length).padStart(2, "0")}</span>
                 </div>
-              )}
-
-              {(activePane === "preview" || activePane === "split") && (
-                <div
-                  className={cn(
-                    "flex min-h-0 flex-col overflow-hidden bg-canvas",
-                    activePane === "split" ? "h-1/2 w-full md:h-auto md:w-1/2" : "h-full w-full"
-                  )}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-surface-2/20 px-3 py-2">
-                    <div className="min-w-0">
-                      <p className="font-mono text-[9.5px] uppercase tracking-[0.12em] text-ink-3">Sandbox preview</p>
-                      <p className="mt-0.5 truncate font-mono text-[10.5px] text-ink-2" title={previewUrl || undefined}>
-                        {previewUrl || previewError || "Preview not running"}
-                      </p>
+                <div className="flex-1 overflow-y-auto py-1">
+                  {filesLoading && (
+                    <div className="space-y-2 px-3 py-3">
+                      {Array.from({ length: 8 }).map((_, i) => (
+                        <div key={i} className="skeleton h-3 w-full" />
+                      ))}
                     </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      {previewUrl && (
-                        <a href={previewUrl} target="_blank" rel="noreferrer" className="icon-btn h-7 w-7" title="Open preview in new tab" aria-label="Open preview in new tab">
-                          <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.8} />
-                        </a>
-                      )}
+                  )}
+                  {!filesLoading && fileList.length === 0 && (
+                    <div className="px-3 py-8">
+                      <p className="text-[12.5px] font-medium text-ink">No workspace files</p>
+                      <p className="mt-1 text-[11.5px] leading-relaxed text-ink-3">Select a project with an extracted workspace to browse files.</p>
+                    </div>
+                  )}
+                  {fileList.map((file) => {
+                    const isSelected = selectedFile === file
+                    const parts = file.split("/")
+                    const name = parts.pop()
+                    const folder = parts.join("/")
+                    return (
                       <button
-                        onClick={() => setPreviewFrameKey((key) => key + 1)}
-                        disabled={!previewRunning}
-                        className="icon-btn h-7 w-7"
-                        title="Reload preview"
-                        aria-label="Reload preview"
+                        key={file}
+                        onClick={() => {
+                          setSelectedFile(file)
+                          if (!isMdUp) setMobileTab("code")
+                        }}
+                        title={file}
+                        className={cn(
+                          "relative flex min-h-[44px] w-full items-center gap-2 px-3 py-2 text-left transition-colors md:min-h-0",
+                          isSelected ? "bg-surface-2/80 text-ink" : "text-ink-2 hover:bg-surface-2/50 hover:text-ink"
+                        )}
                       >
-                        <RotateCw className="h-3.5 w-3.5" strokeWidth={1.8} />
+                        <span className={cn("absolute inset-y-1 left-0 w-[2px] rounded-full bg-accent transition-opacity", isSelected ? "opacity-100" : "opacity-0")} />
+                        <FileCode className={cn("h-3.5 w-3.5 shrink-0", isSelected ? "text-accent" : "text-ink-3")} strokeWidth={1.8} />
+                        <span className="min-w-0">
+                          <span className="block truncate font-mono text-[11px] md:text-[10.5px]">{name}</span>
+                          {folder && <span className="block truncate font-mono text-[9.5px] text-ink-3 md:text-[9px]">{folder}</span>}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="border-t border-line px-3 py-2.5 font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-3">
+                  {activeProject?.name || "No project"} · {previewRunning ? "preview live" : "preview stopped"}
+                </div>
+              </aside>
+            )}
+
+            {!showFilesPane && !(!isMdUp && mobileTab === "tools") && (
+              <div className="flex min-w-0 flex-1 flex-col overflow-hidden md:flex-row">
+                {showEditorPane && (
+                  <div
+                    className={cn(
+                      "flex min-h-0 min-w-0 flex-col overflow-hidden bg-surface",
+                      isMdUp && activePane === "split"
+                        ? "h-1/2 w-full border-b border-line md:h-auto md:w-1/2 md:border-b-0 md:border-r"
+                        : "h-[58dvh] min-h-[360px] w-full md:h-full"
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-3 border-b border-line bg-surface-2/20 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-mono text-[10.5px] text-ink">{selectedFile || "No file selected"}</p>
+                        <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-ink-3">Monaco editor · {editorLanguage}</p>
+                      </div>
+                      <button onClick={handleSave} className="btn-secondary btn-sm" disabled={!projectId || !selectedFile}>
+                        <Save className="h-3 w-3" strokeWidth={1.8} />
+                        {saveSuccess ? "Saved" : "Save"}
                       </button>
                     </div>
+                    <div className="min-h-0 flex-1">
+                      <Editor
+                        height="100%"
+                        language={editorLanguage}
+                        theme={editorTheme}
+                        value={code}
+                        onChange={(v) => setCode(v || "")}
+                        options={{
+                          fontSize: isMdUp ? 12.5 : 13,
+                          lineNumbersMinChars: isMdUp ? 4 : 3,
+                          glyphMargin: isMdUp,
+                          folding: isMdUp,
+                          wordWrap: isMdUp ? "off" : "on",
+                          minimap: { enabled: false },
+                          scrollBeyondLastLine: false,
+                          automaticLayout: true,
+                          lineNumbers: "on",
+                          fontFamily: "var(--font-jetbrains), monospace",
+                          padding: { top: 12, bottom: 12 },
+                        }}
+                      />
+                    </div>
                   </div>
+                )}
 
-                  <div className="flex min-h-0 flex-1 items-center justify-center p-3 sm:p-4">
-                    <div
-                      className={cn(
-                        "flex h-full flex-col overflow-hidden border border-line bg-surface transition-[width] duration-300",
-                        viewport === "mobile" ? "w-[375px] max-w-full" : viewport === "tablet" ? "w-[720px] max-w-full" : "w-full"
-                      )}
-                    >
-                      <div className="flex h-8 items-center justify-between gap-2 border-b border-line bg-surface-2/60 px-3">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className={cn("h-1.5 w-1.5 shrink-0", previewRunning ? "bg-success" : "bg-soft-grey")} />
-                          <span className="truncate font-mono text-[10px] text-ink-2">{previewRunning ? "Live session" : "Stopped"}</span>
-                        </div>
-                        <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-ink-3">{viewport}</span>
+                {showPreviewPane && (
+                  <div
+                    className={cn(
+                      "flex min-h-0 flex-col overflow-hidden bg-canvas",
+                      isMdUp && activePane === "split"
+                        ? "h-1/2 w-full md:h-auto md:w-1/2"
+                        : "h-[60dvh] min-h-[380px] w-full md:h-full"
+                    )}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-surface-2/20 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="font-mono text-[9.5px] uppercase tracking-[0.12em] text-ink-3">Sandbox preview</p>
+                        <p className="mt-0.5 truncate font-mono text-[10.5px] text-ink-2" title={previewUrl || undefined}>
+                          {previewUrl || (previewRunning ? "Running" : "Preview stopped")}
+                        </p>
                       </div>
-
-                      <div className={cn("relative flex-1 overflow-hidden", previewRunning && previewUrl ? "bg-white" : "bg-surface")}>
-                        {previewRunning && previewUrl ? (
-                          <iframe
-                            key={previewFrameKey}
-                            src={previewUrl}
-                            title="Live project preview"
-                            className="h-full w-full border-0"
-                            allow="clipboard-read; clipboard-write; fullscreen"
-                          />
-                        ) : (
-                          <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
-                            <span className="flex h-10 w-10 items-center justify-center border border-line bg-surface-2">
-                              <Play className="h-4 w-4 text-accent" strokeWidth={1.8} />
-                            </span>
-                            <div className="max-w-sm">
-                              <p className="text-[13px] font-medium text-ink">{previewError ? "Preview could not start" : "Preview is not running"}</p>
-                              <p className="mt-1 text-[12px] leading-relaxed text-ink-3">
-                                {previewError || "Select a project with an extracted workspace and start the sandbox preview to load its dev server here."}
-                              </p>
-                            </div>
-                            {previewError && (
-                              <button onClick={handleStartPreview} className="btn-secondary btn-sm">Retry start</button>
-                            )}
-                          </div>
+                      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                        <div className="segmented md:hidden" role="group" aria-label="Mobile preview viewport">
+                          {[
+                            { id: "mobile" as const, label: "375" },
+                            { id: "tablet" as const, label: "720" },
+                            { id: "desktop" as const, label: "Full" },
+                          ].map((vp) => (
+                            <button
+                              key={vp.id}
+                              type="button"
+                              onClick={() => setViewport(vp.id)}
+                              aria-pressed={viewport === vp.id}
+                              className={cn("segmented-item px-2", viewport === vp.id && "segmented-item-active")}
+                            >
+                              {vp.label}
+                            </button>
+                          ))}
+                        </div>
+                        {previewUrl && (
+                          <a href={previewUrl} target="_blank" rel="noreferrer" className="icon-btn" title="Open preview in new tab" aria-label="Open preview in new tab">
+                            <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.8} />
+                          </a>
                         )}
+                        <button
+                          onClick={() => setPreviewFrameKey((key) => key + 1)}
+                          disabled={!previewRunning}
+                          className="icon-btn"
+                          title="Reload preview"
+                          aria-label="Reload preview"
+                        >
+                          <RotateCw className="h-3.5 w-3.5" strokeWidth={1.8} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {previewError && (
+                      <div className="flex items-center justify-between gap-2 border-b border-danger/30 bg-danger-soft/50 px-3 py-2 text-[12px] text-danger">
+                        <span className="flex items-center gap-2 min-w-0 truncate">
+                          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{previewError}</span>
+                        </span>
+                        <button onClick={handleStartPreview} className="btn-secondary btn-sm shrink-0">
+                          Retry
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex min-h-0 flex-1 items-center justify-center overflow-x-auto p-3 sm:p-4">
+                      <div
+                        className={cn(
+                          "flex h-full flex-col overflow-hidden border border-line bg-surface transition-[width] duration-300",
+                          viewport === "mobile"
+                            ? "w-[375px] max-w-full"
+                            : viewport === "tablet"
+                              ? "w-[720px] shrink-0 md:max-w-full"
+                              : "w-full"
+                        )}
+                      >
+                        <div className="flex h-8 items-center justify-between gap-2 border-b border-line bg-surface-2/60 px-3">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className={cn("h-1.5 w-1.5 shrink-0", previewRunning ? "bg-success" : "bg-soft-grey")} />
+                            <span className="truncate font-mono text-[10px] text-ink-2">{previewRunning ? "Live session" : "Stopped"}</span>
+                          </div>
+                          <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-ink-3">{viewport}</span>
+                        </div>
+
+                        <div className={cn("relative flex-1 overflow-hidden", previewRunning && previewUrl ? "bg-white" : "bg-surface")}>
+                          {previewRunning && previewUrl ? (
+                            <iframe
+                              key={previewFrameKey}
+                              src={previewUrl}
+                              title="Live project preview"
+                              className="h-full w-full border-0"
+                              allow="clipboard-read; clipboard-write; fullscreen"
+                            />
+                          ) : (
+                            <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center sm:p-8">
+                              <span className="flex h-10 w-10 items-center justify-center border border-line bg-surface-2">
+                                <Play className="h-4 w-4 text-accent" strokeWidth={1.8} />
+                              </span>
+                              <div className="max-w-sm">
+                                <p className="text-[13px] font-medium text-ink">{previewError ? "Preview could not start" : "Preview is not running"}</p>
+                                <p className="mt-1 text-[12px] leading-relaxed text-ink-3">
+                                  {previewError || "Select a project with an extracted workspace and start the sandbox preview to load its dev server here."}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {showDevTools && (
-            <div className="flex h-52 shrink-0 flex-col border-t border-line bg-[#0a0b0d] text-[#c9c6bf]">
+          {showDevToolsPanel && (
+            <div className={cn("flex shrink-0 flex-col border-t border-line bg-[#0a0b0d] text-[#c9c6bf]", isMdUp ? "h-52" : "min-h-[380px]")}>
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1c1e22] px-3 py-1.5 sm:px-4">
                 <div className="flex items-center gap-4">
                   {[

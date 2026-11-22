@@ -21,7 +21,8 @@ export function useModalA11y(isOpen: boolean, onClose: () => void) {
 
   useEffect(() => {
     if (!isOpen) return
-    const root = containerRef.current
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
     previouslyFocused.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null
 
@@ -68,6 +69,7 @@ export function useModalA11y(isOpen: boolean, onClose: () => void) {
     return () => {
       window.cancelAnimationFrame(frame)
       document.removeEventListener("keydown", handleKeyDown, true)
+      document.body.style.overflow = prevOverflow
       previouslyFocused.current?.focus?.()
     }
   }, [isOpen, onClose])

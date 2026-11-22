@@ -148,11 +148,11 @@ export default function NotificationsPage() {
               {filtered.length} notification{filtered.length === 1 ? "" : "s"}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full items-center gap-2 sm:w-auto">
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              className="select select-sm w-auto"
+              className="select select-sm w-full sm:w-auto"
               aria-label="Filter notifications"
             >
               <option value="all">All</option>
@@ -221,15 +221,15 @@ export default function NotificationsPage() {
                     </p>
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                  <div className="flex shrink-0 items-center gap-1 opacity-100 transition-opacity [@media(hover:hover)]:lg:opacity-0 [@media(hover:hover)]:lg:group-hover:opacity-100 [@media(hover:hover)]:lg:group-focus-within:opacity-100">
                     {!n.isRead && (
-                      <button onClick={() => markRead(n.id)} className="icon-btn h-7 w-7" aria-label="Mark as read" title="Mark as read">
+                      <button onClick={() => markRead(n.id)} className="icon-btn" aria-label="Mark as read" title="Mark as read">
                         <Check className="h-3.5 w-3.5" strokeWidth={2} />
                       </button>
                     )}
                     <button
                       onClick={() => remove(n.id)}
-                      className="icon-btn h-7 w-7 hover:border-danger/30 hover:bg-danger-soft hover:text-danger"
+                      className="icon-btn hover:border-danger/30 hover:bg-danger-soft hover:text-danger"
                       aria-label="Delete notification"
                       title="Delete"
                     >

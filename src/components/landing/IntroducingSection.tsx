@@ -108,13 +108,13 @@ export function IntroducingSection() {
   return (
     <section
       id="introducing"
-      className="border-b border-[var(--rig-paper-18)] py-20 sm:py-28"
+      className="scroll-mt-20 border-b border-[var(--rig-paper-18)] py-16 sm:py-28"
     >
       <div className="rig-container">
         {/* Centered Header */}
-        <div className="mx-auto mb-14 max-w-[740px] text-center">
+        <div className="mx-auto mb-10 max-w-[740px] text-center sm:mb-14">
           <span className="rig-badge mb-6">Introducing MODELVAULT</span>
-          <h2 className="rig-display text-[clamp(2.4rem,5vw,4.35rem)] font-bold leading-[0.95] text-[var(--rig-paper)]">
+          <h2 className="rig-display text-[clamp(1.9rem,4.8vw,4.35rem)] font-bold leading-[0.96] text-[var(--rig-paper)]">
             One workspace.
             <br />
             Your entire AI development process.
@@ -126,7 +126,7 @@ export function IntroducingSection() {
 
         {/* Top Step Markers */}
         <div
-          className="mb-8 flex flex-wrap gap-3 sm:gap-6"
+          className="no-scrollbar mb-8 flex gap-3 overflow-x-auto pb-1 md:grid md:grid-cols-5 md:gap-5 md:overflow-visible"
           role="tablist"
           aria-label="MODELVAULT workspace stages"
         >
@@ -139,7 +139,7 @@ export function IntroducingSection() {
                 role="tab"
                 aria-selected={isActive}
                 onClick={() => setActiveId(item.id)}
-                className={`flex flex-1 min-w-[130px] items-center justify-between border-t-2 pt-3 pb-2 text-left rig-mono text-[11px] uppercase tracking-[0.1em] transition-colors ${
+                className={`flex min-h-[44px] min-w-[126px] shrink-0 items-center justify-between border-t-2 pt-3 pb-2 text-left rig-mono text-[11px] uppercase tracking-[0.1em] transition-colors md:min-w-0 ${
                   isActive
                     ? "border-[var(--rig-blue)] text-[var(--rig-paper)]"
                     : "border-[var(--rig-paper-18)] text-[var(--rig-paper-50)] hover:text-[var(--rig-paper)]"

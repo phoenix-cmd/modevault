@@ -17,6 +17,7 @@ import {
   LogOut,
   Menu,
   Moon,
+  PanelLeft,
   Plus,
   Search,
   Sun,
@@ -100,6 +101,8 @@ function timeAgo(value: string) {
 
 export function Header({
   onMenuOpen,
+  sidebarCollapsed,
+  onToggleSidebar,
 }: {
   onMenuOpen: () => void
   sidebarCollapsed?: boolean
@@ -281,7 +284,7 @@ export function Header({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15 }}
-              className="fixed inset-0 z-[80] flex items-start justify-center bg-black/60 px-4 pt-[12vh] backdrop-blur-[2px]"
+              className="fixed inset-0 z-[80] flex items-start justify-center bg-black/60 px-3 pt-[6vh] backdrop-blur-[2px] sm:px-4 sm:pt-[12vh]"
               onMouseDown={(event) => {
                 if (event.target === event.currentTarget) setSearchOpen(false)
               }}
@@ -296,7 +299,7 @@ export function Header({
                 aria-modal="true"
                 aria-label="Search MODELVAULT"
               >
-                <div className="flex items-center gap-2.5 border-b border-line px-4 py-3">
+                <div className="flex items-center gap-2.5 border-b border-line px-3.5 py-3 sm:px-4">
                   <Search className="h-4 w-4 text-ink-3" strokeWidth={1.8} />
                   <input
                     ref={searchInputRef}
@@ -304,14 +307,14 @@ export function Header({
                     onChange={(event) => setQuery(event.target.value)}
                     onKeyDown={handleSearchKeyDown}
                     placeholder="Search pages, providers, and plans…"
-                    className="h-5 flex-1 bg-transparent text-[13.5px] text-ink outline-none placeholder:text-ink-3"
+                    className="h-6 flex-1 bg-transparent text-[14px] text-ink outline-none placeholder:text-ink-3 sm:h-5 sm:text-[13.5px]"
                   />
                   <kbd className="rounded-[2px] border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] font-medium text-ink-3">
                     ESC
                   </kbd>
                 </div>
 
-                <div className="max-h-[52vh] overflow-y-auto p-1.5">
+                <div className="max-h-[60dvh] overflow-y-auto p-1.5 sm:max-h-[52vh]">
                   {results.length === 0 ? (
                     <p className="px-3 py-8 text-center text-[13px] text-ink-3">
                       No results for “{query}”.
@@ -327,7 +330,7 @@ export function Header({
                           onMouseEnter={() => setActiveIndex(index)}
                           onClick={() => goTo(result)}
                           className={cn(
-                            "flex w-full items-center gap-3 rounded-[2px] px-2.5 py-2 text-left transition-colors",
+                            "flex min-h-[44px] w-full items-center gap-3 rounded-[2px] px-2.5 py-2.5 text-left transition-colors",
                             index === activeIndex
                               ? "bg-accent-soft text-accent"
                               : "text-ink-2 hover:bg-surface-2"
@@ -368,8 +371,8 @@ export function Header({
     : null
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-line bg-canvas/95 px-4 backdrop-blur-sm sm:px-6 lg:px-8">
-      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+    <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between gap-2 border-b border-line bg-canvas/95 px-3 backdrop-blur-sm sm:gap-3 sm:px-6 lg:px-8">
+      <div className="flex min-w-0 items-center gap-1.5 sm:gap-3">
         <button
           onClick={onMenuOpen}
           className="icon-btn -ml-1 lg:hidden"
@@ -377,6 +380,18 @@ export function Header({
         >
           <Menu className="h-4 w-4" strokeWidth={1.8} />
         </button>
+
+        {onToggleSidebar && (
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            className="icon-btn -ml-1 hidden lg:inline-flex"
+            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            <PanelLeft className="h-4 w-4" strokeWidth={1.8} />
+          </button>
+        )}
 
         <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 sm:gap-2">
           <span className="hidden font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-ink-3 sm:inline">
@@ -389,10 +404,10 @@ export function Header({
         </nav>
       </div>
 
-      <div className="flex items-center gap-1 sm:gap-1.5">
+      <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
         <button
           onClick={() => setSearchOpen(true)}
-          className="hidden h-8 w-[220px] items-center gap-2 rounded-[2px] border border-line bg-surface px-2.5 text-left text-[12px] text-ink-3 transition-colors hover:border-line-strong hover:text-ink-2 md:flex lg:w-[260px]"
+          className="hidden h-8 w-[200px] items-center gap-2 rounded-[2px] border border-line bg-surface px-2.5 text-left text-[12px] text-ink-3 transition-colors hover:border-line-strong hover:text-ink-2 md:flex lg:w-[240px] xl:w-[260px]"
         >
           <Search className="h-3.5 w-3.5" strokeWidth={1.8} />
           <span className="flex-1">Search</span>
@@ -465,7 +480,7 @@ export function Header({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -3, scale: 0.99 }}
                   transition={{ duration: 0.14 }}
-                  className="glass-panel absolute right-0 top-[calc(100%+8px)] z-50 w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[2px] shadow-float"
+                  className="glass-panel fixed inset-x-3 top-16 z-50 overflow-hidden rounded-[2px] shadow-float sm:absolute sm:inset-x-auto sm:right-0 sm:top-[calc(100%+8px)] sm:w-[340px]"
                 >
                   <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
                     <div className="flex items-center gap-2">
@@ -546,7 +561,7 @@ export function Header({
 
         <Link
           href="/settings"
-          className="flex h-8 w-8 items-center justify-center rounded-[2px] border border-line bg-surface font-mono text-[10px] font-medium text-ink-2 transition-colors hover:border-line-strong hover:text-ink"
+          className="hidden h-8 w-8 items-center justify-center rounded-[2px] border border-line bg-surface font-mono text-[10px] font-medium text-ink-2 transition-colors hover:border-line-strong hover:text-ink sm:flex"
           aria-label="User profile"
           title="User profile"
         >
@@ -558,7 +573,7 @@ export function Header({
             await fetch("/api/auth/logout", { method: "POST" })
             window.location.href = "/login"
           }}
-          className="icon-btn"
+          className="icon-btn hidden sm:inline-flex"
           aria-label="Sign out"
           title="Sign out"
         >

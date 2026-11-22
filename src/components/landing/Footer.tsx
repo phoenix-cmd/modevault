@@ -69,9 +69,9 @@ export function Footer() {
       </svg>
 
       <div className="rig-container relative z-10">
-        <div className="grid grid-cols-2 gap-10 md:grid-cols-4 lg:grid-cols-[2fr_repeat(6,1fr)]">
+        <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-[2fr_repeat(6,1fr)]">
           {/* Brand */}
-          <div className="col-span-2 md:col-span-4 lg:col-span-1">
+          <div className="col-span-2 sm:col-span-3 lg:col-span-4 xl:col-span-1">
             <Link href="/" aria-label="MODELVAULT Home">
               <BrandMark />
             </Link>
@@ -82,15 +82,15 @@ export function Footer() {
 
           {FOOTER_COLS.map((col) => (
             <div key={col.title}>
-              <h3 className="mb-4 rig-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-[var(--rig-paper-40)]">
+              <h3 className="mb-3 rig-mono text-[10.5px] font-medium uppercase tracking-[0.14em] text-[var(--rig-paper-40)]">
                 {col.title}
               </h3>
-              <ul className="space-y-2.5">
+              <ul className="space-y-1.5">
                 {col.links.map((link) => (
                   <li key={link.label}>
                     <Link
                       href={link.href}
-                      className="text-[13px] text-[var(--rig-paper-60)] transition-colors hover:text-[var(--rig-blue)]"
+                      className="inline-block py-1 text-[13px] text-[var(--rig-paper-60)] transition-colors hover:text-[var(--rig-blue)]"
                     >
                       {link.label}
                     </Link>

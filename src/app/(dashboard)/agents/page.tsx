@@ -1,11 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import dynamic from "next/dynamic"
+import Link from "next/link"
 import { useModalA11y } from "@/lib/use-modal-a11y"
+import { useMediaQuery } from "@/lib/use-media-query"
 import {
   Play,
   CheckCircle2,
-  Terminal,
   FileCode,
   GitBranch,
   Sparkles,
@@ -14,11 +16,24 @@ import {
   MessageSquare,
   Send,
   CheckSquare,
+  ChevronLeft,
+  ArrowRight,
 } from "lucide-react"
-import { DiffEditor } from "@monaco-editor/react"
 import { PageHeader } from "@/components/ui/page-header"
 import { StatBand, StatBandSkeleton } from "@/components/ui/stat-band"
 import { cn, formatNumber } from "@/lib/utils"
+
+const DiffEditor = dynamic(
+  () => import("@monaco-editor/react").then((mod) => mod.DiffEditor),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[340px] items-center justify-center font-mono text-[11px] uppercase tracking-[0.12em] text-ink-3 sm:h-[460px]">
+        Loading diff inspector…
+      </div>
+    ),
+  }
+)
 
 function executionStatusClass(status: string) {
   if (status === "completed") return "bg-success-soft text-success"
@@ -48,9 +63,15 @@ export default function AgentCenterPage() {
   const [showPlanModal, setShowPlanModal] = useState(false)
   const planDialogRef = useModalA11y(showPlanModal, () => setShowPlanModal(false))
 
-  // Monaco Diff Editor state
-  const [diffSideBySide, setDiffSideBySide] = useState(true)
+  // Responsive viewports & Monaco Diff Editor state
+  const isDesktop = useMediaQuery("(min-width: 1024px)")
+  const isXlDesktop = useMediaQuery("(min-width: 1280px)")
+  const [mobilePane, setMobilePane] = useState<"workspace" | "detail">("workspace")
+  const [diffModeOverride, setDiffModeOverride] = useState<boolean | null>(null)
+  const diffSideBySide = diffModeOverride ?? isDesktop
   const [diffTheme, setDiffTheme] = useState<"vs-dark" | "light">("vs-dark")
+  const pendingEventsRef = useRef<any[]>([])
+  const flushRafRef = useRef<number | null>(null)
 
   useEffect(() => {
     // Match the editor surface to the active site theme and react to theme switches.
@@ -125,22 +146,34 @@ export default function AgentCenterPage() {
     }
   }, [selectedExecution?.id])
 
-  // Stream real execution events when an execution is selected.
+  // Stream real execution events when an execution is selected, batching frames to avoid layout jitter.
   useEffect(() => {
     if (!selectedExecution?.id) return
-    const source = new EventSource(`/api/executions/${selectedExecution.id}/events`)
+    const targetId = selectedExecution.id
+    pendingEventsRef.current = []
+    const source = new EventSource(`/api/executions/${targetId}/events`)
     source.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data)
         if (payload.eventType === "done") return
-        setSelectedExecution((prev: any) => {
-          if (!prev || prev.id !== selectedExecution.id) return prev
-          const events = [...(prev.events || [])]
-          if (!events.some((item: any) => item.id === payload.id)) {
-            events.push(payload)
-          }
-          return { ...prev, events }
-        })
+        pendingEventsRef.current.push(payload)
+        if (flushRafRef.current === null) {
+          flushRafRef.current = window.requestAnimationFrame(() => {
+            flushRafRef.current = null
+            const batch = pendingEventsRef.current.splice(0)
+            if (batch.length === 0) return
+            setSelectedExecution((prev: any) => {
+              if (!prev || prev.id !== targetId) return prev
+              const events = [...(prev.events || [])]
+              for (const item of batch) {
+                if (!events.some((existing: any) => existing.id === item.id)) {
+                  events.push(item)
+                }
+              }
+              return { ...prev, events }
+            })
+          })
+        }
       } catch {
         // Ignore malformed event payloads.
       }
@@ -149,6 +182,10 @@ export default function AgentCenterPage() {
       source.close()
     }
     return () => {
+      if (flushRafRef.current !== null) {
+        window.cancelAnimationFrame(flushRafRef.current)
+        flushRafRef.current = null
+      }
       source.close()
     }
   }, [selectedExecution?.id])
@@ -412,7 +449,31 @@ export class ApiClient {
         </div>
       )}
 
-      <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
+      <div className="segmented w-full xl:hidden" role="group" aria-label="Agent Center workspace view">
+        <button
+          type="button"
+          onClick={() => setMobilePane("workspace")}
+          aria-pressed={mobilePane === "workspace"}
+          className={cn("segmented-item flex-1", mobilePane === "workspace" && "segmented-item-active")}
+        >
+          Dispatch &amp; runs ({executions.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobilePane("detail")}
+          aria-pressed={mobilePane === "detail"}
+          className={cn("segmented-item flex-1", mobilePane === "detail" && "segmented-item-active")}
+        >
+          Execution detail
+        </button>
+      </div>
+
+      <div
+        className={cn(
+          "grid items-start gap-8 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]",
+          mobilePane !== "workspace" && "hidden xl:grid"
+        )}
+      >
         <section className="border-t border-line pt-6">
           <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -534,7 +595,13 @@ export class ApiClient {
                     <li key={exec.id} className="border-b border-line last:border-b-0">
                       <button
                         type="button"
-                        onClick={() => setSelectedExecution(exec)}
+                        onClick={() => {
+                          setSelectedExecution(exec)
+                          if (!isXlDesktop) {
+                            setMobilePane("detail")
+                            window.scrollTo({ top: 0, behavior: "smooth" })
+                          }
+                        }}
                         className={cn(
                           "relative block w-full px-3 py-3.5 text-left transition-colors",
                           isSelected ? "bg-surface-2/70" : "hover:bg-surface-2/40"
@@ -570,21 +637,21 @@ export class ApiClient {
       </div>
 
       {showPlanModal && planPreview && (
-        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[1px]">
+        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 backdrop-blur-[1px] sm:p-4">
           <div
             ref={planDialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="plan-preview-title"
-            className="panel max-h-[90vh] w-full max-w-3xl overflow-hidden shadow-float"
+            className="panel flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden shadow-float"
           >
-            <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
+            <div className="flex items-start justify-between gap-4 border-b border-line px-4 py-4 sm:px-5">
               <div className="min-w-0">
                 <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">Orchestrator plan</p>
                 <h3 id="plan-preview-title" className="mt-1 font-display text-[16px] font-medium tracking-[-0.02em] text-ink">
                   {planPreview.goal || "Decomposed execution plan"}
                 </h3>
-                <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
+                <p className="mt-1 truncate font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
                   {planPreview.projectName} · {planPreview.targetBranch}
                 </p>
               </div>
@@ -599,22 +666,22 @@ export class ApiClient {
                 { label: "Est. cost", value: `$${Number(planPreview.metrics?.estimatedCost || 0).toFixed(4)}` },
                 { label: "Est. runtime", value: `~${Number(planPreview.metrics?.estimatedDurationSec || 0)}s` },
               ].map((metric) => (
-                <div key={metric.label} className="px-4 py-3 sm:px-5">
-                  <p className="metric-label">{metric.label}</p>
-                  <p className="mt-1.5 font-mono text-[18px] font-medium tracking-[-0.03em] text-ink tabular-nums">{metric.value}</p>
+                <div key={metric.label} className="min-w-0 px-2.5 py-2.5 sm:px-5 sm:py-3">
+                  <p className="metric-label truncate">{metric.label}</p>
+                  <p className="mt-1.5 font-mono text-[14px] font-medium tracking-[-0.03em] text-ink tabular-nums sm:text-[18px]">{metric.value}</p>
                 </div>
               ))}
             </div>
 
-            <div className="max-h-[52vh] overflow-y-auto">
-              <div className="grid grid-cols-[3rem_minmax(0,1fr)_10rem] items-center gap-4 border-b border-line px-5 py-2 font-mono text-[9.5px] uppercase tracking-[0.12em] text-ink-3">
+            <div className="flex-1 overflow-y-auto">
+              <div className="hidden grid-cols-[3rem_minmax(0,1fr)_10rem] items-center gap-4 border-b border-line px-5 py-2 font-mono text-[9.5px] uppercase tracking-[0.12em] text-ink-3 sm:grid">
                 <span>Step</span>
-                <span>Stage & scope</span>
+                <span>Stage &amp; scope</span>
                 <span>Agent</span>
               </div>
               <ul>
                 {currentPlanStages.map((stage: any, i: number) => (
-                  <li key={stage.id || i} className="grid grid-cols-[3rem_minmax(0,1fr)_10rem] gap-4 border-b border-line px-5 py-3.5 last:border-b-0">
+                  <li key={stage.id || i} className="flex flex-col gap-2 border-b border-line px-4 py-3.5 last:border-b-0 sm:grid sm:grid-cols-[3rem_minmax(0,1fr)_10rem] sm:gap-4 sm:px-5">
                     <span className="pt-0.5 font-mono text-[10px] tabular-nums text-ink-3">{String(i + 1).padStart(2, "0")}</span>
                     <div className="min-w-0">
                       <p className="text-[13px] font-medium text-ink">{stage.name}</p>
@@ -629,7 +696,7 @@ export class ApiClient {
               </ul>
             </div>
 
-            <div className="flex items-center justify-end gap-2 border-t border-line bg-surface/80 px-5 py-3">
+            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-line bg-surface/80 px-4 py-3 sm:px-5">
               <button type="button" onClick={() => setShowPlanModal(false)} className="btn-ghost">Cancel</button>
               <button type="button" onClick={() => handleDispatch()} className="btn-primary">
                 <Play className="h-3 w-3 fill-current" strokeWidth={1.8} />
@@ -640,11 +707,22 @@ export class ApiClient {
         </div>
       )}
 
-      <section className="border-t border-line pt-6">
+      <section className={cn("border-t border-line pt-6", mobilePane !== "detail" && "hidden xl:block")}>
         <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h2 className="font-display text-[16px] font-medium tracking-[-0.02em] text-ink">Execution detail</h2>
-            <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">Review artifacts, discussion, runtime telemetry, task stages, and cost records for the selected run.</p>
+          <div className="flex items-start gap-2.5">
+            <button
+              type="button"
+              onClick={() => setMobilePane("workspace")}
+              className="btn-secondary btn-sm xl:hidden"
+              aria-label="Back to execution register"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Runs
+            </button>
+            <div>
+              <h2 className="font-display text-[16px] font-medium tracking-[-0.02em] text-ink">Execution detail</h2>
+              <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">Review artifacts, discussion, runtime telemetry, task stages, and cost records for the selected run.</p>
+            </div>
           </div>
           {selectedExecution && (
             <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">
@@ -659,7 +737,7 @@ export class ApiClient {
 
         {selectedExecution ? (
           <div className="border border-line bg-surface">
-            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-5 py-4">
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-4 py-4 sm:px-5">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2.5">
                   <h3 className="font-display text-[16px] font-medium tracking-[-0.02em] text-ink">{selectedExecution.title}</h3>
@@ -671,21 +749,21 @@ export class ApiClient {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <a
+                <Link
                   href="/verify"
                   className="btn-secondary btn-sm"
                 >
                   Open Verification Center
-                </a>
+                </Link>
                 {selectedExecution.status === "awaiting_approval" && (
-                  <>
+                  <div className="hidden flex-wrap items-center gap-2 sm:flex">
                     <button onClick={() => handleApprovalAction("reject")} className="btn-ghost btn-sm">Reject</button>
                     <button onClick={() => handleApprovalAction("request_revision")} className="btn-secondary btn-sm">Request revision</button>
                     <button onClick={() => handleApprovalAction("approve")} className="btn-primary btn-sm">
                       <Check className="h-3.5 w-3.5" strokeWidth={2.2} />
                       Approve and merge
                     </button>
-                  </>
+                  </div>
                 )}
               </div>
             </div>
@@ -733,7 +811,7 @@ export class ApiClient {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                      <button onClick={() => setDiffSideBySide(!diffSideBySide)} className="btn-secondary btn-sm">
+                      <button onClick={() => setDiffModeOverride(!diffSideBySide)} className="btn-secondary btn-sm">
                         {diffSideBySide ? "Inline view" : "Side by side"}
                       </button>
                       <button
@@ -755,25 +833,31 @@ export class ApiClient {
                     </div>
                   </div>
 
-                  <div className="overflow-hidden border border-line bg-canvas">
-                    <DiffEditor
-                      height="460px"
-                      language="typescript"
-                      original={originalCode}
-                      modified={modifiedCode}
-                      theme={diffTheme}
-                      keepCurrentOriginalModel
-                      keepCurrentModifiedModel
-                      options={{
-                        renderSideBySide: diffSideBySide,
-                        readOnly: true,
-                        minimap: { enabled: false },
-                        fontSize: 12.5,
-                        fontFamily: "var(--font-jetbrains), monospace",
-                        scrollBeyondLastLine: false,
-                        smoothScrolling: true,
-                      }}
-                    />
+                  <div className="h-[340px] overflow-hidden border border-line bg-canvas sm:h-[460px]">
+                    {(isXlDesktop || mobilePane === "detail") && (
+                      <DiffEditor
+                        height="100%"
+                        language="typescript"
+                        original={originalCode}
+                        modified={modifiedCode}
+                        theme={diffTheme}
+                        keepCurrentOriginalModel
+                        keepCurrentModifiedModel
+                        options={{
+                          renderSideBySide: diffSideBySide,
+                          readOnly: true,
+                          minimap: { enabled: false },
+                          fontSize: isDesktop ? 12.5 : 12,
+                          lineNumbersMinChars: isDesktop ? 4 : 3,
+                          glyphMargin: isDesktop,
+                          folding: isDesktop,
+                          wordWrap: isDesktop ? "off" : "on",
+                          fontFamily: "var(--font-jetbrains), monospace",
+                          scrollBeyondLastLine: false,
+                          smoothScrolling: true,
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
               )}
@@ -906,38 +990,109 @@ export class ApiClient {
               {activeTab === "tasks" && (
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line pb-3">
-                    <h4 className="font-display text-[14px] font-medium tracking-[-0.02em] text-ink">Task stages</h4>
-                    <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">{executionTasks.length} stages</span>
+                    <h4 className="font-display text-[14px] font-medium tracking-[-0.02em] text-ink">
+                      Orchestration graph &amp; task stages
+                    </h4>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
+                      {executionTasks.length} stages
+                    </span>
                   </div>
 
-                  <ul className="border-t border-line">
-                    {executionTasks.length === 0 ? (
-                      <li className="py-8 text-[13px] leading-relaxed text-ink-3">No orchestrated task stages recorded for this run.</li>
-                    ) : (
-                      executionTasks.map((t: any, i: number) => (
-                        <li key={t.id || i} className="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-start gap-4 border-b border-line py-3.5 last:border-b-0">
-                          <span className="pt-0.5 font-mono text-[10px] tabular-nums text-ink-3">{String(i + 1).padStart(2, "0")}</span>
-                          <div className="min-w-0">
-                            <p className="text-[13px] font-medium text-ink">{t.title}</p>
-                            {(t.agentName || t.agentRole) && (
-                              <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-3">
-                                {t.agentName || "Agent"}{t.agentRole ? ` · ${t.agentRole}` : ""}
-                              </p>
+                  {executionTasks.length === 0 ? (
+                    <p className="py-8 text-[13px] leading-relaxed text-ink-3">
+                      No orchestrated task stages recorded for this run.
+                    </p>
+                  ) : (
+                    <>
+                      {/* Desktop: Multi-agent pipeline connector view */}
+                      <div className="hidden flex-wrap items-stretch gap-y-4 border-t border-line pt-4 lg:flex">
+                        {executionTasks.map((t: any, i: number) => (
+                          <div key={t.id || i} className="flex items-center">
+                            <div className="flex h-full w-[240px] flex-col justify-between border border-line bg-surface-2/25 p-3.5">
+                              <div>
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-mono text-[10px] tabular-nums text-accent">
+                                    STAGE {String(i + 1).padStart(2, "0")}
+                                  </span>
+                                  <span
+                                    className={cn(
+                                      "badge shrink-0",
+                                      t.status === "completed"
+                                        ? "bg-success-soft text-success"
+                                        : "bg-surface-2 text-ink-3"
+                                    )}
+                                  >
+                                    {String(t.status || "pending").replaceAll("_", " ")}
+                                  </span>
+                                </div>
+                                <p className="mt-2 text-[13px] font-medium leading-snug text-ink">{t.title}</p>
+                                {t.description && (
+                                  <p className="mt-1.5 line-clamp-3 text-[11.5px] leading-relaxed text-ink-2">
+                                    {t.description}
+                                  </p>
+                                )}
+                              </div>
+                              {(t.agentName || t.agentRole) && (
+                                <p className="mt-3 border-t border-line/70 pt-2 font-mono text-[9.5px] uppercase tracking-[0.06em] text-ink-3">
+                                  {t.agentName || "Agent"}
+                                  {t.agentRole ? ` · ${t.agentRole}` : ""}
+                                </p>
+                              )}
+                            </div>
+                            {i < executionTasks.length - 1 && (
+                              <div className="flex items-center px-2 text-ink-3" aria-hidden="true">
+                                <span className="h-px w-4 bg-line-strong" />
+                                <ArrowRight className="h-3.5 w-3.5 text-accent" strokeWidth={1.8} />
+                              </div>
                             )}
-                            {t.description && <p className="mt-1 text-[12px] leading-relaxed text-ink-2">{t.description}</p>}
                           </div>
-                          <span
-                            className={cn(
-                              "badge shrink-0",
-                              t.status === "completed" ? "bg-success-soft text-success" : "bg-surface-2 text-ink-3"
+                        ))}
+                      </div>
+
+                      {/* Mobile & Tablet: Structured vertical task timeline */}
+                      <ol className="relative space-y-4 border-t border-line pt-4 pl-6 before:absolute before:bottom-4 before:left-2.5 before:top-6 before:w-px before:bg-line-strong lg:hidden">
+                        {executionTasks.map((t: any, i: number) => (
+                          <li key={t.id || i} className="relative border border-line bg-surface-2/20 p-3.5">
+                            <span
+                              className={cn(
+                                "absolute -left-[19px] top-4 h-2.5 w-2.5 border border-canvas",
+                                t.status === "completed" ? "bg-success" : "bg-accent"
+                              )}
+                              aria-hidden="true"
+                            />
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">
+                                  Stage {String(i + 1).padStart(2, "0")}
+                                  {t.agentName ? ` · ${t.agentName}` : ""}
+                                </span>
+                                <p className="mt-1 text-[13px] font-medium text-ink">{t.title}</p>
+                              </div>
+                              <span
+                                className={cn(
+                                  "badge shrink-0",
+                                  t.status === "completed" ? "bg-success-soft text-success" : "bg-surface-2 text-ink-3"
+                                )}
+                              >
+                                {String(t.status || "pending").replaceAll("_", " ")}
+                              </span>
+                            </div>
+                            {t.agentRole && (
+                              <p className="mt-1 font-mono text-[10px] text-ink-3">{t.agentRole}</p>
                             )}
-                          >
-                            {String(t.status || "pending").replaceAll("_", " ")}
-                          </span>
-                        </li>
-                      ))
-                    )}
-                  </ul>
+                            {t.description && (
+                              <details className="mt-2">
+                                <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3 select-none">
+                                  Stage details
+                                </summary>
+                                <p className="mt-1.5 text-[12px] leading-relaxed text-ink-2">{t.description}</p>
+                              </details>
+                            )}
+                          </li>
+                        ))}
+                      </ol>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -970,6 +1125,21 @@ export class ApiClient {
                 </div>
               )}
             </div>
+
+            {selectedExecution.status === "awaiting_approval" && (
+              <div className="sticky bottom-0 z-20 flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur-sm sm:hidden">
+                <button onClick={() => handleApprovalAction("reject")} className="btn-ghost btn-sm flex-1">
+                  Reject
+                </button>
+                <button onClick={() => handleApprovalAction("request_revision")} className="btn-secondary btn-sm flex-1">
+                  Revise
+                </button>
+                <button onClick={() => handleApprovalAction("approve")} className="btn-primary btn-sm w-full">
+                  <Check className="h-3.5 w-3.5" strokeWidth={2.2} />
+                  Approve and merge
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="border border-dashed border-line-strong bg-surface/60 px-6 py-14">

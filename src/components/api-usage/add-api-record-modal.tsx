@@ -87,13 +87,13 @@ export function AddApiRecordModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[1px] animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 backdrop-blur-[1px] animate-fade-in sm:p-4">
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="api-record-modal-title"
-        className="panel relative max-h-[90vh] w-full max-w-lg overflow-y-auto shadow-float"
+        className="panel relative max-h-[90dvh] w-full max-w-lg overflow-y-auto shadow-float"
       >
         <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
           <div>
@@ -143,7 +143,7 @@ export function AddApiRecordModal({
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
               <div>
                 <label className="label">Input</label>
                 <input type="number" min="0" value={inputTokens} onChange={(e) => setInputTokens(Number(e.target.value))} className="field tnum" />
@@ -158,7 +158,7 @@ export function AddApiRecordModal({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="label">Total cost (USD)</label>
                 <input

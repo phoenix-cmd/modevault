@@ -45,13 +45,13 @@ export function ResourceIntelligence() {
   return (
     <section
       id="intelligence"
-      className="border-b border-[var(--rig-paper-18)] py-20 sm:py-28"
+      className="scroll-mt-20 border-b border-[var(--rig-paper-18)] py-16 sm:py-28"
     >
       <div className="rig-container">
         <div className="flex flex-col justify-between gap-6 border-b border-[var(--rig-paper-18)] pb-10 lg:flex-row lg:items-end">
           <div>
             <span className="rig-badge mb-6">Resource Intelligence</span>
-            <h2 className="rig-display text-[clamp(2.4rem,4.6vw,3.9rem)] font-bold leading-[0.94] text-[var(--rig-paper)]">
+            <h2 className="rig-display text-[clamp(1.9rem,4.5vw,3.9rem)] font-bold leading-[0.95] text-[var(--rig-paper)]">
               Subscriptions, API credits,
               <br />
               <span className="text-[var(--rig-paper-50)]">and agent budgets unified.</span>
@@ -63,21 +63,26 @@ export function ResourceIntelligence() {
         </div>
 
         {/* Summary Band */}
-        <div className="grid grid-cols-2 border-b border-[var(--rig-paper-18)] lg:grid-cols-4 lg:divide-x lg:divide-[var(--rig-paper-18)]">
+        <div className="grid grid-cols-2 gap-x-4 border-b border-[var(--rig-paper-18)] lg:grid-cols-4 lg:gap-x-0 lg:divide-x lg:divide-[var(--rig-paper-18)]">
           {[
             { label: "Provider Subscriptions", value: "$480.00", meta: "12 tracked seats (illustrative)" },
             { label: "Metered API Credits", value: "$815.50", meta: "Across 3 active providers" },
             { label: "Token Consumption", value: "54.5M", meta: "Input + output volume" },
             { label: "Agent Budget Guard", value: "98.4%", meta: "Runs within cap" },
-          ].map((m) => (
-            <div key={m.label} className="py-6 lg:px-6 lg:first:pl-0">
+          ].map((m, idx) => (
+            <div
+              key={m.label}
+              className={`min-w-0 py-5 lg:px-6 lg:py-6 lg:first:pl-0 ${
+                idx < 2 ? "border-b border-[var(--rig-paper-18)] lg:border-b-0" : ""
+              }`}
+            >
               <p className="rig-mono text-[10px] uppercase tracking-[0.14em] text-[var(--rig-paper-40)]">
                 {m.label}
               </p>
-              <p className="mt-2 rig-mono text-[26px] font-medium tracking-[-0.04em] text-[var(--rig-paper)] tabular-nums">
+              <p className="mt-2 rig-mono text-[clamp(1.35rem,3vw,1.625rem)] font-medium tracking-[-0.04em] text-[var(--rig-paper)] tabular-nums">
                 {m.value}
               </p>
-              <p className="mt-1 text-[11px] text-[var(--rig-paper-50)]">{m.meta}</p>
+              <p className="mt-1 text-[11px] leading-snug text-[var(--rig-paper-50)]">{m.meta}</p>
             </div>
           ))}
         </div>
@@ -91,7 +96,7 @@ export function ResourceIntelligence() {
               <span className="text-[var(--rig-yellow)]">Illustrative Data</span>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full border-collapse text-left text-[12.5px]">
                 <thead>
                   <tr className="border-b border-[var(--rig-paper-12)] rig-mono text-[10px] uppercase tracking-[0.12em] text-[var(--rig-paper-40)]">
@@ -138,6 +143,38 @@ export function ResourceIntelligence() {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            <div className="divide-y divide-[var(--rig-paper-12)] md:hidden">
+              {PROVIDER_LEDGER.map((row) => (
+                <div key={row.provider} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-medium text-[var(--rig-paper)]">{row.provider}</p>
+                      <p className="mt-0.5 rig-mono text-[10px] text-[var(--rig-paper-50)]">{row.allowance}</p>
+                    </div>
+                    <div className="shrink-0 text-right rig-mono">
+                      <p className="text-[13px] font-medium text-[var(--rig-paper)] tabular-nums">{row.consumed}</p>
+                      <p className="mt-0.5 text-[10px] text-[var(--rig-paper-50)] tabular-nums">{row.tokens}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <div className="h-[3px] w-full bg-[var(--rig-paper-12)]">
+                      <div
+                        className="h-full"
+                        style={{
+                          width: `${row.pct}%`,
+                          backgroundColor: row.pct >= 80 ? "var(--rig-yellow)" : "var(--rig-blue)",
+                        }}
+                      />
+                    </div>
+                    <div className="mt-1.5 flex items-center justify-between rig-mono text-[10px] text-[var(--rig-paper-40)]">
+                      <span>{row.pct}% used</span>
+                      <span>{row.budgetCap}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 

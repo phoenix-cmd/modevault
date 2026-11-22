@@ -32,7 +32,7 @@ export function PageHeader({
           </p>
         )}
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="font-display text-[28px] font-bold leading-[1.02] tracking-[-0.035em] text-ink sm:text-[36px]">
+          <h1 className="font-display text-[clamp(1.625rem,3vw,2.25rem)] font-bold leading-[1.04] tracking-[-0.035em] text-ink">
             {title}
           </h1>
           {badge}
@@ -43,7 +43,11 @@ export function PageHeader({
           </p>
         )}
       </div>
-      {action && <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div>}
+      {action && (
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">
+          {action}
+        </div>
+      )}
     </div>
   )
 }

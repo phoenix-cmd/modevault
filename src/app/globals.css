@@ -80,6 +80,11 @@
   --mv-muted-slate: #8ba8cb;
   --font-jetbrains: var(--font-mono);
 
+  /* Responsive spacing & fluid typography tokens */
+  --mv-gutter: clamp(1rem, 2.5vw, 2rem);
+  --mv-section-gap: clamp(1.5rem, 3vw, 2.25rem);
+  --mv-h1-size: clamp(1.625rem, 3vw, 2.25rem);
+
   /* App namespace */
   --app-bg: var(--mv-bg);
   --app-surface: var(--mv-surface);
@@ -156,6 +161,7 @@
 }
 
 [data-app="vault"] {
+  overflow-x: clip;
   --app-bg: var(--mv-bg);
   --app-surface: var(--mv-surface);
   --app-surface-2: var(--mv-surface-2);
@@ -236,6 +242,7 @@
   }
 
   body {
+    overflow-x: clip;
     background-color: var(--mv-bg);
     color: var(--mv-text);
     font-family: var(--font-sans), "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
@@ -433,6 +440,43 @@
   .skeleton {
     @apply animate-pulse bg-surface-2;
   }
+
+  @media (max-width: 767px), (pointer: coarse) {
+    .btn-primary,
+    .btn-secondary,
+    .btn-ghost,
+    .btn-danger {
+      min-height: 44px;
+    }
+
+    .btn-sm {
+      min-height: 40px;
+      padding-inline: 0.85rem;
+    }
+
+    .icon-btn {
+      min-width: 40px;
+      min-height: 40px;
+    }
+
+    .segmented-item {
+      min-height: 38px;
+    }
+  }
+
+  @media (max-width: 639px) {
+    .field,
+    .select {
+      min-height: 44px;
+      font-size: 16px;
+    }
+
+    .field-sm,
+    .select-sm {
+      min-height: 42px;
+      font-size: 15px;
+    }
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -485,15 +529,22 @@
 
 @media (max-width: 1280px) {
   .rig-container {
-    max-width: 90%;
-    padding-inline: 0;
+    max-width: 92%;
+    padding-inline: 1.5rem;
   }
 }
 
 @media (max-width: 768px) {
   .rig-container {
     max-width: 100%;
-    padding-inline: 1.25rem;
+    padding-inline: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .rig-container {
+    max-width: 100%;
+    padding-inline: 1rem;
   }
 }
 
@@ -525,19 +576,25 @@
 
 @media (max-width: 1280px) {
   .rig-content-lines::before {
-    left: 5%;
+    left: 4%;
   }
   .rig-content-lines::after {
-    right: 5%;
+    right: 4%;
   }
 }
 
 @media (max-width: 768px) {
   .rig-content-lines::before {
-    left: 1.25rem;
+    left: 0.75rem;
   }
   .rig-content-lines::after {
-    right: 1.25rem;
+    right: 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .rig-content-lines {
+    display: none;
   }
 }
 
@@ -545,8 +602,8 @@
 .rig-scanlines {
   position: fixed;
   inset: 0;
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   background: repeating-linear-gradient(
     0deg,
     transparent,
@@ -561,8 +618,8 @@
 .rig-rgb-fringe {
   position: fixed;
   inset: 0;
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   background: linear-gradient(
     90deg,
     rgba(229, 51, 42, 0.025),
@@ -577,8 +634,8 @@
 .rig-grain {
   position: fixed;
   inset: 0;
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
   z-index: 40;
   opacity: 0.032;
@@ -633,21 +690,23 @@
   color: var(--rig-paper);
 }
 
-.rig-btn-dark:hover {
-  text-shadow: -1px 0 rgba(43, 79, 255, 0.4), 1px 0 rgba(237, 70, 45, 0.4);
-  box-shadow: 4px 4px 0 var(--rig-yellow);
-  animation: rig-btn-glitch 0.28s ease-in-out;
-}
-
 .rig-btn-blue {
   background: var(--rig-blue);
   color: #0d1212;
 }
 
-.rig-btn-blue:hover {
-  text-shadow: -1px 0 rgba(10, 10, 10, 0.25), 1px 0 rgba(237, 70, 45, 0.35);
-  box-shadow: 4px 4px 0 var(--rig-yellow);
-  animation: rig-btn-glitch 0.28s ease-in-out;
+@media (hover: hover) {
+  .rig-btn-dark:hover {
+    text-shadow: -1px 0 rgba(43, 79, 255, 0.4), 1px 0 rgba(237, 70, 45, 0.4);
+    box-shadow: 4px 4px 0 var(--rig-yellow);
+    animation: rig-btn-glitch 0.28s ease-in-out;
+  }
+
+  .rig-btn-blue:hover {
+    text-shadow: -1px 0 rgba(10, 10, 10, 0.25), 1px 0 rgba(237, 70, 45, 0.35);
+    box-shadow: 4px 4px 0 var(--rig-yellow);
+    animation: rig-btn-glitch 0.28s ease-in-out;
+  }
 }
 
 /* Double-polygon chamfered outline button on blue hero */
@@ -748,11 +807,20 @@
   }
 }
 
+.rig-ticker {
+  touch-action: pan-y;
+  max-width: 100%;
+}
+
 .rig-ticker-inner {
   display: flex;
   width: max-content;
   animation: rig-ticker 36s linear infinite;
   will-change: transform;
+}
+
+.rig-ticker.is-offscreen .rig-ticker-inner {
+  animation-play-state: paused;
 }
 
 .rig-ticker:hover .rig-ticker-inner,
@@ -826,7 +894,7 @@
 
 /* Auth / Marketing Form Controls inside .rig-page */
 .rig-field {
-  height: 2.65rem;
+  min-height: 2.75rem;
   width: 100%;
   border: 1px solid var(--rig-paper-20);
   background: #101514;
@@ -895,6 +963,18 @@
   height: 6px;
   background-color: var(--mv-accent);
   border: 1px solid var(--mv-bg);
+}
+
+@media (pointer: coarse), (max-width: 767px) {
+  .react-flow__handle {
+    width: 12px;
+    height: 12px;
+  }
+
+  .react-flow__controls-button {
+    width: 36px;
+    height: 36px;
+  }
 }
 
 .react-flow__edge-path,

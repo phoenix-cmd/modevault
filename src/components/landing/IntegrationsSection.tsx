@@ -49,12 +49,12 @@ export function IntegrationsSection() {
   return (
     <section
       id="integrations"
-      className="border-b border-[var(--rig-paper-18)] py-20 sm:py-28"
+      className="scroll-mt-20 border-b border-[var(--rig-paper-18)] py-16 sm:py-28"
     >
       <div className="rig-container">
-        <div className="mx-auto mb-14 max-w-[680px] text-center">
+        <div className="mx-auto mb-12 max-w-[680px] text-center sm:mb-14">
           <span className="rig-badge mb-6">Get Started</span>
-          <h2 className="rig-display text-[clamp(2.4rem,4.8vw,4rem)] font-bold leading-[0.96] text-[var(--rig-paper)]">
+          <h2 className="rig-display text-[clamp(1.9rem,4.6vw,4rem)] font-bold leading-[0.96] text-[var(--rig-paper)]">
             Set up MODELVAULT
             <br />
             where code gets written.
@@ -82,7 +82,7 @@ export function IntegrationsSection() {
         </ol>
 
         {/* Works With Your Stack */}
-        <div className="mt-20 border-t border-[var(--rig-paper-18)] pt-14">
+        <div className="mt-16 border-t border-[var(--rig-paper-18)] pt-12 sm:mt-20 sm:pt-14">
           <h3 className="text-center rig-display text-[1.35rem] font-semibold text-[var(--rig-paper)]">
             Works with your coding agents and stack.
           </h3>
@@ -90,7 +90,7 @@ export function IntegrationsSection() {
             Supported workspace profiles &amp; planned external CLI adapters labeled explicitly
           </p>
 
-          <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-8">
+          <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
             {AGENT_STACK.map((agent) => (
               <div
                 key={agent.name}

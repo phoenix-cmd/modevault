@@ -210,8 +210,8 @@ export default function OrganizationsPage() {
                           <ul className="space-y-1.5">
                             {org.memberships.map((m) => (
                               <li key={m.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12.5px]">
-                                <span className="text-ink">{m.user.name || m.user.email}</span>
-                                <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-ink-3">{m.role}</span>
+                                <span className="min-w-0 break-all text-ink sm:break-words">{m.user.name || m.user.email}</span>
+                                <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-3">{m.role}</span>
                               </li>
                             ))}
                           </ul>

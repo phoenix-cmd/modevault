@@ -57,19 +57,19 @@ export function ProblemSection() {
     <section
       id="problem"
       ref={sectionRef}
-      className="relative border-b border-[var(--rig-paper-18)]"
+      className="relative scroll-mt-20 border-b border-[var(--rig-paper-18)]"
     >
       <div className="rig-container !px-0">
         {/* Top Editorial Header */}
         <div
           ref={headingRef}
-          className="border-b border-[var(--rig-paper-18)] px-5 py-12 sm:px-12 sm:py-16"
+          className="border-b border-[var(--rig-paper-18)] px-4 py-10 sm:px-12 sm:py-16"
         >
           <span className="rig-badge mb-7">
             <span className="rig-blink-dot" aria-hidden="true" />
             The Problem
           </span>
-          <h2 className="rig-display max-w-4xl text-[clamp(2.4rem,5vw,4.25rem)] font-bold leading-[0.94] text-[var(--rig-paper)]">
+          <h2 className="rig-display max-w-4xl text-[clamp(1.85rem,4.8vw,4.25rem)] font-bold leading-[0.95] text-[var(--rig-paper)]">
             AI development is powerful.
             <br />
             <span className="text-[var(--rig-paper-50)]">
@@ -81,7 +81,7 @@ export function ProblemSection() {
         {/* Rig 3-column asymmetric hairline grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 lg:grid-rows-2">
           {/* Left architectural diagram spanning 2 rows */}
-          <div className="flex flex-col items-center justify-center border-b border-[var(--rig-paper-18)] bg-[#101514] p-8 lg:row-span-2 lg:border-b-0 lg:border-r">
+          <div className="flex flex-col items-center justify-center border-b border-[var(--rig-paper-18)] bg-[#101514] p-6 sm:p-8 lg:row-span-2 lg:border-b-0 lg:border-r">
             <div className="w-full max-w-[300px]">
               <div className="mb-4 flex items-center justify-between rig-mono text-[10px] uppercase tracking-[0.14em] text-[var(--rig-paper-40)]">
                 <span>Uncoordinated Flow</span>
@@ -90,6 +90,7 @@ export function ProblemSection() {
 
               <svg
                 viewBox="0 0 280 260"
+                preserveAspectRatio="xMidYMid meet"
                 className="w-full"
                 aria-label="Diagram illustrating four fragmented AI tool streams converging onto an uncoordinated review bottleneck"
               >

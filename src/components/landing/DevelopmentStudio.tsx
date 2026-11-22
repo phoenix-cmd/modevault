@@ -11,18 +11,18 @@ const FILES = [
 export function DevelopmentStudio() {
   const [selectedFile, setSelectedFile] = useState(FILES[0])
   const [bottomTab, setBottomTab] = useState<"terminal" | "activity" | "git">("terminal")
-  const [mobilePane, setMobilePane] = useState<"code" | "preview" | "git">("code")
+  const [mobilePane, setMobilePane] = useState<"files" | "code" | "preview" | "terminal">("code")
 
   return (
     <section
       id="studio"
-      className="border-b border-[var(--rig-paper-18)] py-20 sm:py-28"
+      className="scroll-mt-20 border-b border-[var(--rig-paper-18)] py-16 sm:py-28"
     >
       <div className="rig-container">
         <div className="flex flex-col justify-between gap-6 border-b border-[var(--rig-paper-18)] pb-10 lg:flex-row lg:items-end">
           <div>
             <span className="rig-badge mb-6">Development Studio</span>
-            <h2 className="rig-display text-[clamp(2.4rem,4.6vw,3.9rem)] font-bold leading-[0.94] text-[var(--rig-paper)]">
+            <h2 className="rig-display text-[clamp(1.9rem,4.5vw,3.9rem)] font-bold leading-[0.95] text-[var(--rig-paper)]">
               Inspect every line, diff,
               <br />
               <span className="text-[var(--rig-paper-50)]">and running preview.</span>
@@ -34,13 +34,14 @@ export function DevelopmentStudio() {
         </div>
 
         {/* Mobile pane switcher */}
-        <div className="mt-6 flex gap-2 lg:hidden">
-          {(["code", "preview", "git"] as const).map((pane) => (
+        <div className="mt-6 grid grid-cols-4 gap-2 lg:hidden" role="group" aria-label="Studio mobile panes">
+          {(["files", "code", "preview", "terminal"] as const).map((pane) => (
             <button
               key={pane}
               type="button"
               onClick={() => setMobilePane(pane)}
-              className={`border px-3 py-1.5 rig-mono text-[11px] uppercase tracking-[0.08em] ${
+              aria-pressed={mobilePane === pane}
+              className={`min-h-[44px] border px-2 py-2 rig-mono text-[10.5px] uppercase tracking-[0.08em] transition-colors ${
                 mobilePane === pane
                   ? "border-[var(--rig-blue)] bg-[var(--rig-blue-dim)] text-[var(--rig-paper)]"
                   : "border-[var(--rig-paper-18)] text-[var(--rig-paper-50)]"
@@ -63,7 +64,7 @@ export function DevelopmentStudio() {
                 branch: feat/webhook-idempotency
               </span>
             </div>
-            <span className="uppercase tracking-[0.1em] text-[var(--rig-paper-40)]">
+            <span className="hidden uppercase tracking-[0.1em] text-[var(--rig-paper-40)] sm:inline">
               Illustrative Studio Interface
             </span>
           </div>
@@ -71,7 +72,11 @@ export function DevelopmentStudio() {
           {/* 3-Column IDE Upper Surface */}
           <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)_320px]">
             {/* File Explorer */}
-            <div className="hidden border-r border-[var(--rig-paper-12)] bg-[#0b0f0e] p-3 lg:block">
+            <div
+              className={`border-b border-[var(--rig-paper-12)] bg-[#0b0f0e] p-3 lg:block lg:border-b-0 lg:border-r ${
+                mobilePane !== "files" ? "hidden lg:block" : ""
+              }`}
+            >
               <p className="mb-2.5 px-2 rig-mono text-[10px] uppercase tracking-[0.12em] text-[var(--rig-paper-40)]">
                 Explorer
               </p>
@@ -82,8 +87,11 @@ export function DevelopmentStudio() {
                     <button
                       key={file}
                       type="button"
-                      onClick={() => setSelectedFile(file)}
-                      className={`block w-full truncate px-2.5 py-1.5 text-left rig-mono text-[11px] transition-colors ${
+                      onClick={() => {
+                        setSelectedFile(file)
+                        setMobilePane("code")
+                      }}
+                      className={`flex min-h-[44px] w-full items-center truncate px-2.5 py-1.5 text-left rig-mono text-[11px] transition-colors lg:min-h-0 ${
                         active
                           ? "border-l-2 border-[var(--rig-blue)] bg-[var(--rig-blue-dim)] text-[var(--rig-paper)]"
                           : "text-[var(--rig-paper-50)] hover:text-[var(--rig-paper)]"
@@ -183,7 +191,7 @@ export function DevelopmentStudio() {
           {/* Bottom Drawer: Terminal / Agent Activity / Git */}
           <div
             className={`border-t border-[var(--rig-paper-18)] bg-[#0a0d0c] ${
-              mobilePane === "git" ? "block" : ""
+              mobilePane === "terminal" ? "block" : "hidden lg:block"
             }`}
           >
             <div className="flex items-center justify-between border-b border-[var(--rig-paper-12)] px-4">

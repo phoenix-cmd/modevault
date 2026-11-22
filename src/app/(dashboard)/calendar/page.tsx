@@ -151,7 +151,7 @@ export default function CalendarPage() {
                   </div>
                 </div>
 
-                <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 pl-10 text-[11px]">
+                <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] sm:pl-10">
                   <span className="font-mono tabular-nums text-ink-2">
                     {sub.renewalDate ? formatDate(sub.renewalDate) : "—"}
                   </span>

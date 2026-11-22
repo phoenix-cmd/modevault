@@ -43,12 +43,12 @@ export function Hero() {
 
       <Navbar />
 
-      <div className="rig-container relative z-10 flex-1 py-14 sm:py-20 lg:py-24">
-        <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-12">
-          <div>
+      <div className="rig-container relative z-10 flex-1 py-10 sm:py-20 lg:py-24">
+        <div className="grid items-center gap-9 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-12">
+          <div className="min-w-0">
             <h1
               ref={titleRef}
-              className="rig-display text-[clamp(3rem,6.8vw,5.75rem)] font-bold leading-[0.89] text-[var(--rig-paper)]"
+              className="rig-display text-[clamp(2.25rem,6.6vw,5.75rem)] font-bold leading-[0.91] text-[var(--rig-paper)]"
             >
               Software
               <br />
@@ -59,7 +59,7 @@ export function Hero() {
 
             <p
               ref={subtitleRef}
-              className="mt-7 max-w-[540px] text-[1.125rem] font-semibold leading-[1.55] text-[#0c1212] sm:text-[1.25rem]"
+              className="mt-6 max-w-[540px] text-[clamp(1rem,1.8vw,1.25rem)] font-semibold leading-[1.55] text-[#0c1212] sm:mt-7"
             >
               One environment to coordinate coding agents, automate engineering
               workflows and verify the software they produce.
@@ -67,18 +67,18 @@ export function Hero() {
 
             <div
               ref={actionsRef}
-              className="mt-9 flex flex-wrap items-center gap-3.5"
+              className="mt-8 flex flex-col gap-3 sm:mt-9 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3.5"
             >
-              <Link href="/register" className="rig-btn-chamfer rig-btn-dark">
+              <Link href="/register" className="rig-btn-chamfer rig-btn-dark min-h-[46px] w-full sm:w-auto">
                 Get started
               </Link>
-              <Link href="#introducing" className="rig-btn-hero-outline">
+              <Link href="#introducing" className="rig-btn-hero-outline min-h-[46px] w-full sm:w-auto">
                 Explore MODELVAULT
               </Link>
             </div>
           </div>
 
-          <div ref={diagramRef}>
+          <div ref={diagramRef} className="min-w-0">
             <HeroProductDemo />
           </div>
         </div>

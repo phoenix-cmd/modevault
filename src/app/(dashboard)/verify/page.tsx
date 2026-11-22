@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Check,
   CheckCircle2,
+  ChevronLeft,
   FileCheck2,
   GitBranch,
   MessageSquare,
@@ -16,6 +17,7 @@ import {
 } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
 import { StatBand, StatBandSkeleton } from "@/components/ui/stat-band"
+import { useMediaQuery } from "@/lib/use-media-query"
 import { cn, formatNumber } from "@/lib/utils"
 
 interface DiffFinding {
@@ -148,6 +150,8 @@ export default function VerifyCenterPage() {
   const [noteLine, setNoteLine] = useState<number>(1)
   const [noteText, setNoteText] = useState("")
   const [postingNote, setPostingNote] = useState(false)
+  const isLgUp = useMediaQuery("(min-width: 1024px)")
+  const [mobilePane, setMobilePane] = useState<"queue" | "detail">("detail")
 
   const loadExecutions = useCallback(async () => {
     try {
@@ -337,9 +341,28 @@ export default function VerifyCenterPage() {
         </div>
       )}
 
+      <div className="segmented w-full lg:hidden" role="group" aria-label="Verification view">
+        <button
+          type="button"
+          onClick={() => setMobilePane("queue")}
+          aria-pressed={mobilePane === "queue"}
+          className={cn("segmented-item flex-1", mobilePane === "queue" && "segmented-item-active")}
+        >
+          Run queue ({executions.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobilePane("detail")}
+          aria-pressed={mobilePane === "detail"}
+          className={cn("segmented-item flex-1", mobilePane === "detail" && "segmented-item-active")}
+        >
+          Inspection
+        </button>
+      </div>
+
       <div className="grid items-start gap-8 lg:grid-cols-[320px_minmax(0,1fr)]">
         {/* Left Run Queue */}
-        <aside className="border-t border-line pt-4">
+        <aside className={cn("border-t border-line pt-4", mobilePane !== "queue" && "hidden lg:block")}>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
               Execution queue
@@ -367,7 +390,13 @@ export default function VerifyCenterPage() {
                     <li key={ex.id}>
                       <button
                         type="button"
-                        onClick={() => setSelectedId(ex.id)}
+                        onClick={() => {
+                          setSelectedId(ex.id)
+                          if (!isLgUp) {
+                            setMobilePane("detail")
+                            window.scrollTo({ top: 0, behavior: "smooth" })
+                          }
+                        }}
                         className={cn(
                           "relative block w-full px-3 py-3 text-left transition-colors",
                           active ? "bg-surface-2/80" : "hover:bg-surface-2/40"
@@ -413,20 +442,30 @@ export default function VerifyCenterPage() {
         </aside>
 
         {/* Main Inspection Surface */}
-        <section className="min-w-0">
+        <section className={cn("min-w-0", mobilePane !== "detail" && "hidden lg:block")}>
           {!selected ? (
             <div className="border border-dashed border-line-strong bg-surface px-6 py-14">
               <p className="text-[14px] font-medium text-ink">No run selected</p>
               <p className="mt-1 text-[13px] text-ink-3">
-                Select an execution from the left queue to inspect its diff artifact, recorded task evidence, and approval controls.
+                Select an execution from the queue to inspect its diff artifact, recorded task evidence, and approval controls.
               </p>
             </div>
           ) : (
             <div className="border border-line bg-surface">
               {/* Header & Approval Controls */}
-              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-5 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-4 py-4 sm:px-5">
                 <div className="min-w-0">
-                  <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-accent">
+                  <div className="mb-2 flex items-center gap-2 lg:hidden">
+                    <button
+                      type="button"
+                      onClick={() => setMobilePane("queue")}
+                      className="btn-secondary btn-sm"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                      Queue
+                    </button>
+                  </div>
+                  <p className="truncate font-mono text-[10px] uppercase tracking-[0.12em] text-accent">
                     {selected.project?.name || "Workspace project"} · {selected.targetBranch || "branch"}
                   </p>
                   <h2 className="mt-1 font-display text-[17px] font-semibold tracking-[-0.02em] text-ink">
@@ -435,7 +474,7 @@ export default function VerifyCenterPage() {
                 </div>
 
                 {selected.status === "awaiting_approval" && (
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="hidden flex-wrap items-center gap-2 sm:flex">
                     <button onClick={() => handleDecision("reject")} className="btn-ghost btn-sm">
                       Reject
                     </button>
@@ -451,7 +490,7 @@ export default function VerifyCenterPage() {
               </div>
 
               {/* Tabs */}
-              <div className="flex overflow-x-auto border-b border-line px-4">
+              <div className="flex overflow-x-auto border-b border-line px-3 sm:px-4">
                 {[
                   { id: "findings" as const, label: `Diff inspection (${inspection.findings.length})` },
                   { id: "evidence" as const, label: `Build & task evidence (${selected.tasks?.length || 0})` },
@@ -473,11 +512,11 @@ export default function VerifyCenterPage() {
                 ))}
               </div>
 
-              <div className="p-5">
+              <div className="p-4 sm:p-5">
                 {activeTab === "findings" && (
                   <div className="space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3 font-mono text-[10.5px] uppercase tracking-[0.08em] text-ink-3">
-                      <span>Artifact: {diffArtifact?.path || "None recorded"}</span>
+                      <span className="min-w-0 truncate">Artifact: {diffArtifact?.path || "None recorded"}</span>
                       <span>
                         Added lines scanned: {inspection.addedLineCount} · Matches: {inspection.findings.length}
                       </span>
@@ -501,31 +540,45 @@ export default function VerifyCenterPage() {
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {inspection.findings.map((f) => (
+                        {inspection.findings.map((f, idx) => (
                           <div
                             key={f.id}
-                            className="space-y-2 border border-danger/35 bg-danger-soft/40 p-4"
+                            className="space-y-2.5 border border-danger/35 bg-danger-soft/40 p-3.5 sm:p-4"
                           >
                             <div className="flex flex-wrap items-center justify-between gap-2">
-                              <span className="inline-flex items-center gap-2 font-mono text-[11px] font-bold text-danger">
-                                {f.severity === "high" ? (
-                                  <ShieldAlert className="h-4 w-4" />
-                                ) : (
-                                  <AlertTriangle className="h-4 w-4 text-warning" />
+                              <span
+                                className={cn(
+                                  "inline-flex items-center gap-2 font-mono text-[11px] font-bold",
+                                  f.severity === "high" ? "text-danger" : "text-warning"
                                 )}
+                              >
+                                {f.severity === "high" ? (
+                                  <ShieldAlert className="h-4 w-4 shrink-0" />
+                                ) : (
+                                  <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
+                                )}
+                                <span className="badge bg-surface-2 text-ink">{f.severity.toUpperCase()}</span>
                                 {f.rule}
                               </span>
                               <span className="font-mono text-[10.5px] text-ink-3">
-                                Patch line {f.lineNumber}
+                                {diffArtifact?.path || "workspace.diff"} : line {f.lineNumber}
                               </span>
                             </div>
-                            <pre className="overflow-x-auto border border-line bg-canvas px-3 py-2 font-mono text-[11px] text-warning">
-                              {f.snippet}
-                            </pre>
-                            <p className="text-[12.5px] text-ink-2">{f.reason}</p>
-                            <p className="font-mono text-[11px] text-success">
-                              Remediation: {f.guidance}
-                            </p>
+
+                            <details open={idx === 0} className="border-t border-line/70 pt-2">
+                              <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.1em] text-ink-2 select-none hover:text-ink">
+                                Evidence &amp; remediation guidance
+                              </summary>
+                              <div className="mt-2.5 space-y-2">
+                                <pre className="overflow-x-auto border border-line bg-canvas px-3 py-2 font-mono text-[11px] text-warning">
+                                  {f.snippet}
+                                </pre>
+                                <p className="text-[12.5px] leading-relaxed text-ink-2">{f.reason}</p>
+                                <p className="font-mono text-[11px] leading-relaxed text-success">
+                                  Remediation: {f.guidance}
+                                </p>
+                              </div>
+                            </details>
                           </div>
                         ))}
                       </div>
@@ -544,7 +597,7 @@ export default function VerifyCenterPage() {
                       <ul className="divide-y divide-line border-y border-line">
                         {selected.tasks.map((task, i) => (
                           <li key={task.id || i} className="flex items-start justify-between gap-4 py-3.5">
-                            <div>
+                            <div className="min-w-0">
                               <p className="text-[13px] font-medium text-ink">{task.title}</p>
                               <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-3">
                                 {task.agentName} · {task.agentRole}
@@ -574,21 +627,21 @@ export default function VerifyCenterPage() {
                         Recorded telemetry &amp; budget
                       </p>
                       <div className="grid grid-cols-3 divide-x divide-line border border-line bg-canvas">
-                        <div className="p-3">
-                          <span className="metric-label">Total tokens</span>
-                          <p className="mt-1 font-mono text-[16px] text-ink tabular-nums">
+                        <div className="min-w-0 p-2.5 sm:p-3">
+                          <span className="metric-label truncate block">Total tokens</span>
+                          <p className="mt-1 font-mono text-[13.5px] text-ink tabular-nums sm:text-[16px]">
                             {formatNumber(Number(selected.totalTokens || 0))}
                           </p>
                         </div>
-                        <div className="p-3">
-                          <span className="metric-label">Est. cost</span>
-                          <p className="mt-1 font-mono text-[16px] text-ink tabular-nums">
+                        <div className="min-w-0 p-2.5 sm:p-3">
+                          <span className="metric-label truncate block">Est. cost</span>
+                          <p className="mt-1 font-mono text-[13.5px] text-ink tabular-nums sm:text-[16px]">
                             ${Number(selected.estimatedCost || 0).toFixed(4)}
                           </p>
                         </div>
-                        <div className="p-3">
-                          <span className="metric-label">Duration</span>
-                          <p className="mt-1 font-mono text-[16px] text-ink tabular-nums">
+                        <div className="min-w-0 p-2.5 sm:p-3">
+                          <span className="metric-label truncate block">Duration</span>
+                          <p className="mt-1 font-mono text-[13.5px] text-ink tabular-nums sm:text-[16px]">
                             {selected.durationMs ? `${(selected.durationMs / 1000).toFixed(1)}s` : "—"}
                           </p>
                         </div>
@@ -659,6 +712,21 @@ export default function VerifyCenterPage() {
                   </div>
                 )}
               </div>
+
+              {selected.status === "awaiting_approval" && (
+                <div className="sticky bottom-0 z-20 flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur-sm sm:hidden">
+                  <button onClick={() => handleDecision("reject")} className="btn-ghost btn-sm flex-1">
+                    Reject
+                  </button>
+                  <button onClick={() => handleDecision("request_revision")} className="btn-secondary btn-sm flex-1">
+                    Revise
+                  </button>
+                  <button onClick={() => handleDecision("approve")} className="btn-primary btn-sm w-full">
+                    <Check className="h-3.5 w-3.5" strokeWidth={2.2} />
+                    Verify &amp; Approve
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </section>

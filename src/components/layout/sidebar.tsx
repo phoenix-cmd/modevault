@@ -21,6 +21,7 @@ import {
   FolderGit2,
   GitBranch,
   LayoutDashboard,
+  LogOut,
   Plug,
   Receipt,
   Settings,
@@ -171,19 +172,27 @@ function WorkspaceControls({ collapsed }: { collapsed?: boolean }) {
 
 function NavContent({
   collapsed,
+  isMobileDrawer,
   onNavigate,
 }: {
   collapsed?: boolean
+  isMobileDrawer?: boolean
   onNavigate?: () => void
 }) {
   const pathname = usePathname()
+
+  async function handleSignOut() {
+    onNavigate?.()
+    await fetch("/api/auth/logout", { method: "POST" })
+    window.location.href = "/login"
+  }
 
   return (
     <div className="flex h-full flex-col bg-sidebar">
       <div
         className={cn(
           "flex h-14 shrink-0 items-center border-b border-line",
-          collapsed ? "justify-center px-2" : "px-4"
+          collapsed ? "justify-center px-2" : isMobileDrawer ? "pl-4 pr-14" : "px-4"
         )}
       >
         <Brand collapsed={collapsed} />
@@ -215,7 +224,11 @@ function NavContent({
                       title={item.label}
                       className={cn(
                         "group relative flex items-center rounded-[2px] transition-colors duration-150",
-                        collapsed ? "h-9 justify-center px-0" : "h-8 gap-2.5 px-3",
+                        collapsed
+                          ? "h-9 justify-center px-0"
+                          : isMobileDrawer
+                            ? "min-h-[44px] gap-3 px-3 py-2"
+                            : "h-8 gap-2.5 px-3",
                         isActive
                           ? "bg-accent-soft text-accent"
                           : "text-ink-2 hover:bg-surface-2/70 hover:text-ink"
@@ -237,7 +250,13 @@ function NavContent({
                         strokeWidth={1.6}
                       />
                       {!collapsed && (
-                        <span className={cn("truncate text-[12.5px]", isActive ? "font-medium text-ink" : "font-normal")}>
+                        <span
+                          className={cn(
+                            "truncate",
+                            isMobileDrawer ? "text-[13.5px]" : "text-[12.5px]",
+                            isActive ? "font-medium text-ink" : "font-normal"
+                          )}
+                        >
                           {item.label}
                         </span>
                       )}
@@ -257,7 +276,7 @@ function NavContent({
           title="User profile"
           className={cn(
             "group flex items-center rounded-[2px] text-ink-2 transition-colors hover:bg-surface-2/70 hover:text-ink",
-            collapsed ? "h-9 justify-center" : "h-9 gap-2.5 px-2.5"
+            collapsed ? "h-9 justify-center" : isMobileDrawer ? "min-h-[44px] gap-2.5 px-2.5" : "h-9 gap-2.5 px-2.5"
           )}
         >
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[2px] border border-line bg-surface font-mono text-[9px] font-medium text-ink-2">
@@ -270,6 +289,16 @@ function NavContent({
             </span>
           )}
         </Link>
+        {isMobileDrawer && (
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="mt-1 flex min-h-[44px] w-full items-center gap-2.5 rounded-[2px] px-2.5 text-left text-[13px] font-medium text-ink-2 transition-colors hover:bg-surface-2/70 hover:text-ink"
+          >
+            <LogOut className="h-4 w-4 shrink-0 text-ink-3" strokeWidth={1.6} />
+            <span>Sign out</span>
+          </button>
+        )}
         {!collapsed ? (
           <p className="flex items-center gap-2 px-2.5 pt-2.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-ink-3">
             <span className="inline-block h-1.5 w-1.5 bg-accent" aria-hidden />
@@ -286,6 +315,20 @@ function NavContent({
 }
 
 export function Sidebar({ mobileOpen, collapsed, onClose, onToggleCollapse }: SidebarProps) {
+  useEffect(() => {
+    if (!mobileOpen) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.body.style.overflow = prevOverflow
+      window.removeEventListener("keydown", onKeyDown)
+    }
+  }, [mobileOpen, onClose])
+
   return (
     <>
       <aside
@@ -325,19 +368,20 @@ export function Sidebar({ mobileOpen, collapsed, onClose, onToggleCollapse }: Si
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "spring", damping: 30, stiffness: 320 }}
-              className="fixed inset-y-0 left-0 z-50 flex w-[17rem] flex-col border-r border-line bg-sidebar lg:hidden"
+              className="fixed inset-y-0 left-0 z-50 flex w-[min(18rem,86vw)] flex-col border-r border-line bg-sidebar lg:hidden"
+              aria-label="Mobile navigation drawer"
             >
-              <div className="absolute right-3 top-3.5 z-10">
+              <div className="absolute right-2.5 top-2 z-10">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="flex h-7 w-7 items-center justify-center rounded-[2px] border border-line text-ink-2 hover:bg-surface-2 hover:text-ink"
+                  className="flex h-10 w-10 items-center justify-center rounded-[2px] border border-line text-ink-2 hover:bg-surface-2 hover:text-ink"
                   aria-label="Close menu"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
-              <NavContent onNavigate={onClose} />
+              <NavContent isMobileDrawer onNavigate={onClose} />
             </motion.aside>
           </>
         )}

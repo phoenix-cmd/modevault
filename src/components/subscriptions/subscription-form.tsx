@@ -186,13 +186,13 @@ export function SubscriptionForm({
     "mb-3 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-3"
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[1px] animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 backdrop-blur-[1px] animate-fade-in sm:p-4">
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="subscription-form-title"
-        className="panel relative max-h-[90vh] w-full max-w-2xl overflow-y-auto shadow-float"
+        className="panel relative max-h-[90dvh] w-full max-w-2xl overflow-y-auto shadow-float"
       >
         <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-line bg-surface px-5 py-4">
           <div>
@@ -290,7 +290,7 @@ export function SubscriptionForm({
 
             <div className="border-t border-line pt-4">
               <p className={sectionLabel}>Billing</p>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
                   <label className="label">Price</label>
                   <input

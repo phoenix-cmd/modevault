@@ -50,19 +50,19 @@ export default function LoginPage() {
           </Link>
           <Link
             href="/register"
-            className="rig-mono text-[11.5px] uppercase tracking-[0.08em] text-[var(--rig-paper-60)] transition-colors hover:text-[var(--rig-blue)]"
+            className="inline-flex min-h-[44px] items-center rig-mono text-[11.5px] uppercase tracking-[0.08em] text-[var(--rig-paper-60)] transition-colors hover:text-[var(--rig-blue)]"
           >
             Create account
           </Link>
         </header>
 
-        <main className="grid flex-1 items-center gap-12 py-12 lg:grid-cols-[minmax(0,1fr)_430px] lg:gap-16">
+        <main className="grid flex-1 items-center gap-8 py-8 sm:gap-12 sm:py-12 lg:grid-cols-[minmax(0,1fr)_430px] lg:gap-16">
           <div className="max-w-xl">
             <span className="rig-badge mb-6">
               <span className="rig-blink-dot" aria-hidden="true" />
               Workspace Access
             </span>
-            <h1 className="rig-display text-[2.6rem] font-bold leading-[0.94] text-[var(--rig-paper)] sm:text-[3.6rem]">
+            <h1 className="rig-display text-[clamp(2.1rem,5.5vw,3.6rem)] font-bold leading-[0.94] text-[var(--rig-paper)]">
               Sign in to the
               <br />
               command center.
@@ -123,13 +123,13 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="rig-btn-chamfer rig-btn-blue w-full"
+                className="rig-btn-chamfer rig-btn-blue min-h-[46px] w-full"
               >
                 <span>{loading ? "Signing in…" : "Sign in"}</span>
                 {!loading && <ArrowRight className="h-4 w-4" strokeWidth={2.2} />}
               </button>
 
-              <a href="/api/auth/github" className="rig-btn-outline w-full">
+              <a href="/api/auth/github" className="rig-btn-outline min-h-[46px] w-full">
                 Continue with GitHub
               </a>
             </form>

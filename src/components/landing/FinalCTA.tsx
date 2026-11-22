@@ -2,7 +2,7 @@ import Link from "next/link"
 
 export function FinalCTA() {
   return (
-    <section className="relative overflow-hidden border-b border-[var(--rig-paper-18)] py-28 text-center sm:py-40">
+    <section className="relative overflow-hidden border-b border-[var(--rig-paper-18)] py-20 text-center sm:py-40">
       <div className="rig-perspective-grid" aria-hidden="true" />
 
       {/* Oversized architectural watermark */}
@@ -36,7 +36,7 @@ export function FinalCTA() {
           </svg>
         </div>
 
-        <h2 className="rig-display max-w-[640px] text-[clamp(3rem,7vw,5.75rem)] font-bold leading-[0.9] text-[var(--rig-paper)]">
+        <h2 className="rig-display max-w-[640px] text-[clamp(2.25rem,6.8vw,5.75rem)] font-bold leading-[0.92] text-[var(--rig-paper)]">
           Build with agents.
           <br />
           Stay in control.
@@ -49,13 +49,13 @@ export function FinalCTA() {
         <div className="mt-10 flex w-full max-w-[500px] flex-col gap-3 sm:flex-row sm:justify-center">
           <Link
             href="/register"
-            className="rig-btn-chamfer rig-btn-blue flex-1 !py-4 !text-[13px]"
+            className="rig-btn-chamfer rig-btn-blue min-h-[48px] flex-1 !py-4 !text-[13px]"
           >
             Get started
           </Link>
           <Link
             href="#faq"
-            className="rig-btn-outline flex-1 !py-4 !text-[13px]"
+            className="rig-btn-outline min-h-[48px] flex-1 !py-4 !text-[13px]"
           >
             Explore documentation
           </Link>

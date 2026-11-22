@@ -111,13 +111,13 @@ export function WorkflowShowcase() {
     <section
       id="workflows"
       ref={sectionRef}
-      className="border-b border-[var(--rig-paper-18)] py-20 sm:py-28"
+      className="scroll-mt-20 border-b border-[var(--rig-paper-18)] py-16 sm:py-28"
     >
       <div className="rig-container">
         <div className="flex flex-col justify-between gap-6 border-b border-[var(--rig-paper-18)] pb-10 lg:flex-row lg:items-end">
           <div>
             <span className="rig-badge mb-6">Workflow Automation</span>
-            <h2 className="rig-display text-[clamp(2.4rem,4.6vw,3.9rem)] font-bold leading-[0.94] text-[var(--rig-paper)]">
+            <h2 className="rig-display text-[clamp(1.9rem,4.5vw,3.9rem)] font-bold leading-[0.95] text-[var(--rig-paper)]">
               From request to verified merge.
               <br />
               <span className="text-[var(--rig-paper-50)]">Every stage connected.</span>
@@ -126,6 +126,13 @@ export function WorkflowShowcase() {
           <p className="max-w-md text-[0.95rem] leading-[1.68] text-[var(--rig-paper-75)]">
             Chain agent execution, Git integration, testing, verification, and human approval into a single inspectable DAG workflow.
           </p>
+        </div>
+
+        {/* Mobile/Tablet linear topology summary */}
+        <div className="mt-6 border border-[var(--rig-paper-18)] bg-[#101514] px-3.5 py-2.5 rig-mono text-[10px] leading-relaxed text-[var(--rig-paper-60)] lg:hidden">
+          <span className="text-[var(--rig-blue)]">PIPELINE // </span>
+          01 Plan → 02 Develop → 03 Integrate → 04 Test → 05 Verify → 06 Review → 07 Deliver
+          <span className="block pt-1 text-[var(--rig-yellow)]">On test failure → return to 02 Develop</span>
         </div>
 
         {/* SVG Pipeline Backbone (desktop visual connector) */}
@@ -150,7 +157,7 @@ export function WorkflowShowcase() {
         </div>
 
         {/* 7-Stage Pipeline Nodes */}
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:mt-2 lg:grid-cols-7">
+        <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:mt-2 lg:grid-cols-7 lg:gap-3">
           {PIPELINE.map((stage) => {
             const active = stage.id === selectedId
             return (
@@ -159,7 +166,7 @@ export function WorkflowShowcase() {
                 type="button"
                 onClick={() => setSelectedId(stage.id)}
                 aria-pressed={active}
-                className={`flex min-h-[122px] flex-col justify-between border p-3.5 text-left transition-colors ${
+                className={`flex min-h-[112px] flex-col justify-between border p-3 text-left transition-colors sm:p-3.5 ${
                   active
                     ? "border-[var(--rig-blue)] bg-[var(--rig-blue-dim)]"
                     : "border-[var(--rig-paper-18)] bg-[#101514] hover:border-[var(--rig-paper-30)]"

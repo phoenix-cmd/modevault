@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
 } from "recharts"
 import { ProviderIcon } from "@/components/ui/provider-icon"
+import { useMediaQuery } from "@/lib/use-media-query"
 import { formatCurrency } from "@/lib/utils"
 import type { SpendingDataPoint, ProviderSpendingData } from "@/lib/types"
 
@@ -110,6 +111,8 @@ function compactCurrency(value: number) {
 /* ─── Monthly spending trend ─── */
 
 function MonthlySpendingChart({ data }: { data: SpendingDataPoint[] }) {
+  const isMobile = useMediaQuery("(max-width: 639px)")
+
   return (
     <section className="border-t border-line pt-5">
       <SectionHead
@@ -128,24 +131,51 @@ function MonthlySpendingChart({ data }: { data: SpendingDataPoint[] }) {
           No spending history recorded yet.
         </p>
       ) : (
-        <div className="h-[280px] w-full border-t border-line pt-2">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-              <CartesianGrid stroke={GRID_COLOR} strokeDasharray="2 4" vertical={false} />
-              <XAxis dataKey="month" tick={{ fill: AXIS_COLOR, fontSize: 10.5 }} axisLine={false} tickLine={false} dy={8} />
-              <YAxis
-                tick={{ fill: AXIS_COLOR, fontSize: 10.5 }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={compactCurrency}
-                width={48}
-              />
-              <Tooltip content={<ChartTooltip />} cursor={{ stroke: CURSOR_COLOR, strokeDasharray: "4 4" }} />
-              <Line type="monotone" dataKey="subscriptions" name="Subscriptions" stroke={CHART_ACCENT} strokeWidth={1.75} dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
-              <Line type="monotone" dataKey="api" name="API" stroke={CHART_TEAL} strokeWidth={1.75} dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+        <>
+          <div className="h-[220px] w-full border-t border-line pt-2 sm:h-[280px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={data} margin={{ top: 8, right: 8, left: isMobile ? -10 : -18, bottom: 0 }}>
+                <CartesianGrid stroke={GRID_COLOR} strokeDasharray="2 4" vertical={false} />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fill: AXIS_COLOR, fontSize: 10.5 }}
+                  axisLine={false}
+                  tickLine={false}
+                  dy={8}
+                  interval={isMobile ? "preserveStartEnd" : 0}
+                  minTickGap={isMobile ? 28 : 12}
+                />
+                <YAxis
+                  tick={{ fill: AXIS_COLOR, fontSize: 10.5 }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={compactCurrency}
+                  width={isMobile ? 40 : 48}
+                  tickCount={isMobile ? 4 : 5}
+                />
+                <Tooltip content={<ChartTooltip />} cursor={{ stroke: CURSOR_COLOR, strokeDasharray: "4 4" }} />
+                <Line type="monotone" dataKey="subscriptions" name="Subscriptions" stroke={CHART_ACCENT} strokeWidth={1.75} dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
+                <Line type="monotone" dataKey="api" name="API" stroke={CHART_TEAL} strokeWidth={1.75} dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          <details className="mt-3 border-t border-line pt-2.5 sm:hidden">
+            <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3 select-none">
+              View monthly table ({data.length} months)
+            </summary>
+            <div className="mt-2 divide-y divide-line border-t border-line font-mono text-[11px]">
+              {data.map((row) => (
+                <div key={row.month} className="grid grid-cols-[3.5rem_1fr_1fr_1fr] items-center gap-2 py-2 tabular-nums">
+                  <span className="text-ink-3">{row.month}</span>
+                  <span className="text-right text-ink-2">{compactCurrency(row.subscriptions)}</span>
+                  <span className="text-right text-ink-2">{compactCurrency(row.api)}</span>
+                  <span className="text-right font-medium text-ink">{compactCurrency(row.total)}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+        </>
       )}
     </section>
   )

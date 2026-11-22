@@ -35,15 +35,19 @@ function Toggle({
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-line ${
-        checked ? "bg-accent" : "bg-surface-3"
-      }`}
+      className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-end focus-visible:outline-none"
     >
       <span
-        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-surface shadow-sm transition-transform duration-150 ${
-          checked ? "translate-x-[18px]" : "translate-x-[3px]"
+        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-150 ${
+          checked ? "bg-accent" : "bg-surface-3"
         }`}
-      />
+      >
+        <span
+          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-surface shadow-sm transition-transform duration-150 ${
+            checked ? "translate-x-[18px]" : "translate-x-[3px]"
+          }`}
+        />
+      </span>
     </button>
   )
 }
@@ -75,7 +79,7 @@ export default function SettingsPage() {
 
       {toast && (
         <div
-          className="fixed right-4 top-20 z-50 flex items-center gap-2 border border-line-strong bg-surface px-3.5 py-2.5 shadow-float animate-fade-in-up"
+          className="fixed inset-x-4 top-16 z-50 flex items-center justify-between gap-2 border border-line-strong bg-surface px-3.5 py-2.5 shadow-float animate-fade-in-up sm:inset-x-auto sm:right-4 sm:top-20"
           role="status"
           aria-live="polite"
         >

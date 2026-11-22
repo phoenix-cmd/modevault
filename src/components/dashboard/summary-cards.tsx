@@ -17,8 +17,8 @@ function Stat({ label, value, meta, emphasis }: StatProps) {
       <p
         className={
           emphasis
-            ? "mt-2 font-mono text-[22px] font-medium tracking-[-0.04em] text-accent tabular-nums"
-            : "mt-2 font-mono text-[22px] font-medium tracking-[-0.04em] text-ink tabular-nums"
+            ? "mt-2 font-mono text-[clamp(1.1rem,2.2vw,1.375rem)] font-medium tracking-[-0.04em] text-accent tabular-nums"
+            : "mt-2 font-mono text-[clamp(1.1rem,2.2vw,1.375rem)] font-medium tracking-[-0.04em] text-ink tabular-nums"
         }
       >
         {value}
@@ -35,7 +35,7 @@ export function SummaryCards({ data }: { data: DashboardSummary }) {
         <p className="font-mono text-[10px] font-medium uppercase tracking-[0.14em] text-ink-3">
           Monthly run-rate
         </p>
-        <p className="mt-3 font-mono text-[42px] font-medium leading-none tracking-[-0.055em] text-ink tabular-nums sm:text-[48px]">
+        <p className="mt-3 break-words font-mono text-[clamp(1.95rem,5vw,3rem)] font-medium leading-none tracking-[-0.055em] text-ink tabular-nums">
           {formatCurrency(data.totalMonthlySpend, data.currency)}
         </p>
         <p className="mt-3 max-w-sm text-[12.5px] leading-relaxed text-ink-2">
@@ -44,7 +44,7 @@ export function SummaryCards({ data }: { data: DashboardSummary }) {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-8 gap-y-7 sm:grid-cols-4 lg:col-span-7 lg:pl-10">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4 sm:gap-x-8 sm:gap-y-7 lg:col-span-7 lg:pl-10">
         <Stat
           label="Annual projected"
           value={formatCurrency(data.totalAnnualSpend, data.currency)}

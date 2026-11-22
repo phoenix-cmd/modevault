@@ -40,15 +40,15 @@ export function ApiAccountsCards({ accounts, onAddLog }: ApiAccountsCardsProps) 
       </div>
 
       <div className="hidden overflow-x-auto border-t border-line md:block">
-        <table className="data-table min-w-[860px]">
+        <table className="data-table">
           <thead>
             <tr>
               <th>Account</th>
               <th>Status</th>
               <th className="text-right">Prepaid balance</th>
               <th className="text-right">Total spent</th>
-              <th className="text-right">Rate limit</th>
-              <th>Last sync</th>
+              <th className="hidden text-right lg:table-cell">Rate limit</th>
+              <th className="hidden xl:table-cell">Last sync</th>
               <th className="text-right">Action</th>
             </tr>
           </thead>
@@ -77,8 +77,8 @@ export function ApiAccountsCards({ accounts, onAddLog }: ApiAccountsCardsProps) 
                   </div>
                 </td>
                 <td className="text-right font-mono text-[11.5px] text-ink-2 tabular-nums">{formatCurrency(acc.totalSpent, acc.currency)}</td>
-                <td className="text-right font-mono text-[11.5px] text-ink-2 tabular-nums">{acc.rateLimit ? `${acc.rateLimit} RPM` : "Default"}</td>
-                <td className="whitespace-nowrap font-mono text-[10.5px] text-ink-3">
+                <td className="hidden text-right font-mono text-[11.5px] text-ink-2 tabular-nums lg:table-cell">{acc.rateLimit ? `${acc.rateLimit} RPM` : "Default"}</td>
+                <td className="hidden whitespace-nowrap font-mono text-[10.5px] text-ink-3 xl:table-cell">
                   {acc.lastSyncAt
                     ? new Date(acc.lastSyncAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
                     : "Manual"}
@@ -125,6 +125,28 @@ export function ApiAccountsCards({ accounts, onAddLog }: ApiAccountsCardsProps) 
               <span className="text-[11px] text-ink-3">{acc.rateLimit ? `${acc.rateLimit} RPM` : "Default rate limit"}</span>
               <button onClick={() => onAddLog(acc.id)} className="btn-ghost btn-sm">Log usage</button>
             </div>
+
+            <details className="mt-2">
+              <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3 select-none">
+                Sync &amp; limit metadata
+              </summary>
+              <div className="mt-2 space-y-1 border-t border-line/70 pt-2 font-mono text-[10.5px] text-ink-3">
+                <div className="flex justify-between gap-3">
+                  <span>Last sync</span>
+                  <span className="text-ink-2">
+                    {acc.lastSyncAt
+                      ? new Date(acc.lastSyncAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
+                      : "Manual"}
+                  </span>
+                </div>
+                {acc.rateLimitTokens && (
+                  <div className="flex justify-between gap-3">
+                    <span>Token ceiling</span>
+                    <span className="tabular-nums text-ink-2">{acc.rateLimitTokens.toLocaleString()} TPM</span>
+                  </div>
+                )}
+              </div>
+            </details>
           </div>
         ))}
       </div>

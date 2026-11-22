@@ -53,7 +53,13 @@ function sortValue(sub: SubscriptionData, key: SortKey) {
   }
 }
 
-function UsageRemaining({ subscription }: { subscription: SubscriptionData }) {
+function UsageRemaining({
+  subscription,
+  fullWidth,
+}: {
+  subscription: SubscriptionData
+  fullWidth?: boolean
+}) {
   const usage = getPrimaryUsage(subscription)
 
   if (!usage) {
@@ -64,7 +70,7 @@ function UsageRemaining({ subscription }: { subscription: SubscriptionData }) {
   const remaining = Math.max(100 - usedPct, 0)
 
   return (
-    <div className="w-[150px]">
+    <div className={fullWidth ? "w-full" : "w-[150px]"}>
       <div className="flex items-center justify-between gap-2 font-mono text-[10.5px]">
         <span
           className={cn(
@@ -208,15 +214,26 @@ export function SubscriptionList({
   return (
     <>
       <div className="hidden overflow-x-auto border-t border-line md:block">
-        <table className="data-table min-w-[980px]">
+        <table className="data-table">
           <thead>
             <tr>
               <SortHeader label="Provider" column="provider" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <th>Plan</th>
-              <th>Billing</th>
+              <th className="hidden lg:table-cell">Billing</th>
               <SortHeader label="Monthly eq." column="monthly" align="right" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortHeader label="Usage remaining" column="usage" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-              <SortHeader label="Next renewal" column="renewal" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <th className="hidden xl:table-cell">
+                <button
+                  onClick={() => toggleSort("renewal")}
+                  className={cn(
+                    "inline-flex items-center gap-1 uppercase tracking-[0.06em] transition-colors hover:text-ink",
+                    sortKey === "renewal" && "text-ink-2"
+                  )}
+                >
+                  Next renewal
+                  <ArrowUpDown className="h-3 w-3" strokeWidth={2} />
+                </button>
+              </th>
               <th>Status</th>
               <th className="text-right">Actions</th>
             </tr>
@@ -236,7 +253,7 @@ export function SubscriptionList({
                     </div>
                   </td>
                   <td className="max-w-[180px]"><p className="truncate text-ink-2">{sub.planName}</p></td>
-                  <td className="whitespace-nowrap capitalize text-ink-2">{sub.billingCycle}</td>
+                  <td className="hidden whitespace-nowrap capitalize text-ink-2 lg:table-cell">{sub.billingCycle}</td>
                   <td className="whitespace-nowrap text-right">
                     <p className="font-mono text-[12px] text-ink tabular-nums">{formatCurrency(monthly, sub.currency)}</p>
                     {sub.billingCycle !== "monthly" && (
@@ -246,7 +263,7 @@ export function SubscriptionList({
                     )}
                   </td>
                   <td><UsageRemaining subscription={sub} /></td>
-                  <td className="whitespace-nowrap">
+                  <td className="hidden whitespace-nowrap xl:table-cell">
                     {sub.renewalDate ? (
                       <>
                         <p className="text-ink-2">{formatRelativeDate(sub.renewalDate)}</p>
@@ -293,7 +310,32 @@ export function SubscriptionList({
                 <Actions subscription={sub} onEdit={onEdit} onDelete={onDelete} onRecordUsage={onRecordUsage} />
               </div>
 
-              <div className="mt-3"><UsageRemaining subscription={sub} /></div>
+              <div className="mt-3"><UsageRemaining subscription={sub} fullWidth /></div>
+
+              <details className="mt-2.5">
+                <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3 select-none">
+                  Billing &amp; source details
+                </summary>
+                <div className="mt-2 space-y-1 border-t border-line/70 pt-2 font-mono text-[10.5px] text-ink-3">
+                  <div className="flex justify-between gap-3">
+                    <span>Cycle</span>
+                    <span className="capitalize text-ink-2">
+                      {sub.billingCycle} ({formatCurrency(sub.price, sub.currency)})
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span>Renewal date</span>
+                    <span className="text-ink-2">{sub.renewalDate ? formatDate(sub.renewalDate) : "—"}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span>Source / Category</span>
+                    <span className="capitalize text-ink-2">
+                      {sub.dataSource.replace("_", " ")} · {sub.type}
+                    </span>
+                  </div>
+                  {sub.notes && <p className="pt-1 font-sans text-[11.5px] text-ink-2">{sub.notes}</p>}
+                </div>
+              </details>
             </div>
           )
         })}

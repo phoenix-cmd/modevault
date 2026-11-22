@@ -26,7 +26,7 @@ export function ModelComparisonTable({ models }: ModelComparisonTableProps) {
       </div>
 
       <div className="hidden overflow-x-auto border-t border-line md:block">
-        <table className="data-table min-w-[760px]">
+        <table className="data-table">
           <thead>
             <tr>
               <th>Provider</th>

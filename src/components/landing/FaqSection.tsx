@@ -42,12 +42,12 @@ export function FaqSection() {
   return (
     <section
       id="faq"
-      className="border-b border-[var(--rig-paper-18)] py-20 sm:py-28"
+      className="scroll-mt-20 border-b border-[var(--rig-paper-18)] py-16 sm:py-28"
     >
       <div className="rig-container">
-        <div className="mb-12 text-center">
+        <div className="mb-10 text-center sm:mb-12">
           <span className="rig-badge mb-5">FAQ</span>
-          <h2 className="rig-display text-[clamp(2.2rem,4.5vw,3.6rem)] font-bold leading-[0.95] text-[var(--rig-paper)]">
+          <h2 className="rig-display text-[clamp(1.9rem,4.5vw,3.6rem)] font-bold leading-[0.95] text-[var(--rig-paper)]">
             Frequently asked questions.
           </h2>
         </div>
@@ -64,12 +64,12 @@ export function FaqSection() {
                   type="button"
                   onClick={() => setOpenIdx(isOpen ? null : idx)}
                   aria-expanded={isOpen}
-                  className="flex w-full items-center gap-5 py-6 text-left transition-colors hover:text-white focus-visible:outline-2"
+                  className="flex min-h-[48px] w-full items-center gap-4 py-5 text-left transition-colors hover:text-white focus-visible:outline-2 sm:gap-5 sm:py-6"
                 >
                   <span className="rig-mono text-[11px] font-bold tracking-[0.14em] text-[var(--rig-blue)]">
                     {item.num}
                   </span>
-                  <span className="flex-1 rig-display text-[1.1rem] font-semibold text-[var(--rig-paper)] sm:text-[1.25rem]">
+                  <span className="flex-1 rig-display text-[1.05rem] font-semibold text-[var(--rig-paper)] sm:text-[1.25rem]">
                     {item.q}
                   </span>
                   <Plus
@@ -80,7 +80,7 @@ export function FaqSection() {
                 </button>
 
                 {isOpen && (
-                  <div className="pb-6 pl-10 pr-6 text-[0.92rem] leading-[1.7] text-[var(--rig-paper-75)] sm:pl-11">
+                  <div className="pb-6 pl-7 pr-2 text-[0.92rem] leading-[1.7] text-[var(--rig-paper-75)] sm:pl-11 sm:pr-6">
                     <p className="max-w-[660px]">{item.a}</p>
                   </div>
                 )}

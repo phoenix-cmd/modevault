@@ -239,12 +239,12 @@ export default function GitControlPage() {
           ) : undefined
         }
         action={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
             <select
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
               aria-label="Active project"
-              className="select select-sm w-auto max-w-[220px]"
+              className="select select-sm w-full sm:w-auto sm:max-w-[200px]"
             >
               {projects.length === 0 && <option value="">No projects</option>}
               {projects.map((project) => (
@@ -259,12 +259,12 @@ export default function GitControlPage() {
               New branch
             </button>
 
-            <div className="inline-flex h-8 items-center overflow-hidden border border-line bg-surface">
+            <div className="inline-flex min-h-[40px] items-center overflow-hidden border border-line bg-surface sm:h-8 sm:min-h-0">
               <button
                 onClick={() => handleSync("pull")}
                 disabled={syncing !== null || !projectId}
                 title={sync?.hasRemote ? "Pull from origin" : "No remote configured"}
-                className="inline-flex h-8 items-center gap-1.5 px-2.5 text-[11.5px] font-medium text-ink transition-colors hover:bg-surface-2 disabled:opacity-50"
+                className="inline-flex h-full items-center gap-1.5 px-2.5 text-[11.5px] font-medium text-ink transition-colors hover:bg-surface-2 disabled:opacity-50"
               >
                 <ArrowDown className="h-3.5 w-3.5" strokeWidth={1.8} />
                 {syncing === "pull" ? "Pulling" : "Pull"}
@@ -274,7 +274,7 @@ export default function GitControlPage() {
                 onClick={() => handleSync("push")}
                 disabled={syncing !== null || !projectId}
                 title={sync?.hasRemote ? "Push to origin" : "No remote configured"}
-                className="inline-flex h-8 items-center gap-1.5 px-2.5 text-[11.5px] font-medium text-ink transition-colors hover:bg-surface-2 disabled:opacity-50"
+                className="inline-flex h-full items-center gap-1.5 px-2.5 text-[11.5px] font-medium text-ink transition-colors hover:bg-surface-2 disabled:opacity-50"
               >
                 <ArrowUp className="h-3.5 w-3.5" strokeWidth={1.8} />
                 {syncing === "push" ? "Pushing" : "Push"}
@@ -285,7 +285,7 @@ export default function GitControlPage() {
                 disabled={syncing !== null || !projectId}
                 title="Fetch origin"
                 aria-label="Fetch origin"
-                className="icon-btn h-8 w-8 rounded-none"
+                className="icon-btn h-full rounded-none sm:h-8 sm:w-8"
               >
                 <RefreshCw className={cn("h-3.5 w-3.5", syncing === "fetch" && "animate-spin")} strokeWidth={1.8} />
               </button>
@@ -366,13 +366,34 @@ export default function GitControlPage() {
 
         {diff && (
           <div className="border-b border-line py-4">
-            <div className="flex items-baseline justify-between gap-3">
-              <p className="metric-label">Latest workspace diff</p>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="metric-label">Unified workspace diff</p>
               <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">Recorded from active worktree</p>
             </div>
-            <pre className="mt-2 max-h-72 overflow-auto border border-line bg-surface-2/20 p-3 font-mono text-[10.5px] leading-relaxed whitespace-pre-wrap text-ink-2">
-              {diff}
-            </pre>
+            <div className="mt-2 max-h-72 overflow-auto border border-line bg-surface-2/20 py-2 font-mono text-[11px] leading-relaxed">
+              {diff.split("\n").map((line, idx) => {
+                const isAdd = line.startsWith("+") && !line.startsWith("+++")
+                const isDel = line.startsWith("-") && !line.startsWith("---")
+                const isHunk = line.startsWith("@@")
+                return (
+                  <div
+                    key={idx}
+                    className={cn(
+                      "whitespace-pre px-3",
+                      isAdd
+                        ? "bg-success-soft/45 text-success"
+                        : isDel
+                        ? "bg-danger-soft/45 text-danger"
+                        : isHunk
+                        ? "bg-accent-soft/40 text-accent"
+                        : "text-ink-2"
+                    )}
+                  >
+                    {line || " "}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )}
 
@@ -633,13 +654,13 @@ export default function GitControlPage() {
       </section>
 
       {showPrModal && (
-        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[1px]">
+        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 backdrop-blur-[1px] sm:p-4">
           <div
             ref={prDialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="pr-dialog-title"
-            className="panel max-h-[90vh] w-full max-w-lg overflow-y-auto shadow-float"
+            className="panel max-h-[90dvh] w-full max-w-lg overflow-y-auto shadow-float"
           >
             <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
               <div>
@@ -700,13 +721,13 @@ export default function GitControlPage() {
       )}
 
       {showBranchModal && (
-        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-[1px]">
+        <div className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 backdrop-blur-[1px] sm:p-4">
           <div
             ref={branchDialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="branch-dialog-title"
-            className="panel w-full max-w-sm shadow-float"
+            className="panel max-h-[90dvh] w-full max-w-sm overflow-y-auto shadow-float"
           >
             <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
               <div>

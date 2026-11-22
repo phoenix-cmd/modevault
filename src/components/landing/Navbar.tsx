@@ -60,6 +60,15 @@ export function Navbar() {
     return () => window.removeEventListener("scroll", onScroll)
   }, [])
 
+  useEffect(() => {
+    if (!mobileOpen) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileOpen(false)
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [mobileOpen])
+
   return (
     <header
       role="banner"
@@ -120,7 +129,7 @@ export function Navbar() {
           onClick={() => setMobileOpen((v) => !v)}
           aria-expanded={mobileOpen}
           aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
-          className={`inline-flex h-9 w-9 items-center justify-center border lg:hidden ${
+          className={`inline-flex h-11 w-11 items-center justify-center border lg:hidden ${
             scrolled
               ? "border-[var(--rig-paper-20)] text-[var(--rig-paper)]"
               : "border-black/25 text-[#0d1313]"
@@ -132,14 +141,14 @@ export function Navbar() {
 
       {/* Mobile Drawer */}
       {mobileOpen && (
-        <div className="border-t border-[var(--rig-paper-18)] bg-[#101514] px-5 py-5 text-[var(--rig-paper)] lg:hidden">
-          <div className="flex flex-col space-y-3">
+        <div className="max-h-[calc(100dvh-68px)] overflow-y-auto border-t border-[var(--rig-paper-18)] bg-[#101514] px-5 py-5 text-[var(--rig-paper)] lg:hidden">
+          <div className="flex flex-col space-y-1">
             {NAV_LINKS.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 onClick={() => setMobileOpen(false)}
-                className="border-b border-[var(--rig-paper-12)] py-2 text-sm font-medium text-[var(--rig-paper-75)] hover:text-[var(--rig-paper)]"
+                className="flex min-h-[44px] items-center border-b border-[var(--rig-paper-12)] py-2 text-sm font-medium text-[var(--rig-paper-75)] hover:text-[var(--rig-paper)]"
               >
                 {item.label}
               </Link>
