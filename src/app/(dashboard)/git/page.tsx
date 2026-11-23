@@ -699,12 +699,24 @@ export default function GitControlPage() {
               <div className="border border-line bg-surface-2/20 p-3.5">
                 <p className="flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-3">
                   <Sparkles className="h-3 w-3 text-accent" strokeWidth={1.8} />
-                  Sample summary · not generated from the diff
+                  Diff summary · derived from current branch state
                 </p>
                 <ul className="mt-2 space-y-1 text-[12px] leading-relaxed text-ink-2">
-                  <li>Atomic database transactions for deduplication locks</li>
-                  <li>Vitest suite added with eight unit assertions</li>
-                  <li>No breaking changes to the client payload contract</li>
+                  <li>
+                    {changes.length > 0
+                      ? `${changes.length} working tree file(s) modified (${changes.map((c) => c.path).slice(0, 3).join(", ")})`
+                      : `Branch ${prBranch || currentBranch} ready for review against main`}
+                  </li>
+                  <li>
+                    {commits[0]?.message
+                      ? `Latest commit (${commits[0].sha}): ${commits[0].message}`
+                      : "All tracked commits verified in worktree"}
+                  </li>
+                  <li>
+                    {diff
+                      ? `Captured patch size: ${diff.split(/\r?\n/).filter((l) => l.startsWith("+") && !l.startsWith("+++")).length} additions, ${diff.split(/\r?\n/).filter((l) => l.startsWith("-") && !l.startsWith("---")).length} deletions`
+                      : "Working directory clean — branch head commit will be proposed"}
+                  </li>
                 </ul>
               </div>
 

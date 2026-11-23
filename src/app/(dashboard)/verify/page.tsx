@@ -189,23 +189,34 @@ export default function VerifyCenterPage() {
 
   const selected = executions.find((e) => e.id === selectedId) || null
   const activeExecutionId = selected?.id
+  const [serverVerification, setServerVerification] = useState<{
+    diffSha256?: string | null
+    commitSha?: string | null
+    findings?: DiffFinding[]
+    addedLineCount?: number
+  } | null>(null)
 
   useEffect(() => {
     let active = true
     if (!activeExecutionId) {
       Promise.resolve().then(() => {
-        if (active) setComments([])
+        if (active) {
+          setComments([])
+          setServerVerification(null)
+        }
       })
       return () => {
         active = false
       }
     }
-    fetch(`/api/executions/${activeExecutionId}/comments`)
-      .then((r) => r.json())
-      .then((j) => {
-        if (active && Array.isArray(j?.data)) setComments(j.data)
-      })
-      .catch(() => {})
+    Promise.all([
+      fetch(`/api/executions/${activeExecutionId}/comments`).then((r) => r.json()).catch(() => null),
+      fetch(`/api/executions/${activeExecutionId}/verify`).then((r) => r.json()).catch(() => null),
+    ]).then(([commentsJson, verifyJson]) => {
+      if (!active) return
+      if (Array.isArray(commentsJson?.data)) setComments(commentsJson.data)
+      if (verifyJson?.data) setServerVerification(verifyJson.data)
+    })
     return () => {
       active = false
     }
@@ -214,7 +225,16 @@ export default function VerifyCenterPage() {
   const diffArtifact = selected?.artifacts?.find((a) => a.type === "git_diff") || null
   const diffText = String(diffArtifact?.content || "")
 
-  const inspection = useMemo(() => inspectDiffContent(diffText), [diffText])
+  const localInspection = useMemo(() => inspectDiffContent(diffText), [diffText])
+  const inspection = useMemo(() => {
+    if (serverVerification?.findings) {
+      return {
+        findings: serverVerification.findings,
+        addedLineCount: serverVerification.addedLineCount ?? localInspection.addedLineCount,
+      }
+    }
+    return localInspection
+  }, [serverVerification, localInspection])
 
   const handleDecision = async (action: "approve" | "request_revision" | "reject") => {
     if (!selected) return
@@ -222,7 +242,11 @@ export default function VerifyCenterPage() {
       const res = await fetch(`/api/executions/${selected.id}/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({
+          action,
+          ...(serverVerification?.diffSha256 ? { expectedDiffHash: serverVerification.diffSha256 } : {}),
+          ...(serverVerification?.commitSha ? { expectedCommitSha: serverVerification.commitSha } : {}),
+        }),
       })
       const json = await res.json()
       if (json?.data) {

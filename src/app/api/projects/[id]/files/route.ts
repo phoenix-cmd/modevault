@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db"
 import { getCurrentUserOrDefault, authErrorResponse } from "@/lib/auth"
 import { requireProjectAccess } from "@/lib/permissions"
 import {
+  analyzeSourceCodeAst,
   listWorkspaceTree,
   readWorkspaceFile,
   writeWorkspaceFile,
@@ -257,11 +258,13 @@ export async function GET(
         try {
           const content = await readWorkspaceFile(source.sourcePath, filePath)
           const language = inferLanguage(filePath)
+          const astSummary = analyzeSourceCodeAst(filePath, content)
           return NextResponse.json({
             data: {
               path: filePath,
               language,
               content,
+              astSummary,
             },
           })
         } catch (err: unknown) {

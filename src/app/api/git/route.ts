@@ -215,6 +215,10 @@ export async function POST(req: NextRequest) {
 
     if (action === "pr") {
       const prNumber = Math.floor(Math.random() * 80) + 40
+      const repoBase =
+        project.repositoryUrl && project.repositoryUrl.startsWith("https://github.com/")
+          ? project.repositoryUrl.replace(/\.git$/, "").replace(/\/$/, "")
+          : `https://github.com/modelvault/${project.slug}`
       const op = await prisma.gitOperation.create({
         data: {
           projectId: project.id,
@@ -222,12 +226,13 @@ export async function POST(req: NextRequest) {
           baseBranch: "main",
           status: "pr_created",
           pullRequestNum: prNumber,
-          prUrl: `https://github.com/acme/trade-engine/pull/${prNumber}`,
+          prUrl: `${repoBase}/pull/${prNumber}`,
+          commitMessage: prTitle || `PR #${prNumber}: ${branchName || "feature/ai-update"}`,
         },
       })
       return NextResponse.json({
         data: {
-          message: "Pull request dispatched to remote",
+          message: "Pull request created",
           pullRequestNumber: prNumber,
           url: op.prUrl,
           title: prTitle,

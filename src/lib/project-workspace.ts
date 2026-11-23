@@ -16,6 +16,127 @@ export interface WorkspaceTreeNode {
   children?: WorkspaceTreeNode[]
 }
 
+export interface FileAstSummary {
+  filePath: string
+  lineCount: number
+  byteSize: number
+  exportedSymbols: string[]
+  importedModules: string[]
+  hooksUsed: string[]
+  complexityScore: number
+  complexityRating: "safe" | "moderate" | "elevated"
+}
+
+export function analyzeSourceCodeAst(filePath: string, content: string): FileAstSummary {
+  const lines = content.split(/\r?\n/)
+  const exportedSymbols = new Set<string>()
+  const importedModules = new Set<string>()
+  const hooksUsed = new Set<string>()
+
+  for (const match of content.matchAll(
+    /export\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var|interface|type)\s+([A-Za-z0-9_]+)/g
+  )) {
+    if (match[1]) exportedSymbols.add(match[1])
+  }
+  for (const match of content.matchAll(/export\s*\{\s*([^}]+)\}/g)) {
+    if (match[1]) {
+      for (const part of match[1].split(",")) {
+        const clean = part.trim().split(/\s+as\s+/)[0]?.trim()
+        if (clean) exportedSymbols.add(clean)
+      }
+    }
+  }
+  for (const match of content.matchAll(/from\s+["']([^"']+)["']/g)) {
+    if (match[1]) importedModules.add(match[1])
+  }
+  for (const match of content.matchAll(/require\(\s*["']([^"']+)["']\s*\)/g)) {
+    if (match[1]) importedModules.add(match[1])
+  }
+  for (const match of content.matchAll(/\b(use[A-Z][A-Za-z0-9_]*)\s*\(/g)) {
+    if (match[1]) hooksUsed.add(match[1])
+  }
+
+  const branchMatches = content.match(/\b(if|else\s+if|for|while|case|catch)\b|&&|\|\||\?/g)
+  const complexityScore = 1 + (branchMatches ? branchMatches.length : 0)
+  const complexityRating =
+    complexityScore <= 8 ? "safe" : complexityScore <= 18 ? "moderate" : "elevated"
+
+  return {
+    filePath,
+    lineCount: lines.length,
+    byteSize: Buffer.byteLength(content, "utf8"),
+    exportedSymbols: Array.from(exportedSymbols).slice(0, 16),
+    importedModules: Array.from(importedModules).slice(0, 16),
+    hooksUsed: Array.from(hooksUsed).slice(0, 12),
+    complexityScore,
+    complexityRating,
+  }
+}
+
+export async function scaffoldStarterWorkspace(
+  projectId: string,
+  opts: { name: string; framework?: string | null; language?: string | null }
+): Promise<string> {
+  const workspacePath = await ensureProjectWorkspace(projectId)
+  const existingEntries = await readdir(workspacePath).catch(() => [])
+  if (existingEntries.length === 0) {
+    const ext = opts.language === "python" ? "py" : opts.language === "javascript" ? "js" : "ts"
+    await writeWorkspaceFile(
+      workspacePath,
+      "README.md",
+      `# ${opts.name}\n\nManaged by MODELVAULT (${opts.framework || "nextjs"} · ${opts.language || "typescript"}).\n`
+    )
+    if (opts.language === "python") {
+      await writeWorkspaceFile(
+        workspacePath,
+        "requirements.txt",
+        "fastapi>=0.115.0\nuvicorn>=0.30.0\npydantic>=2.9.0\n"
+      )
+      await writeWorkspaceFile(
+        workspacePath,
+        "main.py",
+        `from fastapi import FastAPI\n\napp = FastAPI(title="${opts.name}")\n\n@app.get("/health")\ndef health():\n    return {"status": "ok", "service": "${opts.name}"}\n`
+      )
+    } else {
+      await writeWorkspaceFile(
+        workspacePath,
+        "package.json",
+        JSON.stringify(
+          {
+            name: opts.name.toLowerCase().replace(/[^a-z0-9-]/g, "-") || "modelvault-app",
+            version: "0.1.0",
+            private: true,
+            scripts: {
+              dev: "next dev",
+              build: "next build",
+              start: "next start",
+            },
+            dependencies: {
+              next: "16.4.6",
+              react: "19.3.0",
+              "react-dom": "19.3.0",
+            },
+          },
+          null,
+          2
+        )
+      )
+      await writeWorkspaceFile(
+        workspacePath,
+        `src/app/api/checkout/route.${ext}`,
+        `import { NextRequest, NextResponse } from "next/server"\n\nexport async function POST(req: NextRequest) {\n  const idempotencyKey = req.headers.get("Idempotency-Key")\n  if (!idempotencyKey) {\n    return NextResponse.json({ error: "Missing required Idempotency-Key header" }, { status: 400 })\n  }\n  const body = await req.json()\n  return NextResponse.json({ status: "ok", idempotencyKey, received: body })\n}\n`
+      )
+      await writeWorkspaceFile(
+        workspacePath,
+        `src/lib/services/api-client.${ext}`,
+        `export interface RequestConfig {\n  timeoutMs?: number\n  retryAttempts?: number\n  idempotencyKey?: string\n}\n\nexport class ApiClient {\n  constructor(private readonly baseUrl = "") {}\n\n  async request<T>(endpoint: string, options: RequestConfig = {}): Promise<T> {\n    const res = await fetch(\`\${this.baseUrl}\${endpoint}\`, {\n      headers: {\n        "Content-Type": "application/json",\n        ...(options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : {}),\n      },\n      signal: AbortSignal.timeout(options.timeoutMs ?? 15000),\n    })\n    if (!res.ok) throw new Error(\`HTTP \${res.status}\`)\n    return (await res.json()) as T\n  }\n}\n`
+      )
+    }
+  }
+  await initializeGitRepository(workspacePath)
+  return workspacePath
+}
+
 export function isSafeRelativePath(relativePath: string): boolean {
   if (!relativePath || typeof relativePath !== "string" || path.isAbsolute(relativePath)) return false
   if (relativePath.includes("\0")) return false

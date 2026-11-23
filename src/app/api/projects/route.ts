@@ -7,6 +7,7 @@ import {
   requireWorkspaceAccess,
   resolveUserDefaultWorkspace,
 } from "@/lib/permissions"
+import { scaffoldStarterWorkspace } from "@/lib/project-workspace"
 import { parseJson, safeUrlSchema } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
@@ -105,6 +106,23 @@ export async function POST(req: NextRequest) {
         sources: true,
       },
     })
+
+    if (!process.env.VERCEL && project.sources?.[0]?.id) {
+      try {
+        const workspacePath = await scaffoldStarterWorkspace(project.id, {
+          name,
+          framework: framework || "nextjs",
+          language: language || "typescript",
+        })
+        await prisma.projectSource.update({
+          where: { id: project.sources[0].id },
+          data: { sourcePath: workspacePath },
+        })
+        project.sources[0].sourcePath = workspacePath
+      } catch (err) {
+        logger.warn("Project starter workspace scaffold skipped", errorContext(err))
+      }
+    }
 
     return NextResponse.json({ data: project }, { status: 201 })
   } catch (err: unknown) {

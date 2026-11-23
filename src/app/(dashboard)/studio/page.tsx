@@ -76,10 +76,18 @@ export default function StudioPage() {
     { id: 3, time: "12:04:15", type: "http", text: "GET / 200 OK — 24ms" },
   ])
 
-  const [networkRequests] = useState<Array<{ id: number; method: string; path: string; status: number; duration: string }>>([
-    { id: 1, method: "GET", path: "/_next/static/chunks/main.js", status: 200, duration: "12ms" },
-    { id: 2, method: "GET", path: "/api/health", status: 200, duration: "8ms" },
+  const [networkRequests, setNetworkRequests] = useState<Array<{ id: number; method: string; path: string; status: number; duration: string }>>([
+    { id: 1, method: "GET", path: "/api/projects", status: 200, duration: "14ms" },
   ])
+  const [astSummary, setAstSummary] = useState<{
+    lineCount?: number
+    byteSize?: number
+    exportedSymbols?: string[]
+    importedModules?: string[]
+    hooksUsed?: string[]
+    complexityScore?: number
+    complexityRating?: string
+  } | null>(null)
 
   // Load projects
   useEffect(() => {
@@ -147,16 +155,26 @@ export default function StudioPage() {
   // Fetch file content
   const fetchFile = async (path: string) => {
     if (!projectId || !path) return
+    const started = performance.now()
+    const url = `/api/projects/${projectId}/files?file=${encodeURIComponent(path)}`
     try {
-      const res = await fetch(`/api/projects/${projectId}/files?file=${encodeURIComponent(path)}`)
+      const res = await fetch(url)
+      const elapsed = `${Math.max(1, Math.round(performance.now() - started))}ms`
+      setNetworkRequests((prev) => [
+        { id: Date.now(), method: "GET", path: url, status: res.status, duration: elapsed },
+        ...prev.slice(0, 19),
+      ])
       const json = await res.json()
       if (json.data && json.data.content) {
         setCode(json.data.content)
+        setAstSummary(json.data.astSummary || null)
       } else {
         setCode("// Select or create a file to inspect")
+        setAstSummary(null)
       }
     } catch {
       setCode("// Unable to load file")
+      setAstSummary(null)
     }
   }
 
@@ -670,11 +688,41 @@ export default function StudioPage() {
 
                 {devToolsTab === "ast" && (
                   <div className="space-y-2">
-                    <p className="text-[9px] uppercase tracking-[0.12em] text-[#77736c]">Static sample · not derived from the selected file</p>
-                    <p className="text-[#77736c]">File <span className="text-[#f4f2ec]">{selectedFile || "—"}</span></p>
-                    <p className="text-[#77736c]">Exported symbols <span className="text-accent">CheckoutButton, ApiClient, POST</span></p>
-                    <p className="text-[#77736c]">Dependencies <span className="text-success">motion/react, react, prisma, next/server</span></p>
-                    <p className="text-[#77736c]">Cyclomatic complexity <span className="text-warning">3 · safe</span></p>
+                    <p className="text-[9px] uppercase tracking-[0.12em] text-[#77736c]">
+                      Live lexical analysis · derived from selected file ({code.split(/\r?\n/).length} lines)
+                    </p>
+                    <p className="text-[#77736c]">
+                      File <span className="text-[#f4f2ec]">{selectedFile || "—"}</span>
+                    </p>
+                    <p className="text-[#77736c]">
+                      Exported symbols{" "}
+                      <span className="text-accent">
+                        {astSummary?.exportedSymbols?.length
+                          ? astSummary.exportedSymbols.join(", ")
+                          : Array.from(
+                              code.matchAll(
+                                /export\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var|interface|type)\s+([A-Za-z0-9_]+)/g
+                              ),
+                              (m) => m[1]
+                            ).join(", ") || "None detected"}
+                      </span>
+                    </p>
+                    <p className="text-[#77736c]">
+                      Dependencies{" "}
+                      <span className="text-success">
+                        {astSummary?.importedModules?.length
+                          ? astSummary.importedModules.join(", ")
+                          : Array.from(code.matchAll(/from\s+["']([^"']+)["']/g), (m) => m[1]).join(", ") || "None"}
+                      </span>
+                    </p>
+                    <p className="text-[#77736c]">
+                      Cyclomatic complexity{" "}
+                      <span className="text-warning">
+                        {astSummary?.complexityScore ??
+                          1 + (code.match(/\b(if|else\s+if|for|while|case|catch)\b|&&|\|\||\?/g)?.length || 0)}{" "}
+                        · {astSummary?.complexityRating || "safe"}
+                      </span>
+                    </p>
                   </div>
                 )}
               </div>

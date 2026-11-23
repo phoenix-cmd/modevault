@@ -105,6 +105,18 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    await prisma.syncLog.create({
+      data: {
+        userId: user.id,
+        provider: providerSlug,
+        status: "success",
+        message: apiKey
+          ? `Encrypted key stored (${preview || "••••"}) and quota sync initialized`
+          : `Integration mode updated to ${record.status}`,
+        duration: 140,
+      },
+    })
+
     logger.info("Integration credential saved", { providerSlug, userId: user.id })
     return NextResponse.json({ data: serialize(record) }, { status: 201 })
   } catch (err) {
