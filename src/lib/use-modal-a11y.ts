@@ -12,12 +12,21 @@ const FOCUSABLE_SELECTOR = [
 ].join(",")
 
 /**
- * Shared modal accessibility: Escape to close, focus the first control on open,
+ * Shared modal accessibility: Escape to close, focus the first control on initial open,
  * trap Tab/Shift+Tab inside the dialog, and restore focus when it closes.
+ *
+ * Uses a ref for onClose so inline `() => setOpen(false)` callbacks never re-trigger
+ * the focus-initialization effect on parent state re-renders (which would steal focus
+ * from text inputs while typing).
  */
 export function useModalA11y(isOpen: boolean, onClose: () => void) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const previouslyFocused = useRef<HTMLElement | null>(null)
+  const onCloseRef = useRef(onClose)
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   useEffect(() => {
     if (!isOpen) return
@@ -27,17 +36,27 @@ export function useModalA11y(isOpen: boolean, onClose: () => void) {
       document.activeElement instanceof HTMLElement ? document.activeElement : null
 
     const focusFirst = () => {
-      const target = containerRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
+      const dialog = containerRef.current
+      if (!dialog) return
+      // Never steal focus if an element inside the dialog is already focused
+      if (document.activeElement && dialog.contains(document.activeElement)) {
+        return
+      }
+      // Prefer focusing the first text input/textarea/select if present, otherwise first focusable control
+      const firstInput = dialog.querySelector<HTMLElement>(
+        'input:not([type="hidden"]):not([type="file"]):not([disabled]), textarea:not([disabled]), select:not([disabled])'
+      )
+      const target = firstInput || dialog.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
       target?.focus()
     }
-    // Let the dialog mount before moving focus.
+
     const frame = window.requestAnimationFrame(focusFirst)
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault()
         event.stopPropagation()
-        onClose()
+        onCloseRef.current()
         return
       }
       if (event.key !== "Tab") return
@@ -72,7 +91,7 @@ export function useModalA11y(isOpen: boolean, onClose: () => void) {
       document.body.style.overflow = prevOverflow
       previouslyFocused.current?.focus?.()
     }
-  }, [isOpen, onClose])
+  }, [isOpen])
 
   return containerRef
 }

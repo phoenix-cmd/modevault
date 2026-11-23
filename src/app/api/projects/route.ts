@@ -7,16 +7,48 @@ import {
   requireWorkspaceAccess,
   resolveUserDefaultWorkspace,
 } from "@/lib/permissions"
-import { scaffoldStarterWorkspace } from "@/lib/project-workspace"
-import { parseJson, safeUrlSchema } from "@/lib/validation"
+import { cloneOrScaffoldGitWorkspace } from "@/lib/project-workspace"
+import { parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
+export function normalizeRepositoryUrl(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+
+  // Support "owner/repo" shorthand -> https://github.com/owner/repo
+  if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(trimmed)) {
+    return `https://github.com/${trimmed.replace(/\.git$/i, "")}`
+  }
+
+  // Support "github.com/owner/repo" or "gitlab.com/owner/repo" without protocol
+  if (/^(github\.com|gitlab\.com|bitbucket\.org)\/[A-Za-z0-9_./-]+$/i.test(trimmed)) {
+    return `https://${trimmed.replace(/\.git$/i, "")}`
+  }
+
+  // Support git@github.com:owner/repo.git SSH format
+  const sshMatch = trimmed.match(/^git@([A-Za-z0-9.-]+):([A-Za-z0-9_./-]+)$/i)
+  if (sshMatch) {
+    return `https://${sshMatch[1]}/${sshMatch[2].replace(/\.git$/i, "")}`
+  }
+
+  try {
+    const parsed = new URL(trimmed)
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return null
+    }
+    return parsed.toString().replace(/\/$/, "")
+  } catch {
+    return null
+  }
+}
+
 const projectCreateSchema = z.object({
-  name: z.string().trim().min(1).max(120),
+  name: z.string().trim().min(1).max(120).optional(),
   description: z.string().max(2000).nullable().optional(),
   framework: z.enum(["nextjs", "react", "vue", "node", "python", "custom"]).optional(),
   language: z.enum(["typescript", "javascript", "python"]).optional(),
-  repositoryUrl: safeUrlSchema.nullable().optional(),
+  repositoryUrl: z.string().max(2048).nullable().optional(),
   workspaceId: z.string().min(1).max(128).optional(),
 })
 
@@ -31,7 +63,11 @@ export async function GET(req: NextRequest) {
       await requireWorkspaceAccess(requestedWorkspaceId, user.id, "viewer")
       whereClause = { workspaceId: requestedWorkspaceId }
     } else {
-      const workspaceIds = await getUserAccessibleWorkspaceIds(user.id, "viewer")
+      let workspaceIds = await getUserAccessibleWorkspaceIds(user.id, "viewer")
+      if (workspaceIds.length === 0) {
+        const def = await resolveUserDefaultWorkspace(user.id, "viewer")
+        workspaceIds = [def.workspaceId]
+      }
       whereClause = { workspaceId: { in: workspaceIds } }
     }
 
@@ -60,7 +96,29 @@ export async function POST(req: NextRequest) {
     const user = await requireAuthenticatedUser()
     const parsed = await parseJson(req, projectCreateSchema)
     if ("response" in parsed) return parsed.response
-    const { name, description, framework, language, repositoryUrl, workspaceId } = parsed.data
+    const { name: rawName, description, framework, language, repositoryUrl: rawRepoUrl, workspaceId } = parsed.data
+
+    const normalizedRepoUrl = normalizeRepositoryUrl(rawRepoUrl)
+    if (rawRepoUrl && rawRepoUrl.trim() && !normalizedRepoUrl) {
+      return NextResponse.json(
+        { error: "Invalid repository URL. Enter an https:// Git URL or owner/repo shorthand." },
+        { status: 422 }
+      )
+    }
+
+    const derivedNameFromRepo = normalizedRepoUrl
+      ? normalizedRepoUrl
+          .replace(/\.git$/i, "")
+          .split("/")
+          .filter(Boolean)
+          .pop()
+          ?.replace(/[-_]+/g, " ")
+      : null
+
+    const name = (rawName?.trim() || derivedNameFromRepo || "").trim()
+    if (!name) {
+      return NextResponse.json({ error: "Project name is required" }, { status: 400 })
+    }
 
     const targetWorkspace = workspaceId
       ? await requireWorkspaceAccess(workspaceId, user.id, "member")
@@ -73,10 +131,12 @@ export async function POST(req: NextRequest) {
         workspaceId: targetWorkspace.workspaceId,
         name,
         slug,
-        description: description || null,
+        description:
+          description ||
+          (normalizedRepoUrl ? `Imported from Git repository: ${normalizedRepoUrl}` : null),
         framework: framework || "nextjs",
         language: language || "typescript",
-        repositoryUrl: repositoryUrl || null,
+        repositoryUrl: normalizedRepoUrl,
         status: "ready",
         environments: {
           create: {
@@ -90,13 +150,13 @@ export async function POST(req: NextRequest) {
         },
         sources: {
           create: {
-            type: repositoryUrl ? "git_clone" : "zip_upload",
+            type: normalizedRepoUrl ? "git_clone" : "zip_upload",
             branch: "main",
             manifestJson: JSON.stringify({
               framework: framework || "Next.js 16",
               language: language || "TypeScript",
               detectedDependencies: ["react", "next", "tailwindcss", "prisma"],
-              fileCount: 28,
+              fileCount: 4,
             }),
           },
         },
@@ -107,24 +167,63 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    if (!process.env.VERCEL && project.sources?.[0]?.id) {
+    let inspection = {
+      fileName: normalizedRepoUrl || name,
+      fileCount: 4,
+      framework: project.framework || "nextjs",
+      language: project.language || "typescript",
+      dependencies: ["react", "next", "typescript"],
+    }
+
+    if (project.sources?.[0]?.id) {
       try {
-        const workspacePath = await scaffoldStarterWorkspace(project.id, {
+        const provisioned = await cloneOrScaffoldGitWorkspace(project.id, {
           name,
+          repositoryUrl: normalizedRepoUrl,
           framework: framework || "nextjs",
           language: language || "typescript",
         })
+
+        await prisma.project.update({
+          where: { id: project.id },
+          data: {
+            framework: provisioned.detectedFramework,
+            language: provisioned.detectedLanguage,
+          },
+        })
+
         await prisma.projectSource.update({
           where: { id: project.sources[0].id },
-          data: { sourcePath: workspacePath },
+          data: {
+            sourcePath: provisioned.workspacePath,
+            manifestJson: JSON.stringify({
+              repositoryUrl: normalizedRepoUrl,
+              cloned: provisioned.cloned,
+              fileCount: provisioned.fileList.length,
+              files: provisioned.fileList.slice(0, 100),
+              detectedFramework: provisioned.detectedFramework,
+              detectedLanguage: provisioned.detectedLanguage,
+              dependencies: provisioned.detectedDependencies,
+            }),
+          },
         })
-        project.sources[0].sourcePath = workspacePath
+
+        project.sources[0].sourcePath = provisioned.workspacePath
+        project.framework = provisioned.detectedFramework
+        project.language = provisioned.detectedLanguage
+        inspection = {
+          fileName: normalizedRepoUrl || name,
+          fileCount: provisioned.fileList.length,
+          framework: provisioned.detectedFramework,
+          language: provisioned.detectedLanguage,
+          dependencies: provisioned.detectedDependencies.slice(0, 15),
+        }
       } catch (err) {
-        logger.warn("Project starter workspace scaffold skipped", errorContext(err))
+        logger.warn("Project workspace provisioning warning", errorContext(err))
       }
     }
 
-    return NextResponse.json({ data: project }, { status: 201 })
+    return NextResponse.json({ data: project, inspection }, { status: 201 })
   } catch (err: unknown) {
     logger.error("Projects POST failed", errorContext(err))
     return authErrorResponse(err, "Failed to create project")

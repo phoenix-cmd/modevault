@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useCallback, useEffect, useState, useRef } from "react"
 import { useModalA11y } from "@/lib/use-modal-a11y"
 import Link from "next/link"
 import {
+  AlertTriangle,
   FolderGit2,
   Plus,
   Upload,
@@ -16,11 +17,22 @@ import { PageHeader } from "@/components/ui/page-header"
 import { StatBand, StatBandSkeleton } from "@/components/ui/stat-band"
 import { cn } from "@/lib/utils"
 
+function deriveProjectNameFromRepoInput(input: string): string {
+  const cleaned = input.trim().replace(/\.git$/i, "").replace(/\/+$/, "")
+  if (!cleaned) return ""
+  const lastSegment = cleaned.split(/[/:]/).filter(Boolean).pop() || ""
+  return lastSegment
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim()
+}
+
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
-  const dialogRef = useModalA11y(modalOpen, () => setModalOpen(false))
+  const closeModal = useCallback(() => setModalOpen(false), [])
+  const dialogRef = useModalA11y(modalOpen, closeModal)
   const [search, setSearch] = useState("")
 
   // Form state
@@ -28,7 +40,9 @@ export default function ProjectsPage() {
   const [repoUrl, setRepoUrl] = useState("")
   const [importMode, setImportMode] = useState<"zip" | "git">("zip")
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
   const [inspectionResult, setInspectionResult] = useState<any | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -49,44 +63,97 @@ export default function ProjectsPage() {
     fetchProjects()
   }, [])
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0]
-      setSelectedFile(file)
-      if (!projectName) {
-        setProjectName(file.name.replace(/\.zip$/i, ""))
-      }
+  const applySelectedFile = (file: File) => {
+    setFormError(null)
+    if (!file.name.toLowerCase().endsWith(".zip") && file.type && !file.type.includes("zip")) {
+      setFormError("Please select a valid .zip archive file.")
+      return
     }
+    setSelectedFile(file)
+    setProjectName((prev) => prev.trim() || file.name.replace(/\.zip$/i, ""))
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      applySelectedFile(file)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) {
+      applySelectedFile(file)
+    }
+  }
+
+  const handleRepoUrlChange = (value: string) => {
+    setRepoUrl(value)
+    setFormError(null)
   }
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault()
-    setUploading(true)
+    setFormError(null)
     setInspectionResult(null)
+
+    if (importMode === "zip") {
+      if (!selectedFile) {
+        setFormError("Please choose or drop a .zip archive file to upload.")
+        return
+      }
+    } else {
+      if (!repoUrl.trim() && !projectName.trim()) {
+        setFormError("Please enter a Git repository URL or project name.")
+        return
+      }
+    }
+
+    const effectiveName =
+      projectName.trim() ||
+      (importMode === "zip" && selectedFile
+        ? selectedFile.name.replace(/\.zip$/i, "")
+        : deriveProjectNameFromRepoInput(repoUrl)) ||
+      "Imported Project"
+
+    setUploading(true)
 
     try {
       if (importMode === "zip" && selectedFile) {
         const formData = new FormData()
         formData.append("file", selectedFile)
-        formData.append("name", projectName)
+        formData.append("name", effectiveName)
 
         const res = await fetch("/api/projects/upload", {
           method: "POST",
           body: formData,
         })
-        const json = await res.json()
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          throw new Error(json.error || `Failed to upload ZIP archive (HTTP ${res.status})`)
+        }
         if (json.data?.inspection) {
           setInspectionResult(json.data.inspection)
         }
       } else {
-        await fetch("/api/projects", {
+        const res = await fetch("/api/projects", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name: projectName,
-            repositoryUrl: repoUrl || null,
+            name: effectiveName,
+            repositoryUrl: repoUrl.trim() || null,
           }),
         })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          throw new Error(json.error || `Failed to import Git repository (HTTP ${res.status})`)
+        }
+        if (json.inspection) {
+          setInspectionResult(json.inspection)
+        }
       }
 
       await fetchProjects()
@@ -95,10 +162,12 @@ export default function ProjectsPage() {
         setSelectedFile(null)
         setProjectName("")
         setRepoUrl("")
+        setFormError(null)
         setInspectionResult(null)
-      }, 1500)
-    } catch (err) {
-      console.error(err)
+        if (fileInputRef.current) fileInputRef.current.value = ""
+      }, 900)
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : "Failed to provision project")
     } finally {
       setUploading(false)
     }
@@ -126,7 +195,14 @@ export default function ProjectsPage() {
         title="Projects"
         description="Repository register for attached codebases, provisioned sandboxes, and recorded agent execution contexts."
         action={
-          <button onClick={() => setModalOpen(true)} className="btn-primary">
+          <button
+            onClick={() => {
+              setFormError(null)
+              setInspectionResult(null)
+              setModalOpen(true)
+            }}
+            className="btn-primary"
+          >
             <Plus className="h-4 w-4" strokeWidth={2} />
             New project
           </button>
@@ -196,7 +272,14 @@ export default function ProjectsPage() {
               <p className="mt-2 text-[13px] leading-relaxed text-ink-3">
                 Upload a ZIP archive or import a Git repository to provision a sandbox and begin agent runs. Repository records and execution counts will appear in this register.
               </p>
-              <button onClick={() => setModalOpen(true)} className="btn-primary mt-5">
+              <button
+                onClick={() => {
+                  setFormError(null)
+                  setInspectionResult(null)
+                  setModalOpen(true)
+                }}
+                className="btn-primary mt-5"
+              >
                 <Plus className="h-4 w-4" strokeWidth={2} />
                 Create first project
               </button>
@@ -343,6 +426,7 @@ export default function ProjectsPage() {
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => setModalOpen(false)}
                 className="icon-btn -mr-1.5 -mt-1"
                 aria-label="Close new project dialog"
@@ -355,7 +439,10 @@ export default function ProjectsPage() {
               <div className="segmented w-full" role="group" aria-label="Import mode">
                 <button
                   type="button"
-                  onClick={() => setImportMode("zip")}
+                  onClick={() => {
+                    setImportMode("zip")
+                    setFormError(null)
+                  }}
                   aria-pressed={importMode === "zip"}
                   className={cn(
                     "segmented-item flex-1",
@@ -366,7 +453,10 @@ export default function ProjectsPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setImportMode("git")}
+                  onClick={() => {
+                    setImportMode("git")
+                    setFormError(null)
+                  }}
                   aria-pressed={importMode === "git"}
                   className={cn(
                     "segmented-item flex-1",
@@ -384,43 +474,79 @@ export default function ProjectsPage() {
                 <input
                   id="project-name"
                   type="text"
-                  required
-                  placeholder="Acme Billing Core"
+                  placeholder={
+                    importMode === "git" && repoUrl
+                      ? deriveProjectNameFromRepoInput(repoUrl) || "Acme Billing Core"
+                      : "Acme Billing Core"
+                  }
                   value={projectName}
-                  onChange={(e) => setProjectName(e.target.value)}
+                  onChange={(e) => {
+                    setProjectName(e.target.value)
+                    setFormError(null)
+                  }}
                   className="field"
                 />
+                <p className="mt-1 font-mono text-[10px] text-ink-3">
+                  {importMode === "zip"
+                    ? "Leave blank to auto-fill from the uploaded .zip filename."
+                    : "Leave blank to auto-fill from the Git repository name."}
+                </p>
               </div>
 
               {importMode === "zip" ? (
                 <div>
                   <span className="label">Source archive</span>
-                  <button
-                    type="button"
+                  <div
+                    role="button"
+                    tabIndex={0}
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex w-full flex-col items-center justify-center border border-dashed border-line-strong bg-surface-2/40 px-6 py-8 text-center transition-colors hover:border-accent-line"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault()
+                        fileInputRef.current?.click()
+                      }
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setIsDragging(true)
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setIsDragging(false)
+                    }}
+                    onDrop={handleDrop}
+                    className={cn(
+                      "flex w-full cursor-pointer flex-col items-center justify-center border border-dashed px-6 py-8 text-center transition-colors",
+                      isDragging
+                        ? "border-accent bg-accent-soft/20"
+                        : selectedFile
+                          ? "border-success/40 bg-success-soft/10"
+                          : "border-line-strong bg-surface-2/40 hover:border-accent-line"
+                    )}
                   >
                     <Upload
-                      className="mb-2.5 h-5 w-5 text-ink-3"
+                      className={cn("mb-2.5 h-5 w-5", selectedFile ? "text-success" : "text-ink-3")}
                       strokeWidth={1.6}
                     />
                     <span className="text-[12.5px] font-medium text-ink">
                       {selectedFile
                         ? selectedFile.name
-                        : "Select a .zip project archive"}
+                        : "Click to choose or drag & drop a .zip archive"}
                     </span>
                     <span className="mt-1 font-mono text-[9.5px] uppercase tracking-[0.08em] text-ink-3">
                       {selectedFile
                         ? `${(selectedFile.size / 1024).toFixed(1)} KB ready for AST inspection`
-                        : "ZIP containing package.json or requirements.txt"}
+                        : "ZIP containing package.json or requirements.txt (up to 25 MB)"}
                     </span>
-                  </button>
+                  </div>
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".zip"
+                    accept=".zip,application/zip,application/x-zip-compressed,multipart/x-zip"
                     onChange={handleFileChange}
-                    className="hidden"
+                    className="sr-only"
                   />
                 </div>
               ) : (
@@ -431,11 +557,30 @@ export default function ProjectsPage() {
                   <input
                     id="repo-url"
                     type="text"
-                    placeholder="https://github.com/org/repo.git"
+                    placeholder="https://github.com/org/repo or org/repo"
                     value={repoUrl}
-                    onChange={(e) => setRepoUrl(e.target.value)}
+                    onChange={(e) => handleRepoUrlChange(e.target.value)}
+                    onBlur={() => {
+                      if (!projectName.trim() && repoUrl.trim()) {
+                        const derived = deriveProjectNameFromRepoInput(repoUrl)
+                        if (derived) setProjectName(derived)
+                      }
+                    }}
                     className="field font-mono text-[12px]"
                   />
+                  <p className="mt-1 font-mono text-[10px] text-ink-3">
+                    Supports full https:// GitHub/GitLab URLs or owner/repo shorthand.
+                  </p>
+                </div>
+              )}
+
+              {formError && (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2 border border-danger/30 bg-danger-soft/40 px-3 py-2.5 text-[12px] text-danger"
+                >
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                  <span>{formError}</span>
                 </div>
               )}
 

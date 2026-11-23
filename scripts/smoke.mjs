@@ -104,6 +104,24 @@ async function main() {
   if (gitState.status !== 200) failures.push(`git state ${gitState.status}`)
   else if (!gitState.json?.data?.sync) failures.push("git sync state missing")
 
+  const gitProjectRes = await request(
+    "/api/projects",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        repositoryUrl: "modevault-org/smoke-repo",
+        sourceType: "git_repo",
+      }),
+    },
+    jar
+  )
+  if (gitProjectRes.status !== 201) {
+    failures.push(`git project create ${gitProjectRes.status} ${gitProjectRes.json?.error || ""}`)
+  } else if (gitProjectRes.json?.data?.name !== "smoke repo") {
+    failures.push(`git project auto-name expected 'smoke repo' got '${gitProjectRes.json?.data?.name}'`)
+  }
+
   const fs = await import("node:fs")
   const path = await import("node:path")
   const demoZipPath = path.join(process.cwd(), "scripts", "demo.zip")

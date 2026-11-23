@@ -107,6 +107,47 @@ export async function resolveUserDefaultWorkspace(
     }
   }
 
+  // If an authenticated user has no organization/workspace yet, auto-provision their default organization & workspace
+  if (memberships.length === 0) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true },
+    })
+    if (user) {
+      const slugBase = (user.name || user.email.split("@")[0] || "user")
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, "-")
+      const createdOrg = await prisma.organization.create({
+        data: {
+          name: `${user.name || "Personal"} Organization`,
+          slug: `${slugBase}-${Date.now().toString(36)}`,
+          memberships: {
+            create: {
+              userId: user.id,
+              role: "owner",
+            },
+          },
+          workspaces: {
+            create: {
+              name: "Default Workspace",
+              slug: "default",
+              isDefault: true,
+            },
+          },
+        },
+        include: { workspaces: true },
+      })
+      const ws = createdOrg.workspaces[0]
+      if (ws) {
+        return {
+          workspaceId: ws.id,
+          organizationId: createdOrg.id,
+          role: "owner",
+        }
+      }
+    }
+  }
+
   throw new AuthError("Forbidden", 403)
 }
 

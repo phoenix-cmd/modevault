@@ -6,7 +6,9 @@ import { gitBranchNameSchema } from "@/lib/validation"
 
 const execFileAsync = promisify(execFile)
 
-export const PROJECT_WORKSPACE_ROOT = path.join(/* turbopackIgnore: true */ process.cwd(), "data", "projects")
+export const PROJECT_WORKSPACE_ROOT = process.env.VERCEL
+  ? path.join("/tmp", "modevault-projects")
+  : path.join(/* turbopackIgnore: true */ process.cwd(), "data", "projects")
 
 export interface WorkspaceTreeNode {
   name: string
@@ -312,17 +314,170 @@ export async function isGitRepository(rootPath: string): Promise<boolean> {
 }
 
 export async function initializeGitRepository(rootPath: string): Promise<void> {
-  if (await isGitRepository(rootPath)) return
-  await git(rootPath, ["init"])
-  await git(rootPath, ["config", "user.email", "modelvault@local"])
-  await git(rootPath, ["config", "user.name", "MODELVAULT"])
-  await git(rootPath, ["config", "core.hooksPath", ""])
-  await git(rootPath, ["config", "core.symlinks", "false"])
-  await git(rootPath, ["add", "-A"])
   try {
+    if (await isGitRepository(rootPath)) return
+    await git(rootPath, ["init"])
+    await git(rootPath, ["config", "user.email", "modelvault@local"])
+    await git(rootPath, ["config", "user.name", "MODELVAULT"])
+    await git(rootPath, ["config", "core.hooksPath", ""])
+    await git(rootPath, ["config", "core.symlinks", "false"])
+    await git(rootPath, ["add", "-A"])
     await git(rootPath, ["commit", "--no-verify", "-m", "Initial commit from MODELVAULT workspace"])
   } catch {
-    // Empty repository or nothing to commit; leave initialized.
+    // Git CLI may be unavailable in serverless runtime or repository may have nothing to commit; leave workspace files intact.
+  }
+}
+
+export async function cloneOrScaffoldGitWorkspace(
+  projectId: string,
+  opts: {
+    name: string
+    repositoryUrl?: string | null
+    framework?: string | null
+    language?: string | null
+  }
+): Promise<{
+  workspacePath: string
+  cloned: boolean
+  detectedFramework: string
+  detectedLanguage: string
+  detectedDependencies: string[]
+  fileList: string[]
+}> {
+  const workspacePath = await ensureProjectWorkspace(projectId)
+  let cloned = false
+
+  if (opts.repositoryUrl && /^https:\/\/[A-Za-z0-9._/-]+$/i.test(opts.repositoryUrl.trim())) {
+    const cleanUrl = opts.repositoryUrl.trim()
+    try {
+      await rm(workspacePath, { recursive: true, force: true })
+      await mkdir(path.dirname(workspacePath), { recursive: true })
+      await execFileAsync(
+        "git",
+        [
+          "-c",
+          "core.hooksPath=",
+          "-c",
+          "core.symlinks=false",
+          "-c",
+          "protocol.file.allow=never",
+          "clone",
+          "--depth",
+          "1",
+          "--no-tags",
+          "--",
+          cleanUrl,
+          workspacePath,
+        ],
+        {
+          env: buildGitEnv(),
+          timeout: 15_000,
+          maxBuffer: 10 * 1024 * 1024,
+        }
+      )
+      cloned = true
+    } catch {
+      await mkdir(workspacePath, { recursive: true })
+    }
+
+    // If git clone binary was unavailable (e.g., on Vercel serverless) and URL is a public GitHub repo,
+    // fetch repository metadata / README / package.json via GitHub REST API so the workspace has real repo files.
+    if (!cloned) {
+      const ghMatch = cleanUrl
+        .replace(/\.git$/i, "")
+        .match(/^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)/i)
+      if (ghMatch) {
+        const [, owner, repo] = ghMatch
+        try {
+          const treeRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents`, {
+            headers: { Accept: "application/vnd.github.v3+json", "User-Agent": "MODELVAULT" },
+            signal: AbortSignal.timeout(6000),
+          })
+          if (treeRes.ok) {
+            const items = (await treeRes.json()) as Array<{
+              name?: string
+              path?: string
+              type?: string
+              download_url?: string | null
+              size?: number
+            }>
+            if (Array.isArray(items)) {
+              const downloadable = items
+                .filter((it) => it.type === "file" && it.download_url && (it.size ?? 0) < 250_000)
+                .slice(0, 12)
+              for (const fileItem of downloadable) {
+                if (!fileItem.path || !fileItem.download_url || !isSafeRelativePath(fileItem.path)) continue
+                const fileRes = await fetch(fileItem.download_url, {
+                  signal: AbortSignal.timeout(4000),
+                }).catch(() => null)
+                if (fileRes && fileRes.ok) {
+                  const buf = Buffer.from(await fileRes.arrayBuffer())
+                  await writeWorkspaceFile(workspacePath, fileItem.path, buf)
+                  cloned = true
+                }
+              }
+            }
+          }
+        } catch {
+          // Fall back to starter scaffold below
+        }
+      }
+    }
+  }
+
+  if (!cloned) {
+    await scaffoldStarterWorkspace(projectId, opts)
+  } else {
+    await initializeGitRepository(workspacePath)
+  }
+
+  const tree = await listWorkspaceTree(workspacePath).catch(() => [])
+  const flatten = (nodes: WorkspaceTreeNode[]): string[] => {
+    const out: string[] = []
+    for (const n of nodes) {
+      if (n.type === "file") out.push(n.path)
+      if (n.children) out.push(...flatten(n.children))
+    }
+    return out
+  }
+  const fileList = flatten(tree)
+
+  let detectedFramework = opts.framework || "nextjs"
+  let detectedLanguage = opts.language || "typescript"
+  let detectedDependencies = ["react", "next", "typescript"]
+
+  try {
+    const pkgText = await readWorkspaceFile(workspacePath, "package.json")
+    const pkg = JSON.parse(pkgText) as {
+      dependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+    }
+    const deps = { ...pkg.dependencies, ...pkg.devDependencies }
+    detectedDependencies = Object.keys(deps).slice(0, 20)
+    if (deps["next"]) detectedFramework = "nextjs"
+    else if (deps["react"]) detectedFramework = "react"
+    else if (deps["vue"]) detectedFramework = "vue"
+    else detectedFramework = "node"
+    if (deps["typescript"] || fileList.some((f) => f.endsWith(".ts") || f.endsWith(".tsx"))) {
+      detectedLanguage = "typescript"
+    } else {
+      detectedLanguage = "javascript"
+    }
+  } catch {
+    if (fileList.some((f) => f.endsWith(".py") || f.endsWith("requirements.txt"))) {
+      detectedFramework = "python"
+      detectedLanguage = "python"
+      detectedDependencies = ["fastapi", "uvicorn", "pydantic"]
+    }
+  }
+
+  return {
+    workspacePath,
+    cloned,
+    detectedFramework,
+    detectedLanguage,
+    detectedDependencies,
+    fileList,
   }
 }
 
