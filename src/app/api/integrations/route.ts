@@ -56,7 +56,10 @@ export async function GET() {
   try {
     const user = await requireAuthenticatedUser()
     const records = await prisma.integrationCredential.findMany({
-      where: { userId: user.id },
+      where: {
+        userId: user.id,
+        NOT: { providerSlug: "__user_preferences__" },
+      },
       orderBy: { providerSlug: "asc" },
     })
     return NextResponse.json({ data: records.map(serialize) })

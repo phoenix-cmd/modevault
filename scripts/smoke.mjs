@@ -39,9 +39,14 @@ async function main() {
   const me = await request("/api/auth/me", {}, jar)
   if (me.status !== 200) failures.push(`me ${me.status}`)
 
-  for (const path of ["/api/projects", "/api/workflows", "/api/organizations"]) {
+  for (const path of ["/api/projects", "/api/workflows", "/api/organizations", "/api/members", "/api/settings"]) {
     const res = await request(path, {}, jar)
     if (res.status !== 200) failures.push(`${path} ${res.status}`)
+  }
+
+  const csvExport = await request("/api/settings/export", {}, jar)
+  if (csvExport.status !== 200 || !csvExport.text.includes("Category,ID,Provider")) {
+    failures.push(`settings/export ${csvExport.status}`)
   }
 
   const models = await request("/api/models", {}, jar)

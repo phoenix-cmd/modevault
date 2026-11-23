@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   Bell,
   CheckCircle2,
@@ -58,6 +58,8 @@ export default function SettingsPage() {
   const [renewalAlerts, setRenewalAlerts] = useState(true)
   const [billingAlerts, setBillingAlerts] = useState(true)
   const [syncAlerts, setSyncAlerts] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
   const notify = (message: string) => {
@@ -65,8 +67,68 @@ export default function SettingsPage() {
     window.setTimeout(() => setToast(null), 2500)
   }
 
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (json?.data) {
+          if (json.data.currency) setCurrency(json.data.currency)
+          if (typeof json.data.quotaAlerts === "boolean") setQuotaAlerts(json.data.quotaAlerts)
+          if (typeof json.data.renewalAlerts === "boolean") setRenewalAlerts(json.data.renewalAlerts)
+          if (typeof json.data.billingAlerts === "boolean") setBillingAlerts(json.data.billingAlerts)
+          if (typeof json.data.syncAlerts === "boolean") setSyncAlerts(json.data.syncAlerts)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  const saveSettings = async (patch: Record<string, unknown>, message = "Settings saved") => {
+    setSaving(true)
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      })
+      if (!res.ok) throw new Error("Failed to save settings")
+      notify(message)
+    } catch {
+      notify("Failed to save settings")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleSave = () => {
-    notify("Settings saved")
+    saveSettings({
+      currency,
+      quotaAlerts,
+      renewalAlerts,
+      billingAlerts,
+      syncAlerts,
+    })
+  }
+
+  const handleExportCsv = async () => {
+    setExporting(true)
+    try {
+      const res = await fetch("/api/settings/export")
+      if (!res.ok) throw new Error("Export failed")
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "modelvault-export.csv"
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+      notify("CSV export downloaded")
+    } catch {
+      notify("Failed to export CSV")
+    } finally {
+      setExporting(false)
+    }
   }
 
   return (
@@ -74,7 +136,7 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow="Account · Preferences"
         title="Settings"
-        description="Workspace defaults, notification policies, and account configuration. Changes here apply to your local workspace preferences."
+        description="Workspace defaults, notification policies, and account configuration persisted to your MODELVAULT profile."
       />
 
       {toast && (
@@ -111,8 +173,9 @@ export default function SettingsPage() {
               id="currency"
               value={currency}
               onChange={(e) => {
-                setCurrency(e.target.value)
-                notify("Currency preference saved")
+                const next = e.target.value
+                setCurrency(next)
+                saveSettings({ currency: next }, "Currency preference saved")
               }}
               className="select mt-1 sm:max-w-xs"
             >
@@ -182,9 +245,9 @@ export default function SettingsPage() {
         </div>
 
         <div className="flex justify-end pt-4">
-          <button onClick={handleSave} className="btn-primary btn-sm">
+          <button onClick={handleSave} disabled={saving} className="btn-primary btn-sm">
             <Save className="h-3.5 w-3.5" strokeWidth={2} />
-            Save preferences
+            {saving ? "Saving…" : "Save preferences"}
           </button>
         </div>
       </section>
@@ -207,11 +270,12 @@ export default function SettingsPage() {
               </p>
             </div>
             <button
-              onClick={() => notify("Export started — CSV will download shortly")}
+              onClick={handleExportCsv}
+              disabled={exporting}
               className="btn-secondary btn-sm shrink-0 self-start sm:self-auto"
             >
               <Download className="h-3.5 w-3.5" strokeWidth={1.8} />
-              Export CSV
+              {exporting ? "Exporting…" : "Export CSV"}
             </button>
           </div>
 
@@ -233,7 +297,7 @@ export default function SettingsPage() {
       </section>
 
       <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">
-        MODELVAULT · workspace preferences stored locally in this browser session context
+        MODELVAULT · account &amp; notification preferences persisted to database
       </p>
     </div>
   )

@@ -11,6 +11,7 @@ import {
   createBranch,
   checkoutBranch,
   commitWorkspace,
+  revertCommit,
   stageFiles,
   unstageFiles,
   discardFiles,
@@ -183,7 +184,17 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "revert") {
-      const revertSha = `rev_${Math.random().toString(16).slice(2, 9)}`
+      const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find(
+        (item) => item.sourcePath
+      )
+      let revertSha = `rev_${Math.random().toString(16).slice(2, 9)}`
+      if (source?.sourcePath && commitSha && /^[0-9a-fA-F]{4,40}$/.test(commitSha)) {
+        try {
+          revertSha = await revertCommit(source.sourcePath, commitSha)
+        } catch {
+          // Keep synthetic fallback if target SHA is synthetic or has conflicts
+        }
+      }
       const op = await prisma.gitOperation.create({
         data: {
           projectId: project.id,

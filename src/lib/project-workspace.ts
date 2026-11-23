@@ -336,6 +336,15 @@ export async function checkoutBranch(rootPath: string, branchName: string): Prom
   await git(rootPath, ["checkout", safeBranch, "--"])
 }
 
+export async function revertCommit(rootPath: string, commitSha: string): Promise<string> {
+  if (!/^[0-9a-fA-F]{4,40}$/.test(commitSha.trim())) {
+    throw new Error("Invalid commit SHA")
+  }
+  await git(rootPath, ["revert", "--no-edit", "--no-verify", commitSha.trim()])
+  const { stdout } = await git(rootPath, ["rev-parse", "--short", "HEAD"])
+  return stdout.trim()
+}
+
 export async function getLatestCommitDiff(rootPath: string): Promise<string> {
   try {
     const { stdout } = await git(rootPath, ["show", "--format=", "--no-color", "--no-ext-diff", "HEAD"])
