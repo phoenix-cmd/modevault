@@ -10,6 +10,7 @@ interface ApiAccountsCardsProps {
   accounts: ApiAccountData[]
   onAddLog: (accountId: string) => void
   onCreateAccount?: () => void
+  onEditAccount?: (account: ApiAccountData) => void
   onDeleteAccount?: (accountId: string) => void
 }
 
@@ -17,6 +18,7 @@ export function ApiAccountsCards({
   accounts,
   onAddLog,
   onCreateAccount,
+  onEditAccount,
   onDeleteAccount,
 }: ApiAccountsCardsProps) {
   if (accounts.length === 0) {
@@ -101,6 +103,15 @@ export function ApiAccountsCards({
                 <td className="text-right">
                   <div className="inline-flex items-center gap-1.5">
                     <button onClick={() => onAddLog(acc.id)} className="btn-ghost btn-sm">Log usage</button>
+                    {onEditAccount && (
+                      <button
+                        type="button"
+                        onClick={() => onEditAccount(acc)}
+                        className="btn-secondary btn-sm"
+                      >
+                        Edit / Top up
+                      </button>
+                    )}
                     {onDeleteAccount && (
                       <button
                         type="button"
@@ -153,6 +164,15 @@ export function ApiAccountsCards({
               <span className="text-[11px] text-ink-3">{acc.rateLimit ? `${acc.rateLimit} RPM` : "Default rate limit"}</span>
               <div className="flex items-center gap-1.5">
                 <button onClick={() => onAddLog(acc.id)} className="btn-ghost btn-sm">Log usage</button>
+                {onEditAccount && (
+                  <button
+                    type="button"
+                    onClick={() => onEditAccount(acc)}
+                    className="btn-secondary btn-sm"
+                  >
+                    Edit
+                  </button>
+                )}
                 {onDeleteAccount && (
                   <button
                     type="button"

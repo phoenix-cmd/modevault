@@ -30,6 +30,7 @@ export default function ApiUsagePage() {
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
 
   const [accountModalOpen, setAccountModalOpen] = useState(false)
+  const [editingAccount, setEditingAccount] = useState<ApiAccountData | null>(null)
   const accountDialogRef = useModalA11y(accountModalOpen, () => setAccountModalOpen(false))
   const [newProviderId, setNewProviderId] = useState("")
   const [newAccountName, setNewAccountName] = useState("")
@@ -101,35 +102,52 @@ export default function ApiUsagePage() {
     fetchData()
   }, [])
 
+  const openEditAccount = (acc: ApiAccountData) => {
+    setEditingAccount(acc)
+    setNewProviderId(acc.providerId)
+    setNewAccountName(acc.accountName || "")
+    setNewKeyLastFour(acc.apiKeyLastFour || "")
+    setNewBalance(String(acc.prepaidBalance ?? 0))
+    setNewCurrency(acc.currency || "USD")
+    setNewRateLimit(acc.rateLimit ? String(acc.rateLimit) : "")
+    setAccountError(null)
+    setAccountModalOpen(true)
+  }
+
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newProviderId) return
+    if (!newProviderId && !editingAccount) return
     setCreatingAccount(true)
     setAccountError(null)
     try {
-      const res = await fetch("/api/api-accounts", {
-        method: "POST",
+      const url = editingAccount
+        ? `/api/api-accounts/${encodeURIComponent(editingAccount.id)}`
+        : "/api/api-accounts"
+      const method = editingAccount ? "PUT" : "POST"
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          providerId: newProviderId,
+          ...(!editingAccount && { providerId: newProviderId }),
           accountName: newAccountName.trim() || null,
           apiKeyLastFour: newKeyLastFour.trim() || null,
           prepaidBalance: Number(newBalance) || 0,
           currency: newCurrency,
           rateLimit: newRateLimit ? Number.parseInt(newRateLimit, 10) : null,
-          integrationStatus: "manual",
+          ...(!editingAccount && { integrationStatus: "manual" }),
         }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error || "Failed to create API account")
+      if (!res.ok) throw new Error(json.error || "Failed to save API account")
       setAccountModalOpen(false)
+      setEditingAccount(null)
       setNewAccountName("")
       setNewKeyLastFour("")
       setNewBalance("50")
       setNewRateLimit("")
       await fetchData()
     } catch (err) {
-      setAccountError(err instanceof Error ? err.message : "Failed to create API account")
+      setAccountError(err instanceof Error ? err.message : "Failed to save API account")
     } finally {
       setCreatingAccount(false)
     }
@@ -185,6 +203,11 @@ export default function ApiUsagePage() {
             </button>
             <button
               onClick={() => {
+                setEditingAccount(null)
+                setNewAccountName("")
+                setNewKeyLastFour("")
+                setNewBalance("50")
+                setNewRateLimit("")
                 setAccountError(null)
                 setAccountModalOpen(true)
               }}
@@ -236,7 +259,11 @@ export default function ApiUsagePage() {
             setSelectedAccountId(id)
             setModalOpen(true)
           }}
-          onCreateAccount={() => setAccountModalOpen(true)}
+          onCreateAccount={() => {
+            setEditingAccount(null)
+            setAccountModalOpen(true)
+          }}
+          onEditAccount={openEditAccount}
           onDeleteAccount={handleDeleteAccount}
         />
       )}
@@ -289,7 +316,7 @@ export default function ApiUsagePage() {
               <div>
                 <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">Developer billing</p>
                 <h2 id="add-api-account-title" className="mt-1 font-display text-[16px] font-medium tracking-[-0.02em] text-ink">
-                  Add API account
+                  {editingAccount ? "Edit / Top up API account" : "Add API account"}
                 </h2>
               </div>
               <button onClick={() => setAccountModalOpen(false)} className="icon-btn -mr-1 -mt-1" aria-label="Close">
@@ -384,8 +411,8 @@ export default function ApiUsagePage() {
                 <button type="button" onClick={() => setAccountModalOpen(false)} className="btn-ghost">
                   Cancel
                 </button>
-                <button type="submit" disabled={creatingAccount || !newProviderId} className="btn-primary">
-                  {creatingAccount ? "Creating…" : "Create account"}
+                <button type="submit" disabled={creatingAccount || (!newProviderId && !editingAccount)} className="btn-primary">
+                  {creatingAccount ? "Saving…" : editingAccount ? "Save changes" : "Create account"}
                 </button>
               </div>
             </form>

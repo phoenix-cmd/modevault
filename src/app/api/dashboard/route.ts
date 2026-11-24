@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { unpackBillingDescription } from "@/lib/billing-meta"
 import { convertCurrency, getExchangeRatesMap } from "@/lib/currency"
 
 export async function GET(_request: NextRequest) {
@@ -129,9 +130,12 @@ export async function GET(_request: NextRequest) {
     }
 
     for (const record of billingRecords) {
+      const meta = unpackBillingDescription(record.description)
+      if (meta.status === "failed") continue
       const key = `${record.billingDate.getFullYear()}-${String(record.billingDate.getMonth() + 1).padStart(2, "0")}`
       if (!spendingByMonthDetailed[key]) continue
-      const converted = convertCurrency(record.amount, record.currency, targetCurrency, rates)
+      const rawConverted = convertCurrency(record.amount, record.currency, targetCurrency, rates)
+      const converted = record.type === "refund" ? -rawConverted : rawConverted
       if (record.type === "subscription_payment") {
         spendingByMonthDetailed[key].subscriptions += converted
       } else {

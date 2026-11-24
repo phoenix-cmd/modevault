@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { unpackBillingDescription } from "@/lib/billing-meta"
 import { convertCurrency, getExchangeRatesMap } from "@/lib/currency"
 
 function formatContextWindow(tokens: number): string {
@@ -18,9 +19,10 @@ export async function GET(_request: NextRequest) {
     const now = new Date()
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
 
-    const [rates, subscriptions, apiAccounts, billingRecords, apiUsageRecords, dbModels] =
+    const [rates, dbUser, subscriptions, apiAccounts, billingRecords, apiUsageRecords, dbModels] =
       await Promise.all([
         getExchangeRatesMap(),
+        prisma.user.findUnique({ where: { id: user.id }, select: { currency: true } }),
         prisma.subscription.findMany({
           where: { userId: user.id },
           include: { provider: true },
@@ -61,9 +63,12 @@ export async function GET(_request: NextRequest) {
     }
 
     for (const b of billingRecords) {
+      const meta = unpackBillingDescription(b.description)
+      if (meta.status === "failed") continue
       const key = `${b.billingDate.getFullYear()}-${String(b.billingDate.getMonth() + 1).padStart(2, "0")}`
       if (months[key]) {
-        const inrAmount = convertCurrency(b.amount, b.currency, "INR", rates)
+        const rawInr = convertCurrency(b.amount, b.currency, "INR", rates)
+        const inrAmount = b.type === "refund" ? -rawInr : rawInr
         if (b.type === "subscription_payment") {
           months[key].subscriptions += inrAmount
         } else {
@@ -207,6 +212,7 @@ export async function GET(_request: NextRequest) {
 
     return NextResponse.json({
       data: {
+        baseCurrency: dbUser?.currency === "USD" ? "USD" : "INR",
         spendingTrends,
         providerBreakdown,
         exchangeRateUsdToInr: rates.USD_INR,

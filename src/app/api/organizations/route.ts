@@ -34,6 +34,15 @@ const orgWorkspaceActionSchema = z.discriminatedUnion("action", [
     organizationId: idSchema,
     workspaceId: idSchema,
   }),
+  z.object({
+    action: z.literal("rename_organization"),
+    organizationId: idSchema,
+    name: z.string().trim().min(1).max(120),
+  }),
+  z.object({
+    action: z.literal("delete_organization"),
+    organizationId: idSchema,
+  }),
 ])
 
 export async function GET() {
@@ -129,6 +138,29 @@ export async function PATCH(req: NextRequest) {
     const body = parsed.data
 
     await requireOrganizationAccess(body.organizationId, user.id, "admin")
+
+    if (body.action === "rename_organization") {
+      const updated = await prisma.organization.update({
+        where: { id: body.organizationId },
+        data: { name: body.name },
+      })
+      return NextResponse.json({ data: updated })
+    }
+
+    if (body.action === "delete_organization") {
+      await requireOrganizationAccess(body.organizationId, user.id, "owner")
+      const userOrgCount = await prisma.membership.count({
+        where: { userId: user.id },
+      })
+      if (userOrgCount <= 1) {
+        return NextResponse.json(
+          { error: "Cannot delete your only remaining organization" },
+          { status: 409 }
+        )
+      }
+      await prisma.organization.delete({ where: { id: body.organizationId } })
+      return NextResponse.json({ data: { deleted: true, organizationId: body.organizationId } })
+    }
 
     if (body.action === "create_workspace") {
       const wsSlug = (

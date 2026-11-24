@@ -12,6 +12,7 @@ import { parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
 const workflowCreateSchema = z.object({
+  id: z.string().min(1).max(128).optional(),
   name: z.string().trim().min(1).max(160),
   description: z.string().max(2000).optional(),
   category: z.enum(["development", "security", "review", "devops"]).optional(),
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
     const user = await requireAuthenticatedUser()
     const parsed = await parseJson(req, workflowCreateSchema)
     if ("response" in parsed) return parsed.response
-    const { name, description, category, workspaceId, nodes, edges } = parsed.data
+    const { id, name, description, category, workspaceId, nodes, edges } = parsed.data
 
     if (nodes && nodes.length > 0) {
       const dag = validateAndSortDag(
@@ -61,6 +62,24 @@ export async function POST(req: NextRequest) {
       )
       if (!dag.valid) {
         return NextResponse.json({ error: dag.errors.join(" ") }, { status: 422 })
+      }
+    }
+
+    if (id) {
+      const existing = await prisma.workflowDefinition.findUnique({ where: { id } })
+      if (existing && !existing.isTemplate && existing.workspaceId) {
+        await requireWorkspaceAccess(existing.workspaceId, user.id, "member")
+        const updated = await prisma.workflowDefinition.update({
+          where: { id: existing.id },
+          data: {
+            name,
+            ...(description !== undefined && { description }),
+            ...(category !== undefined && { category }),
+            nodesJson: JSON.stringify(nodes || []),
+            edgesJson: JSON.stringify(edges || []),
+          },
+        })
+        return NextResponse.json({ data: updated })
       }
     }
 

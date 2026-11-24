@@ -17,7 +17,8 @@ const RANGE_OPTIONS = [
 ]
 
 function formatCost(cost: number, currency: string | undefined) {
-  const symbol = (currency || "USD") === "INR" ? "₹" : "$"
+  const c = (currency || "USD").toUpperCase()
+  const symbol = c === "INR" ? "₹" : c === "EUR" ? "€" : c === "GBP" ? "£" : "$"
   return `${symbol}${cost.toFixed(4)}`
 }
 

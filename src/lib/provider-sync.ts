@@ -171,6 +171,38 @@ export async function verifyAndSyncProvider(
       }
     }
 
+    if (providerSlug === "perplexity") {
+      const res = await fetch("https://api.perplexity.ai/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "sonar",
+          max_tokens: 1,
+          messages: [{ role: "user", content: "ping" }],
+        }),
+        signal: AbortSignal.timeout(7000),
+      })
+      const durationMs = Math.max(1, Date.now() - startedAt)
+      if (!res.ok) {
+        return {
+          ok: false,
+          status: "warning",
+          message: `Key saved encrypted, but Perplexity verification returned HTTP ${res.status}`,
+          durationMs,
+        }
+      }
+      return {
+        ok: true,
+        status: "success",
+        message: "Verified Perplexity Sonar API key",
+        durationMs,
+        modelsDiscovered: 4,
+      }
+    }
+
     return {
       ok: true,
       status: "success",

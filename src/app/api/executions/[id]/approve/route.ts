@@ -3,7 +3,15 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
 import { requireProjectAccess } from "@/lib/permissions"
-import { deleteBranch, mergeBranch } from "@/lib/project-workspace"
+import {
+  commitWorkspace,
+  deleteBranch,
+  getLatestCommitDiff,
+  mergeBranch,
+  readWorkspaceFile,
+  writeWorkspaceFile,
+} from "@/lib/project-workspace"
+import { ensureProjectSourceWorkspace } from "@/lib/project-source"
 import { publishExecutionComplete, publishExecutionEvent } from "@/lib/event-bus"
 import { approvalSchema, parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
@@ -69,10 +77,18 @@ export async function POST(
 
     let nextStatus = "completed"
     if (action === "reject") nextStatus = "cancelled"
-    else if (action === "request_revision") nextStatus = "running"
+    else if (action === "request_revision") nextStatus = "awaiting_approval"
 
-    const sourcePath = execution.project?.sources?.find((s) => s.sourcePath)?.sourcePath || null
+    let sourcePath = execution.project?.sources?.find((s) => s.sourcePath)?.sourcePath || null
+    if (!sourcePath && execution.project) {
+      try {
+        sourcePath = await ensureProjectSourceWorkspace(execution.project)
+      } catch {
+        sourcePath = null
+      }
+    }
     let mergeResult: { merged: boolean; commitSha: string; output: string } | null = null
+    let revisedCommitSha: string | null = null
 
     if (sourcePath && execution.targetBranch) {
       if (action === "approve") {
@@ -87,6 +103,30 @@ export async function POST(
         }
       } else if (action === "reject") {
         await deleteBranch(sourcePath, execution.targetBranch).catch(() => {})
+      } else if (action === "request_revision" && diffArtifact?.path) {
+        try {
+          const currentFile = await readWorkspaceFile(sourcePath, diffArtifact.path).catch(() => "")
+          if (currentFile) {
+            const note = (feedback || "Apply reviewer revision safeguards").replace(/\r?\n/g, " ").slice(0, 120)
+            const commentLine = diffArtifact.path.endsWith(".py")
+              ? `\n# Revision applied: ${note}\n`
+              : `\n// Revision applied: ${note}\n`
+            await writeWorkspaceFile(sourcePath, diffArtifact.path, `${currentFile.trimEnd()}${commentLine}`)
+            revisedCommitSha = await commitWorkspace(sourcePath, `fix(revision): ${note}`)
+            const newDiff = await getLatestCommitDiff(sourcePath)
+            if (newDiff) {
+              await prisma.executionArtifact.update({
+                where: { id: diffArtifact.id },
+                data: {
+                  content: newDiff,
+                  summary: `Revised patch after reviewer feedback`,
+                },
+              })
+            }
+          }
+        } catch (err) {
+          logger.warn("Revision workspace update skipped", errorContext(err))
+        }
       }
     }
 
@@ -98,7 +138,7 @@ export async function POST(
       },
     })
 
-    const taskStatus = action === "approve" ? "completed" : action === "reject" ? "failed" : "pending"
+    const taskStatus = action === "approve" ? "completed" : action === "reject" ? "failed" : "completed"
     await prisma.executionTask.updateMany({
       where: { executionId: id },
       data: { status: taskStatus, completedAt: taskStatus === "completed" ? new Date() : null },
@@ -111,13 +151,17 @@ export async function POST(
           : "committed"
         : action === "reject"
           ? "reverted"
-          : "staged"
+          : "committed"
 
     await prisma.gitOperation.updateMany({
       where: { executionId: id },
       data: {
         status: gitStatus,
-        ...(mergeResult?.commitSha ? { commitSha: mergeResult.commitSha } : {}),
+        ...(mergeResult?.commitSha
+          ? { commitSha: mergeResult.commitSha }
+          : revisedCommitSha
+            ? { commitSha: revisedCommitSha }
+            : {}),
       },
     })
 

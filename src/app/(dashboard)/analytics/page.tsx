@@ -14,6 +14,7 @@ import { cn, formatCurrency } from "@/lib/utils"
 import type { ProviderSpendingData, SpendingDataPoint } from "@/lib/types"
 
 interface AnalyticsData {
+  baseCurrency?: "INR" | "USD"
   spendingTrends: SpendingDataPoint[]
   providerBreakdown: Array<{
     name: string
@@ -44,7 +45,11 @@ export default function AnalyticsPage() {
         const res = await fetch("/api/analytics")
         const json = await res.json()
         if (json.data) {
-          setData(json.data as AnalyticsData)
+          const d = json.data as AnalyticsData
+          setData(d)
+          if (d.baseCurrency === "USD" || d.baseCurrency === "INR") {
+            setCurrency(d.baseCurrency)
+          }
         }
       } catch (err) {
         console.error("Failed to fetch analytics:", err)
@@ -65,6 +70,15 @@ export default function AnalyticsPage() {
       ? formatCurrency(amount * rate, "INR")
       : formatCurrency(amount, "USD")
 
+  const scaleInr = (val: number) => (currency === "INR" ? val : Math.round(val / rate))
+
+  const convertedTrends: SpendingDataPoint[] = (data?.spendingTrends ?? []).map((pt) => ({
+    month: pt.month,
+    subscriptions: scaleInr(pt.subscriptions),
+    api: scaleInr(pt.api),
+    total: scaleInr(pt.total),
+  }))
+
   const providerSpending: ProviderSpendingData[] = (
     data?.providerBreakdown ?? []
   ).map((entry) => {
@@ -74,10 +88,25 @@ export default function AnalyticsPage() {
     return {
       provider: entry.name,
       providerSlug: known?.slug ?? "openai",
-      amount: entry.amount,
+      amount: scaleInr(entry.amount),
       color: entry.color,
     }
   })
+
+  const convertInrText = (text?: string) => {
+    if (!text || currency === "INR") return text
+    return text.replace(/₹([0-9,]+)/g, (_, digits) => {
+      const raw = Number(String(digits).replace(/,/g, ""))
+      if (!Number.isFinite(raw)) return `₹${digits}`
+      return `$${Math.round(raw / rate)}`
+    })
+  }
+
+  const convertedInsights = (data?.insights ?? []).map((ins) => ({
+    ...ins,
+    description: convertInrText(ins.description) || ins.description,
+    impact: convertInrText(ins.impact),
+  }))
 
   const metrics = data?.overview
     ? [
@@ -138,10 +167,14 @@ export default function AnalyticsPage() {
       {loading ? (
         <SpendingChartsSkeleton />
       ) : data ? (
-        <SpendingCharts monthlySpending={data.spendingTrends} providerSpending={providerSpending} />
+        <SpendingCharts
+          monthlySpending={convertedTrends}
+          providerSpending={providerSpending}
+          currency={currency}
+        />
       ) : null}
 
-      {!loading && data?.insights && <SmartIntelligenceCards insights={data.insights} />}
+      {!loading && data?.insights && <SmartIntelligenceCards insights={convertedInsights} />}
 
       {!loading && data?.modelComparison && <ModelComparisonTable models={data.modelComparison} />}
     </div>

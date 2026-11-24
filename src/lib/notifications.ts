@@ -12,6 +12,33 @@ export async function emitNotification(
   }
 ): Promise<void> {
   try {
+    // Check user's saved notification preferences before emitting
+    const prefRecord = await prisma.integrationCredential.findUnique({
+      where: {
+        userId_providerSlug: {
+          userId,
+          providerSlug: "__user_preferences__",
+        },
+      },
+      select: { featuresJson: true },
+    })
+    if (prefRecord?.featuresJson) {
+      try {
+        const prefs = JSON.parse(prefRecord.featuresJson) as {
+          quotaAlerts?: boolean
+          renewalAlerts?: boolean
+          billingAlerts?: boolean
+          syncAlerts?: boolean
+        }
+        if (opts.type === "quota_warning" && prefs.quotaAlerts === false) return
+        if (opts.type === "renewal_due" && prefs.renewalAlerts === false) return
+        if ((opts.type === "credit_low" || opts.type === "billing") && prefs.billingAlerts === false) return
+        if (opts.type === "sync" && prefs.syncAlerts === false) return
+      } catch {
+        // Ignore malformed preference JSON
+      }
+    }
+
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
     const duplicate = await prisma.notification.findFirst({
       where: {

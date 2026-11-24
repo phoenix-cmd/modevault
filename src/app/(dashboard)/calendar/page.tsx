@@ -13,6 +13,7 @@ export default function CalendarPage() {
   const [subscriptions, setSubscriptions] = useState<SubscriptionData[]>([])
   const [loading, setLoading] = useState(true)
   const [now, setNow] = useState<Date | null>(null)
+  const [baseCurrency, setBaseCurrency] = useState<string>("USD")
   const [ratesMap, setRatesMap] = useState<{ USD_INR: number; EUR_USD: number; GBP_USD: number }>({
     USD_INR: 84.5,
     EUR_USD: 1.08,
@@ -24,12 +25,17 @@ export default function CalendarPage() {
     async function load() {
       try {
         setLoading(true)
-        const [res, fxRes] = await Promise.all([
+        const [res, fxRes, settingsRes] = await Promise.all([
           fetch("/api/subscriptions"),
           fetch("/api/exchange-rates").catch(() => null),
+          fetch("/api/settings").catch(() => null),
         ])
         const json = await res.json()
         const fxJson = fxRes ? await fxRes.json().catch(() => null) : null
+        const settingsJson = settingsRes ? await settingsRes.json().catch(() => null) : null
+        if (settingsJson?.data?.currency) {
+          setBaseCurrency(settingsJson.data.currency)
+        }
         if (Array.isArray(fxJson?.data)) {
           const next = { USD_INR: 84.5, EUR_USD: 1.08, GBP_USD: 1.27 }
           for (const row of fxJson.data as Array<{ fromCurrency: string; toCurrency: string; rate: number }>) {
@@ -112,15 +118,22 @@ export default function CalendarPage() {
     return date >= next
   })
 
-  const toUsd = (amount: number, currency: string) => {
+  const toBaseCurrency = (amount: number, currency: string) => {
     const c = (currency || "USD").toUpperCase()
-    if (c === "INR") return amount / ratesMap.USD_INR
-    if (c === "EUR") return amount * ratesMap.EUR_USD
-    if (c === "GBP") return amount * ratesMap.GBP_USD
-    return amount
+    const target = (baseCurrency || "USD").toUpperCase()
+    if (c === target) return amount
+    let usd = amount
+    if (c === "INR") usd = amount / ratesMap.USD_INR
+    else if (c === "EUR") usd = amount * ratesMap.EUR_USD
+    else if (c === "GBP") usd = amount * ratesMap.GBP_USD
+    if (target === "USD") return usd
+    if (target === "INR") return usd * ratesMap.USD_INR
+    if (target === "EUR") return usd / ratesMap.EUR_USD
+    if (target === "GBP") return usd / ratesMap.GBP_USD
+    return usd
   }
 
-  const totalThisMonth = thisMonth.reduce((sum, s) => sum + toUsd(s.price, s.currency), 0)
+  const totalThisMonth = thisMonth.reduce((sum, s) => sum + toBaseCurrency(s.price, s.currency), 0)
 
   const renderSection = (
     title: string,
@@ -138,7 +151,7 @@ export default function CalendarPage() {
         </div>
         {accent && items.length > 0 && (
           <span className="font-mono text-[11px] font-medium tabular-nums text-accent">
-            {formatCurrency(totalThisMonth, "USD")} due
+            {formatCurrency(totalThisMonth, baseCurrency)} due
           </span>
         )}
       </div>
@@ -203,8 +216,8 @@ export default function CalendarPage() {
   const metrics = [
     {
       label: "Due this month",
-      value: formatCurrency(totalThisMonth, "USD"),
-      meta: `${thisMonth.length} renewal${thisMonth.length === 1 ? "" : "s"}`,
+      value: formatCurrency(totalThisMonth, baseCurrency),
+      meta: `${thisMonth.length} renewal${thisMonth.length === 1 ? "" : "s"} (${baseCurrency})`,
       accent: thisMonth.length > 0,
     },
     {

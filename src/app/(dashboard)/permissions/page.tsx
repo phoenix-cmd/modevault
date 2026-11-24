@@ -447,7 +447,30 @@ export default function PermissionsPage() {
                     <p className="truncate text-[11px] text-ink-3">{member.email}</p>
                   </div>
                 </div>
-                <span className="badge shrink-0 bg-surface-2 text-ink-2">{member.role}</span>
+                <div className="flex items-center gap-1.5">
+                  <select
+                    value={member.role}
+                    onChange={(e) => changeRole(member.id, e.target.value as TeamMember["role"])}
+                    className="select h-8 py-1 text-[11.5px]"
+                    aria-label={`Role for ${member.name}`}
+                  >
+                    {ROLES.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => handleRemove(member)}
+                    disabled={member.role === "Owner" && members.filter((m) => m.role === "Owner").length <= 1}
+                    className="icon-btn hover:border-danger/30 hover:bg-danger-soft hover:text-danger disabled:opacity-30"
+                    title="Remove member"
+                    aria-label={`Remove ${member.name}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  </button>
+                </div>
               </div>
 
               <div className="mt-3 grid grid-cols-3 gap-2">

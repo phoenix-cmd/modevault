@@ -194,6 +194,8 @@ export default function WorkflowsPage() {
   const [savedWorkflows, setSavedWorkflows] = useState<
     Array<{ id: string; name: string; nodesJson: string; edgesJson: string; isTemplate?: boolean }>
   >([])
+  const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([])
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("")
   const [selectedSavedId, setSelectedSavedId] = useState<string>("")
   const [validationMessage, setValidationMessage] = useState<string | null>(null)
   const [runError, setRunError] = useState<string | null>(null)
@@ -341,10 +343,20 @@ export default function WorkflowsPage() {
 
   const loadSavedWorkflows = useCallback(async () => {
     try {
-      const res = await fetch("/api/workflows")
+      const [res, projRes] = await Promise.all([
+        fetch("/api/workflows"),
+        fetch("/api/projects").catch(() => null),
+      ])
       const json = await res.json()
+      const projJson = projRes ? await projRes.json().catch(() => null) : null
       if (res.ok && Array.isArray(json?.data)) {
         setSavedWorkflows(json.data.filter((w: { isTemplate?: boolean }) => !w.isTemplate))
+      }
+      if (Array.isArray(projJson?.data)) {
+        setProjects(projJson.data)
+        if (projJson.data.length > 0) {
+          setSelectedProjectId((cur) => cur || projJson.data[0].id)
+        }
       }
     } catch {
       // Ignore load errors
@@ -420,6 +432,7 @@ export default function WorkflowsPage() {
         body: JSON.stringify({
           workflowId: selectedSavedId || activeTemplate,
           workflowName: workflowName.trim() || templateLabel,
+          ...(selectedProjectId ? { projectId: selectedProjectId } : {}),
           customPrompt,
           nodes,
           edges,
@@ -446,6 +459,7 @@ export default function WorkflowsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...(selectedSavedId ? { id: selectedSavedId } : {}),
           name: workflowName.trim() || `${activeTemplate} build`,
           nodes,
           edges,
@@ -503,6 +517,23 @@ export default function WorkflowsPage() {
               </button>
             </div>
           </div>
+
+          <label className="block">
+            <span className="label">Target project</span>
+            <select
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              aria-label="Target project for workflow execution"
+              className="select select-sm"
+            >
+              {projects.length === 0 && <option value="">Default workspace project</option>}
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <label className="block">
             <span className="label">Workflow name</span>

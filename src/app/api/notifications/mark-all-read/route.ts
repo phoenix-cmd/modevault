@@ -17,3 +17,16 @@ export async function POST(_request: NextRequest) {
     return authErrorResponse(err, "Failed to mark notifications as read")
   }
 }
+
+export async function DELETE(_request: NextRequest) {
+  try {
+    const user = await requireAuthenticatedUser()
+    const deleted = await prisma.notification.deleteMany({
+      where: { userId: user.id, isRead: true },
+    })
+    return NextResponse.json({ data: { deletedCount: deleted.count } })
+  } catch (err: unknown) {
+    logger.error("Clear read notifications error", errorContext(err))
+    return authErrorResponse(err, "Failed to clear read notifications")
+  }
+}

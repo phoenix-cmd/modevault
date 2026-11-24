@@ -28,6 +28,8 @@ export default function OrganizationsPage() {
   const [newWsOrgId, setNewWsOrgId] = useState<string | null>(null)
   const [newWsName, setNewWsName] = useState("")
   const [creatingWs, setCreatingWs] = useState(false)
+  const [renamingOrgId, setRenamingOrgId] = useState<string | null>(null)
+  const [renameOrgValue, setRenameOrgValue] = useState("")
 
   const load = async () => {
     setLoading(true)
@@ -113,6 +115,49 @@ export default function OrganizationsPage() {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || "Failed to delete workspace")
+      await load()
+    } catch (err: any) {
+      setError(err.message)
+    }
+  }
+
+  const handleRenameOrganization = async (e: React.FormEvent, orgId: string) => {
+    e.preventDefault()
+    if (!renameOrgValue.trim()) return
+    setError(null)
+    try {
+      const res = await fetch("/api/organizations", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "rename_organization",
+          organizationId: orgId,
+          name: renameOrgValue.trim(),
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || "Failed to rename organization")
+      setRenamingOrgId(null)
+      setRenameOrgValue("")
+      await load()
+    } catch (err: any) {
+      setError(err.message)
+    }
+  }
+
+  const handleDeleteOrganization = async (orgId: string) => {
+    setError(null)
+    try {
+      const res = await fetch("/api/organizations", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete_organization",
+          organizationId: orgId,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || "Failed to delete organization")
       await load()
     } catch (err: any) {
       setError(err.message)
@@ -220,13 +265,60 @@ export default function OrganizationsPage() {
               <div key={org.id} className="border-b border-line py-5 last:border-b-0">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2.5">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-[6px] border border-line bg-surface-2 text-ink-2">
-                        <Building2 className="h-4 w-4" strokeWidth={1.8} />
-                      </span>
-                      <div className="min-w-0">
-                        <p className="truncate text-[14px] font-medium text-ink">{org.name}</p>
-                        <p className="font-mono text-[10.5px] text-ink-3">/{org.slug}</p>
+                    <div className="flex flex-wrap items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-[6px] border border-line bg-surface-2 text-ink-2">
+                          <Building2 className="h-4 w-4" strokeWidth={1.8} />
+                        </span>
+                        <div className="min-w-0">
+                          {renamingOrgId === org.id ? (
+                            <form onSubmit={(e) => handleRenameOrganization(e, org.id)} className="flex items-center gap-1.5">
+                              <input
+                                type="text"
+                                value={renameOrgValue}
+                                onChange={(e) => setRenameOrgValue(e.target.value)}
+                                className="field field-sm"
+                                required
+                              />
+                              <button type="submit" className="btn-primary btn-sm">Save</button>
+                              <button
+                                type="button"
+                                onClick={() => setRenamingOrgId(null)}
+                                className="btn-ghost btn-sm"
+                              >
+                                Cancel
+                              </button>
+                            </form>
+                          ) : (
+                            <p className="truncate text-[14px] font-medium text-ink">{org.name}</p>
+                          )}
+                          <p className="font-mono text-[10.5px] text-ink-3">/{org.slug}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {renamingOrgId !== org.id && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRenamingOrgId(org.id)
+                              setRenameOrgValue(org.name)
+                            }}
+                            className="btn-ghost btn-sm text-[11px]"
+                          >
+                            Rename
+                          </button>
+                        )}
+                        {organizations.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteOrganization(org.id)}
+                            className="icon-btn h-7 w-7 hover:text-danger"
+                            title={`Delete ${org.name}`}
+                            aria-label={`Delete ${org.name}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
 

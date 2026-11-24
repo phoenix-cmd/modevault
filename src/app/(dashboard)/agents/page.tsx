@@ -90,21 +90,28 @@ export default function AgentCenterPage() {
   const [newCommentLine, setNewCommentLine] = useState<number | null>(null)
   const [newCommentText, setNewCommentText] = useState("")
   const [submittingComment, setSubmittingComment] = useState(false)
+  const [currentUserName, setCurrentUserName] = useState("Workspace Reviewer")
+  const [verifyMeta, setVerifyMeta] = useState<{ diffSha256?: string | null; commitSha?: string | null } | null>(null)
 
   const loadData = async () => {
     try {
       setLoading(true)
-      const [projRes, agentRes, execRes] = await Promise.all([
+      const [projRes, agentRes, execRes, meRes] = await Promise.all([
         fetch("/api/projects"),
         fetch("/api/agents"),
         fetch("/api/executions"),
+        fetch("/api/auth/me").catch(() => null),
       ])
 
-      const [projJson, agentJson, execJson] = await Promise.all([
+      const [projJson, agentJson, execJson, meJson] = await Promise.all([
         projRes.json(),
         agentRes.json(),
         execRes.json(),
+        meRes ? meRes.json().catch(() => null) : Promise.resolve(null),
       ])
+      if (meJson?.data?.name || meJson?.data?.email) {
+        setCurrentUserName(meJson.data.name || meJson.data.email)
+      }
 
       const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null
       const urlProjectId = params?.get("projectId") || null
@@ -151,6 +158,12 @@ export default function AgentCenterPage() {
   useEffect(() => {
     if (selectedExecution?.id) {
       loadComments(selectedExecution.id)
+      fetch(`/api/executions/${selectedExecution.id}/verify`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => setVerifyMeta(j?.data || null))
+        .catch(() => setVerifyMeta(null))
+    } else {
+      setVerifyMeta(null)
     }
   }, [selectedExecution?.id])
 
@@ -268,21 +281,29 @@ export default function AgentCenterPage() {
       const res = await fetch(`/api/executions/${selectedExecution.id}/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({
+          action,
+          ...(verifyMeta?.diffSha256 ? { expectedDiffHash: verifyMeta.diffSha256 } : {}),
+          ...(verifyMeta?.commitSha ? { expectedCommitSha: verifyMeta.commitSha } : {}),
+        }),
       })
 
       const json = await res.json()
       if (json.data) {
+        const nextStatus = json.data.status
         setSelectedExecution((prev: any) => ({
           ...prev,
-          status: json.data.status,
+          status: nextStatus,
         }))
+        setExecutions((prev) =>
+          prev.map((item) => (item.id === selectedExecution.id ? { ...item, status: nextStatus } : item))
+        )
         setActionSuccess(
           action === "approve"
-            ? "Diff approved! Git commit created and ready for merge."
+            ? "Diff approved! Git commit merged into target branch."
             : action === "reject"
-            ? "Changes rejected and working worktree reset."
-            : "Revision requested. Agent notified."
+            ? "Changes rejected and feature branch cleaned up."
+            : "Revision applied and staged for re-approval."
         )
         setTimeout(() => setActionSuccess(null), 4000)
       }
@@ -305,7 +326,7 @@ export default function AgentCenterPage() {
           filePath,
           lineNumber: newCommentLine,
           comment: newCommentText,
-          authorName: "Alex Kumar (Tech Lead)",
+          authorName: currentUserName,
         }),
       })
 
@@ -497,6 +518,18 @@ export default function AgentCenterPage() {
                   <option value="agent_codex">Codex 5.2 (Backend)</option>
                   <option value="agent_gemini_cli">Gemini CLI 2.5 (Frontend)</option>
                   <option value="multi_agent">Multi-Agent Team (Orchestrated DAG)</option>
+                  {agents
+                    .filter(
+                      (a) =>
+                        !["agent_claude_code", "agent_codex", "agent_gemini_cli", "multi_agent"].includes(
+                          a.slug || a.id
+                        )
+                    )
+                    .map((a) => (
+                      <option key={a.id} value={a.slug || a.id}>
+                        {a.name} ({a.role || a.provider || "Custom"})
+                      </option>
+                    ))}
                 </select>
               </label>
             </div>
@@ -739,7 +772,7 @@ export default function AgentCenterPage() {
 
               <div className="flex flex-wrap items-center gap-2">
                 <Link
-                  href="/verify"
+                  href={`/verify?executionId=${encodeURIComponent(selectedExecution.id)}`}
                   className="btn-secondary btn-sm"
                 >
                   Open Verification Center

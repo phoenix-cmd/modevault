@@ -3,7 +3,7 @@
 /* eslint-disable react-hooks/set-state-in-effect -- session state is hydrated from the API on mount */
 
 import { useEffect, useState } from "react"
-import { Download, Plus, Receipt, X } from "lucide-react"
+import { Check, Download, Plus, Receipt, Trash2, X } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
 import { StatBand, StatBandSkeleton } from "@/components/ui/stat-band"
 import { cn, formatCurrency, formatDate } from "@/lib/utils"
@@ -80,12 +80,14 @@ export default function BillingPage() {
       const subs = (subsJson.data || []).map(
         (s: {
           id: string
-          planName: string
+          planName?: string
+          customPlanName?: string | null
+          plan?: { name?: string | null } | null
           provider?: { name: string }
           providerName?: string
         }) => ({
           id: s.id,
-          planName: s.planName,
+          planName: s.planName || s.customPlanName || s.plan?.name || "Standard Plan",
           providerName: s.provider?.name || s.providerName || "Provider",
         })
       )
@@ -133,13 +135,38 @@ export default function BillingPage() {
     }
   }
 
+  const handleMarkPaid = async (id: string) => {
+    try {
+      const res = await fetch("/api/billing", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status: "paid" }),
+      })
+      if (res.ok) await fetchData()
+    } catch (err) {
+      console.error("Failed to update billing status", err)
+    }
+  }
+
+  const handleDeleteRecord = async (id: string) => {
+    try {
+      const res = await fetch(`/api/billing?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      })
+      if (res.ok) await fetchData()
+    } catch (err) {
+      console.error("Failed to delete billing record", err)
+    }
+  }
+
   const handleExport = () => {
+    const escapeCsv = (val: unknown) => `"${String(val ?? "").replace(/"/g, '""')}"`
     const rows = [
       ["Date", "Provider", "Plan", "Type", "Amount", "Currency", "Status", "Method"],
       ...records.map((r) => [
         r.billingDate,
         r.subscription?.provider?.name || "",
-        r.subscription?.planName || "",
+        r.subscription?.planName || (r.subscription as { customPlanName?: string } | null)?.customPlanName || "",
         r.type,
         r.amount.toString(),
         r.currency,
@@ -147,7 +174,7 @@ export default function BillingPage() {
         r.paymentMethod || "",
       ]),
     ]
-    const csv = rows.map((r) => r.join(",")).join("\n")
+    const csv = rows.map((r) => r.map(escapeCsv).join(",")).join("\n")
     const blob = new Blob([csv], { type: "text/csv" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -257,49 +284,80 @@ export default function BillingPage() {
                     <th className="hidden lg:table-cell">Method</th>
                     <th>Status</th>
                     <th className="text-right">Amount</th>
+                    <th className="text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((record) => (
-                    <tr key={record.id}>
-                      <td className="whitespace-nowrap font-mono text-[10.5px] text-ink-3 tabular-nums">
-                        {formatDate(record.billingDate)}
-                      </td>
-                      <td>
-                        <p className="text-[12.5px] font-medium text-ink">
-                          {record.subscription
-                            ? `${record.subscription.provider?.name || ""} — ${record.subscription.planName}`
-                            : record.type === "api_topup"
-                              ? "API credit top-up"
-                              : "Payment"}
-                        </p>
-                        {record.notes && <p className="text-[10.5px] text-ink-3">{record.notes}</p>}
-                      </td>
-                      <td>
-                        <span className={cn("badge", TYPE_STYLE[record.type] || "bg-surface-2 text-ink-3")}>
-                          {TYPE_LABEL[record.type] || record.type}
-                        </span>
-                      </td>
-                      <td className="hidden text-[12px] text-ink-2 lg:table-cell">{record.paymentMethod || "—"}</td>
-                      <td>
-                        <span
-                          className={cn(
-                            "badge",
-                            record.status === "paid"
-                              ? "bg-success-soft text-success"
-                              : record.status === "failed"
-                                ? "bg-danger-soft text-danger"
-                                : "bg-surface-2 text-ink-3"
-                          )}
-                        >
-                          {record.status}
-                        </span>
-                      </td>
-                      <td className="text-right font-mono text-[12px] font-medium text-ink tabular-nums">
-                        {formatCurrency(record.amount, record.currency)}
-                      </td>
-                    </tr>
-                  ))}
+                  {filtered.map((record) => {
+                    const resolvedPlanName =
+                      record.subscription?.planName ||
+                      (record.subscription as { customPlanName?: string } | null)?.customPlanName ||
+                      "Standard Plan"
+                    return (
+                      <tr key={record.id}>
+                        <td className="whitespace-nowrap font-mono text-[10.5px] text-ink-3 tabular-nums">
+                          {formatDate(record.billingDate)}
+                        </td>
+                        <td>
+                          <p className="text-[12.5px] font-medium text-ink">
+                            {record.subscription
+                              ? `${record.subscription.provider?.name || ""} — ${resolvedPlanName}`
+                              : record.type === "api_topup"
+                                ? "API credit top-up"
+                                : "Payment"}
+                          </p>
+                          {record.notes && <p className="text-[10.5px] text-ink-3">{record.notes}</p>}
+                        </td>
+                        <td>
+                          <span className={cn("badge", TYPE_STYLE[record.type] || "bg-surface-2 text-ink-3")}>
+                            {TYPE_LABEL[record.type] || record.type}
+                          </span>
+                        </td>
+                        <td className="hidden text-[12px] text-ink-2 lg:table-cell">{record.paymentMethod || "—"}</td>
+                        <td>
+                          <span
+                            className={cn(
+                              "badge",
+                              record.status === "paid"
+                                ? "bg-success-soft text-success"
+                                : record.status === "failed"
+                                  ? "bg-danger-soft text-danger"
+                                  : "bg-surface-2 text-ink-3"
+                            )}
+                          >
+                            {record.status}
+                          </span>
+                        </td>
+                        <td className="text-right font-mono text-[12px] font-medium text-ink tabular-nums">
+                          {formatCurrency(record.amount, record.currency)}
+                        </td>
+                        <td className="text-right">
+                          <div className="inline-flex items-center justify-end gap-1.5">
+                            {record.status !== "paid" && (
+                              <button
+                                type="button"
+                                onClick={() => handleMarkPaid(record.id)}
+                                className="btn-ghost btn-sm text-success"
+                                title="Mark as paid"
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                                Mark paid
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRecord(record.id)}
+                              className="icon-btn hover:border-danger/30 hover:bg-danger-soft hover:text-danger"
+                              title="Delete transaction"
+                              aria-label="Delete transaction"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

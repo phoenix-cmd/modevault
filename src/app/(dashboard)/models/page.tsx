@@ -155,6 +155,7 @@ export default function ModelLibraryPage() {
 
   // Unit Economics Calculator State
   const [monthlyTokensMillions, setMonthlyTokensMillions] = useState(20) // 20M tokens
+  const [cachedSharePercent, setCachedSharePercent] = useState(25) // 25% of input tokens cached
 
   useEffect(() => {
     let active = true
@@ -507,36 +508,69 @@ export default function ModelLibraryPage() {
                 </p>
               </div>
 
-              <div className="border-t border-line pt-5">
-                <div className="flex flex-wrap items-baseline justify-between gap-3">
-                  <span className="metric-label">Monthly volume</span>
-                  <span className="font-mono text-[13px] tabular-nums text-accent">
-                    {monthlyTokensMillions}M tokens
-                    <span className="ml-2 text-ink-3">~{formatNumber(monthlyTokensMillions * 1000000)}</span>
-                  </span>
+              <div className="grid gap-6 border-t border-line pt-5 sm:grid-cols-2">
+                <div>
+                  <div className="flex flex-wrap items-baseline justify-between gap-3">
+                    <span className="metric-label">Monthly volume</span>
+                    <span className="font-mono text-[13px] tabular-nums text-accent">
+                      {monthlyTokensMillions}M tokens
+                      <span className="ml-2 text-ink-3">~{formatNumber(monthlyTokensMillions * 1000000)}</span>
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="100"
+                    value={monthlyTokensMillions}
+                    onChange={(e) => setMonthlyTokensMillions(Number(e.target.value))}
+                    aria-label="Monthly token volume in millions"
+                    className="mt-4 w-full accent-accent"
+                  />
+                  <div className="mt-2 flex justify-between font-mono text-[9px] uppercase tracking-[0.08em] text-ink-3">
+                    <span>1M · startup</span>
+                    <span className="hidden sm:inline">25M · growth</span>
+                    <span className="hidden sm:inline">50M · scale-up</span>
+                    <span>100M · enterprise</span>
+                  </div>
                 </div>
-                <input
-                  type="range"
-                  min="1"
-                  max="100"
-                  value={monthlyTokensMillions}
-                  onChange={(e) => setMonthlyTokensMillions(Number(e.target.value))}
-                  className="mt-4 w-full accent-accent"
-                />
-                <div className="mt-2 flex justify-between font-mono text-[9px] uppercase tracking-[0.08em] text-ink-3">
-                  <span>1M · startup</span>
-                  <span className="hidden sm:inline">25M · growth</span>
-                  <span className="hidden sm:inline">50M · scale-up</span>
-                  <span>100M · enterprise</span>
+
+                <div>
+                  <div className="flex flex-wrap items-baseline justify-between gap-3">
+                    <span className="metric-label">Prompt cache hit rate</span>
+                    <span className="font-mono text-[13px] tabular-nums text-success">
+                      {cachedSharePercent}% cached input
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="90"
+                    step="5"
+                    value={cachedSharePercent}
+                    onChange={(e) => setCachedSharePercent(Number(e.target.value))}
+                    aria-label="Prompt cache hit rate percentage"
+                    className="mt-4 w-full accent-accent"
+                  />
+                  <div className="mt-2 flex justify-between font-mono text-[9px] uppercase tracking-[0.08em] text-ink-3">
+                    <span>0% · cold</span>
+                    <span>30% · standard</span>
+                    <span>60% · agent loop</span>
+                    <span>90% · RAG cache</span>
+                  </div>
                 </div>
               </div>
             </section>
 
             <div className="grid gap-px border border-line bg-line sm:grid-cols-2 xl:grid-cols-4">
               {models.map((m) => {
-                const inputCost = monthlyTokensMillions * 0.75 * m.inputPricePerM
-                const outputCost = monthlyTokensMillions * 0.25 * m.outputPricePerM
-                const totalMonth = inputCost + outputCost
+                const totalInputM = monthlyTokensMillions * 0.75
+                const cachedInputM = totalInputM * (cachedSharePercent / 100)
+                const uncachedInputM = totalInputM - cachedInputM
+                const outputM = monthlyTokensMillions * 0.25
+                const inputCost = uncachedInputM * m.inputPricePerM
+                const cachedCost = cachedInputM * (m.cachedPricePerM || m.inputPricePerM)
+                const outputCost = outputM * m.outputPricePerM
+                const totalMonth = inputCost + cachedCost + outputCost
 
                 return (
                   <div key={m.id} className="space-y-3 bg-surface p-4">
@@ -552,11 +586,15 @@ export default function ModelLibraryPage() {
 
                     <div className="space-y-1 border-t border-line pt-3 font-mono text-[10px] text-ink-3">
                       <div className="flex justify-between gap-3">
-                        <span>Input ({monthlyTokensMillions * 0.75}M)</span>
+                        <span>Uncached in ({uncachedInputM.toFixed(1)}M)</span>
                         <span className="tabular-nums text-ink-2">${inputCost.toFixed(1)}</span>
                       </div>
                       <div className="flex justify-between gap-3">
-                        <span>Output ({monthlyTokensMillions * 0.25}M)</span>
+                        <span>Cached in ({cachedInputM.toFixed(1)}M)</span>
+                        <span className="tabular-nums text-success">${cachedCost.toFixed(1)}</span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span>Output ({outputM.toFixed(1)}M)</span>
                         <span className="tabular-nums text-ink-2">${outputCost.toFixed(1)}</span>
                       </div>
                     </div>

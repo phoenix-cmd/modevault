@@ -1,25 +1,29 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { convertCurrency, getExchangeRatesMap } from "@/lib/currency"
 
 export async function GET(_request: NextRequest) {
   try {
     const user = await requireAuthenticatedUser()
-    const records = await prisma.apiUsageRecord.findMany({
-      where: {
-        apiAccount: {
-          userId: user.id,
-        },
-      },
-      include: {
-        apiAccount: {
-          include: {
-            provider: true,
+    const [rates, records] = await Promise.all([
+      getExchangeRatesMap(),
+      prisma.apiUsageRecord.findMany({
+        where: {
+          apiAccount: {
+            userId: user.id,
           },
         },
-      },
-      orderBy: { date: "asc" },
-    })
+        include: {
+          apiAccount: {
+            include: {
+              provider: true,
+            },
+          },
+        },
+        orderBy: { date: "asc" },
+      }),
+    ])
 
     let totalTokens = 0
     let totalCost = 0
@@ -42,8 +46,9 @@ export async function GET(_request: NextRequest) {
     > = {}
 
     for (const r of records) {
+      const normalizedUsdCost = convertCurrency(r.cost || 0, r.currency || "USD", "USD", rates)
       totalTokens += r.totalTokens || 0
-      totalCost += r.cost || 0
+      totalCost += normalizedUsdCost
       totalRequests += r.requestCount || 0
       totalCachedTokens += r.cachedTokens || 0
 
@@ -58,7 +63,7 @@ export async function GET(_request: NextRequest) {
         }
       }
       modelMap[modelName].tokens += r.totalTokens || 0
-      modelMap[modelName].cost += r.cost || 0
+      modelMap[modelName].cost += normalizedUsdCost
       modelMap[modelName].requests += r.requestCount || 0
 
       // By Day
@@ -72,7 +77,7 @@ export async function GET(_request: NextRequest) {
         }
       }
       dailyMap[dateStr].tokens += r.totalTokens || 0
-      dailyMap[dateStr].cost += r.cost || 0
+      dailyMap[dateStr].cost += normalizedUsdCost
       dailyMap[dateStr].requests += r.requestCount || 0
 
       // By Provider
@@ -85,7 +90,7 @@ export async function GET(_request: NextRequest) {
         }
       }
       providerMap[provName].tokens += r.totalTokens || 0
-      providerMap[provName].cost += r.cost || 0
+      providerMap[provName].cost += normalizedUsdCost
     }
 
     const byModel = Object.entries(modelMap).map(([model, data]) => ({

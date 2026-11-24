@@ -170,13 +170,20 @@ export default function VerifyCenterPage() {
 
   useEffect(() => {
     let active = true
+    const urlExecutionId =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("executionId")
+        : null
     fetch("/api/executions")
       .then((res) => res.json())
       .then((json) => {
         if (!active) return
         const rows: ExecutionRecord[] = Array.isArray(json?.data) ? json.data : []
         setExecutions(rows)
-        setSelectedId((prev) => (prev && rows.some((r) => r.id === prev) ? prev : rows[0]?.id || ""))
+        setSelectedId((prev) => {
+          if (urlExecutionId && rows.some((r) => r.id === urlExecutionId)) return urlExecutionId
+          return prev && rows.some((r) => r.id === prev) ? prev : rows[0]?.id || ""
+        })
       })
       .catch((err) => console.error("Failed to load executions for verification:", err))
       .finally(() => {
@@ -291,6 +298,25 @@ export default function VerifyCenterPage() {
       console.error(err)
     } finally {
       setPostingNote(false)
+    }
+  }
+
+  const handleResolveNote = async (commentId: string) => {
+    if (!selected) return
+    try {
+      const res = await fetch(`/api/executions/${selected.id}/comments`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ commentId, status: "resolved" }),
+      })
+      const json = await res.json()
+      if (res.ok && json?.data) {
+        setComments((prev) =>
+          prev.map((c) => (c.id === commentId ? { ...c, status: "resolved" } : c))
+        )
+      }
+    } catch (err) {
+      console.error(err)
     }
   }
 
@@ -724,9 +750,20 @@ export default function VerifyCenterPage() {
                           <li key={c.id} className="py-3">
                             <div className="flex items-center justify-between gap-2 font-mono text-[10px] text-ink-3">
                               <span className="font-medium text-ink">{c.authorName}</span>
-                              <span>
-                                {c.filePath}:{c.lineNumber} · {c.status}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span>
+                                  {c.filePath}:{c.lineNumber} · {c.status}
+                                </span>
+                                {c.status !== "resolved" && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleResolveNote(c.id)}
+                                    className="font-mono text-[10px] uppercase tracking-[0.08em] text-success hover:underline"
+                                  >
+                                    Resolve
+                                  </button>
+                                )}
+                              </div>
                             </div>
                             <p className="mt-1 text-[12.5px] text-ink-2">{c.comment}</p>
                           </li>

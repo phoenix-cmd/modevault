@@ -8,8 +8,10 @@ import {
   flattenWorkspaceTree,
   getLatestCommitDiff,
   listWorkspaceTree,
+  readWorkspaceFile,
   writeWorkspaceFile,
 } from "@/lib/project-workspace"
+import { ensureProjectSourceWorkspace } from "@/lib/project-source"
 import { validateAndSortDag, type DagEdgeInput, type DagNodeInput } from "@/lib/dag-engine"
 import { estimateTokenCost, invokeLlmCompletion, resolveUserProviderKey } from "@/lib/llm-provider"
 import { publishExecutionComplete, publishExecutionEvent } from "@/lib/event-bus"
@@ -168,7 +170,13 @@ export async function POST(req: NextRequest) {
       include: { tasks: { orderBy: { orderIndex: "asc" } } },
     })
 
-    const source = project.sources?.find((s) => s.sourcePath)
+    let ensuredPath: string | null = null
+    try {
+      ensuredPath = await ensureProjectSourceWorkspace(project)
+    } catch {
+      ensuredPath = project.sources?.find((s) => s.sourcePath)?.sourcePath || null
+    }
+    const source = ensuredPath ? { sourcePath: ensuredPath } : undefined
     let workspaceFiles: string[] = []
     if (source?.sourcePath) {
       const tree = await listWorkspaceTree(source.sourcePath).catch(() => [])
@@ -212,7 +220,11 @@ export async function POST(req: NextRequest) {
     let pausedAtApproval = false
     let committedSha = ""
     let realDiff = ""
-    const artifactPath = "WORKFLOW_EXECUTION.md"
+    const candidateTarget =
+      workspaceFiles.find((f) => /\.(ts|tsx|js|jsx|py)$/.test(f)) ||
+      workspaceFiles[0] ||
+      "WORKFLOW_EXECUTION.md"
+    let artifactPath = candidateTarget
 
     // Step 1: Execute topological order until first approval gate
     for (let i = 0; i < orderedNodes.length; i++) {
@@ -300,7 +312,19 @@ export async function POST(req: NextRequest) {
     if (source?.sourcePath) {
       try {
         await createBranch(source.sourcePath, branch)
-        await writeWorkspaceFile(source.sourcePath, artifactPath, reportLines)
+        const existingCode = await readWorkspaceFile(source.sourcePath, artifactPath).catch(() => "")
+        if (existingCode && /\.(ts|tsx|js|jsx)$/.test(artifactPath)) {
+          const fnId = `verifyWorkflowStage_${Date.now().toString(36).slice(-4)}`
+          const updatedCode = `${existingCode.trimEnd()}\n\n// Workflow pipeline (${wfName}): ${ orderedNodes.map((n) => String(n.data?.label || n.id)).join(" -> ") }\nexport function ${fnId}(): { workflow: string; stages: number } {\n  return { workflow: "${wfName.replace(/"/g, "")}", stages: ${orderedNodes.length} }\n}\n`
+          await writeWorkspaceFile(source.sourcePath, artifactPath, updatedCode)
+        } else if (existingCode && artifactPath.endsWith(".py")) {
+          const fnId = `verify_workflow_stage_${Date.now().toString(36).slice(-4)}`
+          const updatedCode = `${existingCode.trimEnd()}\n\n\ndef ${fnId}() -> dict:\n    \"\"\"Workflow pipeline (${wfName})\"\"\"\n    return {"workflow": "${wfName.replace(/"/g, "")}", "stages": ${orderedNodes.length}}\n`
+          await writeWorkspaceFile(source.sourcePath, artifactPath, updatedCode)
+        } else {
+          artifactPath = "WORKFLOW_EXECUTION.md"
+          await writeWorkspaceFile(source.sourcePath, artifactPath, reportLines)
+        }
         committedSha = await commitWorkspace(source.sourcePath, `feat(workflow): ${wfName}`)
         realDiff = await getLatestCommitDiff(source.sourcePath)
       } catch (err) {

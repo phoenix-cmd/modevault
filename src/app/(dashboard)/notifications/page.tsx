@@ -1,8 +1,10 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import {
   AlertTriangle,
+  ArrowRight,
   Bell,
   Check,
   CheckCheck,
@@ -22,6 +24,7 @@ interface Notification {
   message: string
   severity: Severity | string
   isRead: boolean
+  actionUrl?: string | null
   createdAt: string
 }
 
@@ -97,7 +100,19 @@ export default function NotificationsPage() {
     }
   }
 
+  const clearRead = async () => {
+    try {
+      const res = await fetch("/api/notifications/mark-all-read", { method: "DELETE" })
+      if (res.ok) {
+        setNotifications((prev) => prev.filter((n) => !n.isRead))
+      }
+    } catch (err) {
+      console.error("Failed to clear read notifications", err)
+    }
+  }
+
   const unreadCount = notifications.filter((n) => !n.isRead).length
+  const readCount = notifications.length - unreadCount
   const criticalCount = notifications.filter((n) => n.severity === "critical" && !n.isRead).length
 
   const filtered = useMemo(() => {
@@ -121,6 +136,12 @@ export default function NotificationsPage() {
               <button onClick={markAllRead} className="btn-secondary btn-sm">
                 <CheckCheck className="h-3.5 w-3.5" strokeWidth={1.8} />
                 Mark all read
+              </button>
+            )}
+            {readCount > 0 && (
+              <button onClick={clearRead} className="btn-ghost btn-sm text-ink-3 hover:text-danger">
+                <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+                Clear read ({readCount})
               </button>
             )}
           </div>
@@ -211,14 +232,25 @@ export default function NotificationsPage() {
                       <span className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-3">{meta.label}</span>
                     </div>
                     <p className="mt-1 text-[12.5px] leading-relaxed text-ink-2">{n.message}</p>
-                    <p className="mt-1.5 font-mono text-[10px] text-ink-3 tabular-nums">
-                      {new Date(n.createdAt).toLocaleString("en-IN", {
-                        day: "numeric",
-                        month: "short",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-3">
+                      <p className="font-mono text-[10px] text-ink-3 tabular-nums">
+                        {new Date(n.createdAt).toLocaleString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                      {n.actionUrl && n.actionUrl.startsWith("/") && (
+                        <Link
+                          href={n.actionUrl}
+                          className="inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.08em] text-accent hover:underline"
+                        >
+                          Open
+                          <ArrowRight className="h-3 w-3" />
+                        </Link>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex shrink-0 items-center gap-1 opacity-100 transition-opacity [@media(hover:hover)]:lg:opacity-0 [@media(hover:hover)]:lg:group-hover:opacity-100 [@media(hover:hover)]:lg:group-focus-within:opacity-100">
