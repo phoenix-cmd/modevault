@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { syncSubscriptionRenewals } from "@/lib/subscription-lifecycle"
 import { parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
@@ -25,9 +26,12 @@ const subscriptionCreateSchema = z.object({
   notes: z.string().max(2000).nullable().optional(),
 })
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
     const user = await requireAuthenticatedUser()
+    if (new URL(request.url).searchParams.get("sync") === "1") {
+      await syncSubscriptionRenewals(user.id)
+    }
     const subscriptions = await prisma.subscription.findMany({
       where: { userId: user.id },
       include: {

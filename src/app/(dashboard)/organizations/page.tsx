@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Building2, Layers, Plus, Users } from "lucide-react"
+import { Building2, Layers, Plus, Trash2, Users } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
 import { StatBand, StatBandSkeleton } from "@/components/ui/stat-band"
 
@@ -25,6 +25,9 @@ export default function OrganizationsPage() {
   const [slug, setSlug] = useState("")
   const [creating, setCreating] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const [newWsOrgId, setNewWsOrgId] = useState<string | null>(null)
+  const [newWsName, setNewWsName] = useState("")
+  const [creatingWs, setCreatingWs] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -66,6 +69,53 @@ export default function OrganizationsPage() {
       setError(err.message)
     } finally {
       setCreating(false)
+    }
+  }
+
+  const handleCreateWorkspace = async (e: React.FormEvent, orgId: string) => {
+    e.preventDefault()
+    if (!newWsName.trim()) return
+    setCreatingWs(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/organizations", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create_workspace",
+          organizationId: orgId,
+          name: newWsName.trim(),
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || "Failed to create workspace")
+      setNewWsName("")
+      setNewWsOrgId(null)
+      await load()
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setCreatingWs(false)
+    }
+  }
+
+  const handleDeleteWorkspace = async (orgId: string, workspaceId: string) => {
+    setError(null)
+    try {
+      const res = await fetch("/api/organizations", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete_workspace",
+          organizationId: orgId,
+          workspaceId,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || "Failed to delete workspace")
+      await load()
+    } catch (err: any) {
+      setError(err.message)
     }
   }
 
@@ -182,18 +232,59 @@ export default function OrganizationsPage() {
 
                     <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:mt-5">
                       <div>
-                        <p className="mb-2 flex items-center gap-1.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-ink-3">
-                          <Layers className="h-3 w-3" strokeWidth={1.8} />
-                          Workspaces ({org.workspaces.length})
-                        </p>
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <p className="flex items-center gap-1.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-ink-3">
+                            <Layers className="h-3 w-3" strokeWidth={1.8} />
+                            Workspaces ({org.workspaces.length})
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewWsOrgId(newWsOrgId === org.id ? null : org.id)
+                              setNewWsName("")
+                            }}
+                            className="btn-ghost btn-sm text-[10px]"
+                          >
+                            <Plus className="h-3 w-3" />
+                            Add workspace
+                          </button>
+                        </div>
+                        {newWsOrgId === org.id && (
+                          <form onSubmit={(e) => handleCreateWorkspace(e, org.id)} className="mb-2 flex gap-1.5">
+                            <input
+                              type="text"
+                              value={newWsName}
+                              onChange={(e) => setNewWsName(e.target.value)}
+                              placeholder="Workspace name"
+                              className="field field-sm flex-1"
+                              required
+                            />
+                            <button type="submit" disabled={creatingWs} className="btn-primary btn-sm">
+                              {creatingWs ? "Adding…" : "Add"}
+                            </button>
+                          </form>
+                        )}
                         {org.workspaces.length === 0 ? (
                           <p className="text-[12px] text-ink-3">No workspaces</p>
                         ) : (
                           <ul className="space-y-1.5">
                             {org.workspaces.map((ws) => (
-                              <li key={ws.id} className="flex items-baseline gap-2 text-[12.5px]">
-                                <span className="text-ink">{ws.name}</span>
-                                <span className="font-mono text-[10px] text-ink-3">/{ws.slug}</span>
+                              <li key={ws.id} className="flex items-center justify-between gap-2 text-[12.5px]">
+                                <div className="flex items-baseline gap-2">
+                                  <span className="text-ink">{ws.name}</span>
+                                  <span className="font-mono text-[10px] text-ink-3">/{ws.slug}</span>
+                                </div>
+                                {org.workspaces.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteWorkspace(org.id, ws.id)}
+                                    className="icon-btn h-6 w-6 hover:text-danger"
+                                    title="Delete workspace"
+                                    aria-label={`Delete workspace ${ws.name}`}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
+                                )}
                               </li>
                             ))}
                           </ul>

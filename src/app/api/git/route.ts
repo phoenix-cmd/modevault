@@ -1,27 +1,57 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { decryptSecret } from "@/lib/crypto"
 import { getUserAccessibleWorkspaceIds, requireProjectAccess } from "@/lib/permissions"
 import {
-  getGitBranches,
-  getGitCommits,
-  getGitDiff,
-  getGitStatusFiles,
-  getCurrentGitBranch,
-  createBranch,
   checkoutBranch,
   commitWorkspace,
+  createBranch,
+  discardFiles,
+  getCurrentGitBranch,
+  getGitBranches,
+  getGitCommits,
+  getGitConflicts,
+  getGitDiff,
+  getGitStatusFiles,
+  getGitSyncStatus,
+  gitFetch,
+  gitPull,
+  gitPush,
   revertCommit,
   stageFiles,
   unstageFiles,
-  discardFiles,
-  getGitSyncStatus,
-  gitPush,
-  gitPull,
-  gitFetch,
+  verifyCommitExists,
 } from "@/lib/project-workspace"
 import { gitActionSchema, parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
+
+async function resolveGithubToken(userId: string): Promise<string | null> {
+  const cred = await prisma.integrationCredential.findUnique({
+    where: { userId_providerSlug: { userId, providerSlug: "github" } },
+  })
+  if (cred?.encryptedKey && cred.status !== "not_connected") {
+    try {
+      const token = decryptSecret(cred.encryptedKey).trim()
+      if (token) return token
+    } catch {
+      // Ignore
+    }
+  }
+  const oauthAccount = await prisma.account.findFirst({
+    where: { userId, provider: "github", access_token: { not: null } },
+    select: { access_token: true },
+  })
+  return oauthAccount?.access_token?.trim() || null
+}
+
+function parseGithubOwnerRepo(repoUrl: string | null | undefined): { owner: string; repo: string } | null {
+  if (!repoUrl) return null
+  const clean = repoUrl.trim().replace(/\.git$/i, "").replace(/\/$/, "")
+  const match = clean.match(/^https?:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/i)
+  if (!match) return null
+  return { owner: match[1], repo: match[2] }
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -56,33 +86,39 @@ export async function GET(req: NextRequest) {
       (item) => item.sourcePath
     )
 
-    let branches: any[] = [
-      { name: "main", isDefault: true, protected: true, lastCommit: "f8a9201" },
-      { name: "feature/checkout-idempotency", isDefault: false, protected: false, lastCommit: "c_9e12bf4" },
-      { name: "feature/multi-agent-orchestrator", isDefault: false, protected: false, lastCommit: "b_3389a12" },
-      { name: "fix/token-usage-aggregation", isDefault: false, protected: false, lastCommit: "a_0411d7c" },
-    ]
-    let commits: any[] = [
-      {
-        sha: "c_9e12bf4",
-        message: "feat(stripe): implement resilient idempotency key lock table",
-        author: "Claude Code 3.7 (Agent)",
-        branch: "feature/checkout-idempotency",
-        timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
-        filesChanged: 2,
-        additions: 48,
-        deletions: 6,
-        status: "verified",
-      },
-    ]
-    let pullRequests: any[] = []
+    const hasGithubToken = Boolean(await resolveGithubToken(user.id))
+    const ghRepo = parseGithubOwnerRepo(project.repositoryUrl)
+
+    let currentBranch = project.defaultBranch || "main"
+    let branches: Array<{ name: string; isDefault: boolean; protected: boolean; lastCommit: string }> = []
+    let commits: Array<{
+      sha: string
+      message: string
+      author: string
+      branch: string
+      timestamp: string
+      filesChanged: number
+      additions: number
+      deletions: number
+      status: string
+    }> = []
+    let diff = ""
+    let changes: Array<{ path: string; code: string; staged: boolean }> = []
+    let sync: {
+      hasRemote: boolean
+      remoteUrl: string | null
+      upstream: string | null
+      branch: string
+      ahead: number
+      behind: number
+    } | null = null
+    let conflicts: Array<{ path: string; content: string }> = []
 
     if (source?.sourcePath) {
       try {
         const realBranches = await getGitBranches(source.sourcePath)
-        const currentBranch = await getCurrentGitBranch(source.sourcePath)
+        currentBranch = await getCurrentGitBranch(source.sourcePath)
         const realCommits = await getGitCommits(source.sourcePath)
-        const diff = await getGitDiff(source.sourcePath)
         branches = realBranches.map((name) => ({
           name,
           isDefault: name === "main" || name === "master",
@@ -100,25 +136,51 @@ export async function GET(req: NextRequest) {
           deletions: 0,
           status: "verified",
         }))
-        pullRequests = []
-        ;(project as { defaultBranch?: string }).defaultBranch = currentBranch
+        diff = await getGitDiff(source.sourcePath).catch(() => "")
+        changes = await getGitStatusFiles(source.sourcePath).catch(() => [])
+        sync = await getGitSyncStatus(source.sourcePath).catch(() => null)
+        conflicts = await getGitConflicts(source.sourcePath).catch(() => [])
       } catch {
-        // Keep mock fallback if Git inspection fails.
+        // Leave empty arrays when git binary is unavailable in serverless
       }
     }
 
+    const pullRequests = operations
+      .filter((op) => op.status === "pr_created" || op.pullRequestNum !== null)
+      .map((op) => ({
+        id: op.id,
+        number: op.pullRequestNum ?? 0,
+        title: op.commitMessage || `Pull Request (${op.branchName})`,
+        branch: op.branchName,
+        targetBranch: op.baseBranch || "main",
+        author: user.name || user.email,
+        status: op.status,
+        url: op.prUrl,
+        isRemote: Boolean(op.prUrl && ghRepo && hasGithubToken && op.prUrl.includes(ghRepo.owner)),
+        createdAt: op.createdAt.toISOString(),
+      }))
+
     return NextResponse.json({
       data: {
-        currentBranch: project.defaultBranch || "main",
+        currentBranch,
         branches,
         commits,
         pullRequests,
         operations,
-        diff: source?.sourcePath ? await getGitDiff(source.sourcePath).catch(() => "") : "",
-        changes: source?.sourcePath ? await getGitStatusFiles(source.sourcePath).catch(() => []) : [],
-        sync: source?.sourcePath
-          ? await getGitSyncStatus(source.sourcePath).catch(() => null)
-          : { hasRemote: false, remoteUrl: null, upstream: null, branch: project.defaultBranch || "main", ahead: 0, behind: 0 },
+        diff,
+        changes,
+        conflicts,
+        hasGithubToken,
+        hasGithubRemote: Boolean(ghRepo),
+        isLocalWorkspace: Boolean(source?.sourcePath),
+        sync: sync || {
+          hasRemote: Boolean(project.repositoryUrl),
+          remoteUrl: project.repositoryUrl || null,
+          upstream: null,
+          branch: currentBranch,
+          ahead: 0,
+          behind: 0,
+        },
       },
     })
   } catch (err: unknown) {
@@ -132,7 +194,7 @@ export async function POST(req: NextRequest) {
     const user = await requireAuthenticatedUser()
     const parsed = await parseJson(req, gitActionSchema)
     if ("response" in parsed) return parsed.response
-    const { action, projectId, branchName, commitMessage, commitSha, prTitle } = parsed.data
+    const { action, projectId, branchName, commitMessage, commitSha, prTitle, prBody } = parsed.data
     const body = parsed.data
 
     let project
@@ -152,19 +214,18 @@ export async function POST(req: NextRequest) {
     }
 
     await requireProjectAccess(project.id, user.id, "member")
-
-    if (action === "commit") {
-      const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find(
+    const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find(
       (item) => item.sourcePath
     )
-      let sha = `c_${Math.random().toString(16).slice(2, 9)}`
-      if (source?.sourcePath) {
-        try {
-          sha = await commitWorkspace(source.sourcePath, commitMessage || "feat: automated agent mutation")
-        } catch {
-          // Fall back to a synthetic SHA if Git is unavailable.
-        }
+
+    if (action === "commit") {
+      if (!source?.sourcePath) {
+        return NextResponse.json(
+          { error: "This project has no writable Git workspace" },
+          { status: 400 }
+        )
       }
+      const sha = await commitWorkspace(source.sourcePath, commitMessage || "feat: automated agent mutation")
       const op = await prisma.gitOperation.create({
         data: {
           projectId: project.id,
@@ -174,93 +235,147 @@ export async function POST(req: NextRequest) {
           status: "committed",
         },
       })
-      return NextResponse.json({
-        data: {
-          message: "Commit created successfully",
-          sha,
-          operation: op,
-        },
-      }, { status: 201 })
+      return NextResponse.json({ data: { message: "Commit created", sha, operation: op } }, { status: 201 })
     }
 
     if (action === "revert") {
-      const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find(
-        (item) => item.sourcePath
-      )
-      let revertSha = `rev_${Math.random().toString(16).slice(2, 9)}`
-      if (source?.sourcePath && commitSha && /^[0-9a-fA-F]{4,40}$/.test(commitSha)) {
-        try {
-          revertSha = await revertCommit(source.sourcePath, commitSha)
-        } catch {
-          // Keep synthetic fallback if target SHA is synthetic or has conflicts
-        }
+      if (!source?.sourcePath) {
+        return NextResponse.json({ error: "No local Git workspace available to revert commits" }, { status: 400 })
       }
-      const op = await prisma.gitOperation.create({
-        data: {
-          projectId: project.id,
-          branchName: branchName || project.defaultBranch,
-          commitSha: revertSha,
-          commitMessage: `revert: Revert commit ${commitSha || "target"}`,
-          status: "reverted",
-        },
-      })
-      return NextResponse.json({
-        data: {
-          message: `Commit ${commitSha} successfully reverted`,
-          revertSha,
-          operation: op,
-        },
-      })
+      if (!commitSha || !(await verifyCommitExists(source.sourcePath, commitSha))) {
+        return NextResponse.json(
+          { error: `Commit ${commitSha || "(missing)"} not found in workspace git history` },
+          { status: 409 }
+        )
+      }
+      try {
+        const revertSha = await revertCommit(source.sourcePath, commitSha)
+        const op = await prisma.gitOperation.create({
+          data: {
+            projectId: project.id,
+            branchName: branchName || project.defaultBranch,
+            commitSha: revertSha,
+            commitMessage: `revert: Revert commit ${commitSha}`,
+            status: "reverted",
+          },
+        })
+        return NextResponse.json({
+          data: {
+            message: `Commit ${commitSha} reverted (${revertSha})`,
+            revertSha,
+            simulated: false,
+            operation: op,
+          },
+        })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Git revert conflicted"
+        return NextResponse.json({ error: `Revert failed: ${message}` }, { status: 409 })
+      }
     }
 
     if (action === "pr") {
-      const prNumber = Math.floor(Math.random() * 80) + 40
-      const repoBase =
-        project.repositoryUrl && project.repositoryUrl.startsWith("https://github.com/")
-          ? project.repositoryUrl.replace(/\.git$/, "").replace(/\/$/, "")
-          : `https://github.com/modelvault/${project.slug}`
+      const headBranch = branchName || project.defaultBranch || "main"
+      const baseBranch = "main"
+      const title = prTitle || `PR: ${headBranch}`
+      const ghToken = await resolveGithubToken(user.id)
+      const ghRepo = parseGithubOwnerRepo(project.repositoryUrl)
+
+      let prNumber = 0
+      let prUrl = ""
+      let simulated = true
+      let notice: string | null = null
+
+      if (ghToken && ghRepo) {
+        try {
+          const ghRes = await fetch(
+            `https://api.github.com/repos/${ghRepo.owner}/${ghRepo.repo}/pulls`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${ghToken}`,
+                Accept: "application/vnd.github+json",
+                "Content-Type": "application/json",
+                "User-Agent": "MODELVAULT",
+              },
+              body: JSON.stringify({
+                title,
+                head: headBranch,
+                base: baseBranch,
+                body: prBody || `Opened from MODELVAULT workspace (${project.name}).`,
+              }),
+              signal: AbortSignal.timeout(10000),
+            }
+          )
+          if (ghRes.ok) {
+            const createdPr = (await ghRes.json()) as { number: number; html_url: string }
+            prNumber = createdPr.number
+            prUrl = createdPr.html_url
+            simulated = false
+          } else {
+            const errJson = (await ghRes.json().catch(() => ({}))) as { message?: string }
+            notice = `GitHub API declined PR (${errJson.message || ghRes.status}); recorded as local PR draft.`
+          }
+        } catch (err) {
+          notice = `GitHub API unreachable (${err instanceof Error ? err.message : "network error"}); recorded as local PR draft.`
+        }
+      } else {
+        notice = !ghRepo
+          ? "Project has no GitHub repository URL; recorded as local PR draft."
+          : "No GitHub token connected in Integrations; recorded as local PR draft."
+      }
+
+      if (simulated) {
+        const existingPrCount = await prisma.gitOperation.count({
+          where: { projectId: project.id, pullRequestNum: { not: null } },
+        })
+        prNumber = existingPrCount + 1
+        const repoBase = ghRepo
+          ? `https://github.com/${ghRepo.owner}/${ghRepo.repo}`
+          : `local://workspace/${project.slug}`
+        prUrl = `${repoBase}/pull/${prNumber}`
+      }
+
       const op = await prisma.gitOperation.create({
         data: {
           projectId: project.id,
-          branchName: branchName || "feature/ai-update",
-          baseBranch: "main",
+          branchName: headBranch,
+          baseBranch,
           status: "pr_created",
           pullRequestNum: prNumber,
-          prUrl: `${repoBase}/pull/${prNumber}`,
-          commitMessage: prTitle || `PR #${prNumber}: ${branchName || "feature/ai-update"}`,
+          prUrl,
+          commitMessage: title,
         },
       })
-      return NextResponse.json({
-        data: {
-          message: "Pull request created",
-          pullRequestNumber: prNumber,
-          url: op.prUrl,
-          title: prTitle,
-          operation: op,
+
+      return NextResponse.json(
+        {
+          data: {
+            message: simulated ? "Local PR draft recorded" : `Live GitHub Pull Request #${prNumber} created`,
+            pullRequestNumber: prNumber,
+            url: prUrl,
+            title,
+            simulated,
+            notice,
+            operation: op,
+          },
         },
-      }, { status: 201 })
+        { status: 201 }
+      )
     }
 
     if (action === "stage") {
-      const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find((item) => item.sourcePath)
-      if (source?.sourcePath) {
-        await stageFiles(source.sourcePath, body.files)
-      }
+      if (source?.sourcePath) await stageFiles(source.sourcePath, body.files)
       const changes = source?.sourcePath ? await getGitStatusFiles(source.sourcePath).catch(() => []) : []
       return NextResponse.json({ data: { message: "Changes staged", changes } })
     }
 
     if (action === "unstage") {
-      const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find((item) => item.sourcePath)
-      if (source?.sourcePath) {
-        await unstageFiles(source.sourcePath, body.files)
-      }
+      if (source?.sourcePath) await unstageFiles(source.sourcePath, body.files)
       const changes = source?.sourcePath ? await getGitStatusFiles(source.sourcePath).catch(() => []) : []
       return NextResponse.json({ data: { message: "Changes unstaged", changes } })
     }
 
     if (action === "discard") {
-      const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find((item) => item.sourcePath)
       if (source?.sourcePath && Array.isArray(body.files)) {
         await discardFiles(source.sourcePath, body.files)
       }
@@ -269,49 +384,28 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "branch") {
-      const branchName = body.branchName
       if (!branchName) {
         return NextResponse.json({ error: "branchName is required" }, { status: 400 })
       }
-      const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find((item) => item.sourcePath)
-      if (source?.sourcePath) {
-        await createBranch(source.sourcePath, branchName)
-      }
-      await prisma.project.update({
-        where: { id: project.id },
-        data: { defaultBranch: branchName },
-      })
+      if (source?.sourcePath) await createBranch(source.sourcePath, branchName)
+      await prisma.project.update({ where: { id: project.id }, data: { defaultBranch: branchName } })
       const branches = source?.sourcePath ? await getGitBranches(source.sourcePath).catch(() => []) : []
       return NextResponse.json({ data: { message: "Branch created", branchName, branches } })
     }
 
     if (action === "checkout") {
-      const branchName = body.branchName
       if (!branchName) {
         return NextResponse.json({ error: "branchName is required" }, { status: 400 })
       }
-      const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find((item) => item.sourcePath)
-      if (source?.sourcePath) {
-        await checkoutBranch(source.sourcePath, branchName)
-      }
-      await prisma.project.update({
-        where: { id: project.id },
-        data: { defaultBranch: branchName },
-      })
+      if (source?.sourcePath) await checkoutBranch(source.sourcePath, branchName)
+      await prisma.project.update({ where: { id: project.id }, data: { defaultBranch: branchName } })
       return NextResponse.json({ data: { message: "Checked out branch", branchName } })
     }
 
     if (action === "push" || action === "pull" || action === "fetch") {
-      const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find(
-        (item) => item.sourcePath
-      )
       if (!source?.sourcePath) {
-        return NextResponse.json(
-          { error: "This project has no local Git workspace to sync" },
-          { status: 400 }
-        )
+        return NextResponse.json({ error: "This project has no local Git workspace to sync" }, { status: 400 })
       }
-
       try {
         if (action === "push") {
           const result = await gitPush(source.sourcePath)

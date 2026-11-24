@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
 import { StatBand, StatBandSkeleton } from "@/components/ui/stat-band"
+import { parseUnifiedDiff } from "@/lib/diff-parser"
 import { cn, formatNumber } from "@/lib/utils"
 
 const DiffEditor = dynamic(
@@ -56,6 +57,7 @@ export default function AgentCenterPage() {
   const [prompt, setPrompt] = useState("")
   const [dispatching, setDispatching] = useState(false)
   const [actionSuccess, setActionSuccess] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   // Multi-Agent Plan preview modal state
   const [planPreview, setPlanPreview] = useState<any | null>(null)
@@ -104,7 +106,9 @@ export default function AgentCenterPage() {
         execRes.json(),
       ])
 
-      const urlProjectId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("projectId") : null
+      const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null
+      const urlProjectId = params?.get("projectId") || null
+      const urlExecutionId = params?.get("executionId") || null
       if (Array.isArray(projJson?.data)) {
         setProjects(projJson.data)
         setSelectedProject((prev: string) => prev || urlProjectId || projJson.data[0]?.id || "")
@@ -113,6 +117,10 @@ export default function AgentCenterPage() {
       if (Array.isArray(execJson?.data)) {
         setExecutions(execJson.data)
         setSelectedExecution((prev: any) => {
+          if (urlExecutionId) {
+            const matched = execJson.data.find((item: any) => item.id === urlExecutionId)
+            if (matched) return matched
+          }
           if (prev) return prev
           const first = execJson.data[0] || null
           if (first?.id) loadComments(first.id)
@@ -221,6 +229,7 @@ export default function AgentCenterPage() {
 
     setDispatching(true)
     setShowPlanModal(false)
+    setActionError(null)
     try {
       const res = await fetch("/api/executions", {
         method: "POST",
@@ -233,16 +242,20 @@ export default function AgentCenterPage() {
       })
 
       const json = await res.json()
+      if (!res.ok) {
+        setActionError(json.error || "Failed to launch execution")
+        return
+      }
       if (json.data) {
         setExecutions((prev) => [json.data, ...prev])
         setSelectedExecution(json.data)
         loadComments(json.data.id)
         setPrompt("")
-        setActionSuccess("Coding agent team dispatched and executed task plan!")
+        setActionSuccess("Execution completed & staged for approval!")
         setTimeout(() => setActionSuccess(null), 4000)
       }
     } catch (err) {
-      console.error(err)
+      setActionError(err instanceof Error ? err.message : "Failed to launch execution")
     } finally {
       setDispatching(false)
     }
@@ -328,71 +341,21 @@ export default function AgentCenterPage() {
   }
 
   const diffArtifact = selectedExecution?.artifacts?.find((a: any) => a.type === "git_diff")
+  const parsedDiff = parseUnifiedDiff(diffArtifact?.content || "", diffArtifact?.path)
+  const originalCode = parsedDiff.original
+  const modifiedCode = parsedDiff.modified
+  const hasRealDiff = Boolean(diffArtifact?.content)
+  const diffPath = parsedDiff.filePath
 
-  // Generate original vs modified code for Monaco Diff Editor
-  const originalCode = `export interface RequestConfig {
-  timeoutMs?: number;
-}
-
-export class ApiClient {
-  private baseUrl: string;
-
-  constructor(baseUrl: string = "") {
-    this.baseUrl = baseUrl;
-  }
-
-  async request<T>(endpoint: string, options: RequestConfig = {}): Promise<T> {
-    const res = await fetch(\`\${this.baseUrl}\${endpoint}\`, {
-      headers: { "Content-Type": "application/json" },
-      signal: AbortSignal.timeout(options.timeoutMs ?? 10000),
-    });
-    if (!res.ok) throw new Error(\`HTTP \${res.status}\`);
-    return await res.json() as T;
-  }
-}`
-
-  const modifiedCode = `export interface RequestConfig {
-  timeoutMs?: number;
-  retryAttempts?: number;
-  idempotencyKey?: string;
-}
-
-export class ApiClient {
-  private baseUrl: string;
-
-  constructor(baseUrl: string = "") {
-    this.baseUrl = baseUrl;
-  }
-
-  /**
-   * Execute request with exponential backoff and automatic idempotency key generation.
-   */
-  async request<T>(endpoint: string, options: RequestConfig = {}): Promise<T> {
-    const maxRetries = options.retryAttempts ?? 3;
-    let lastError: Error | null = null;
-
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        const headers: Record<string, string> = {
-          "Content-Type": "application/json",
-          ...(options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : {}),
-        };
-        const res = await fetch(\`\${this.baseUrl}\${endpoint}\`, {
-          headers,
-          signal: AbortSignal.timeout(options.timeoutMs ?? 15000),
-        });
-        if (!res.ok) throw new Error(\`HTTP \${res.status}: \${res.statusText}\`);
-        return await res.json() as T;
-      } catch (err: any) {
-        lastError = err;
-        if (attempt < maxRetries) {
-          await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 200));
-        }
-      }
+  let selectedPlanMeta: { executionMode?: string; provider?: string | null; model?: string | null } = {}
+  if (selectedExecution?.planJson) {
+    try {
+      selectedPlanMeta = JSON.parse(selectedExecution.planJson)
+    } catch {
+      selectedPlanMeta = {}
     }
-    throw lastError ?? new Error("Request failed after retries");
   }
-}`
+  const selectedExecutionMode = selectedPlanMeta.executionMode || "simulated"
 
   const completedCount = executions.filter(
     (execution) => execution.status === "completed"
@@ -409,8 +372,6 @@ export class ApiClient {
     0
   )
 
-  const hasRealDiff = Boolean(diffArtifact?.content)
-  const diffPath = diffArtifact?.path || "src/lib/services/api-client.ts"
   const currentPlanStages = Array.isArray(planPreview?.stages) ? planPreview.stages : []
   const executionEvents = Array.isArray(selectedExecution?.events) ? selectedExecution.events : []
   const executionTasks = Array.isArray(selectedExecution?.tasks) ? selectedExecution.tasks : []
@@ -421,6 +382,11 @@ export class ApiClient {
         eyebrow="Operations · Agent runs"
         title="Agent Center"
         description="Dispatch instructions, inspect execution plans, and review diffs, comments, telemetry, and recorded spend from real runs in this workspace."
+        badge={
+          <span className="badge bg-surface-2 text-ink-2">
+            Live LLM when key connected · Local deterministic otherwise
+          </span>
+        }
       />
 
       {loading ? (
@@ -446,6 +412,15 @@ export class ApiClient {
         <div className="flex items-start gap-2 border border-success/25 bg-success-soft px-3.5 py-3 text-[13px] text-success">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.8} />
           <span className="font-medium">{actionSuccess}</span>
+        </div>
+      )}
+
+      {actionError && (
+        <div className="flex items-start justify-between gap-2 border border-danger/25 bg-danger-soft px-3.5 py-3 text-[13px] text-danger">
+          <span className="font-medium">{actionError}</span>
+          <button type="button" onClick={() => setActionError(null)} className="icon-btn" aria-label="Dismiss">
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
 
@@ -647,7 +622,14 @@ export class ApiClient {
           >
             <div className="flex items-start justify-between gap-4 border-b border-line px-4 py-4 sm:px-5">
               <div className="min-w-0">
-                <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">Orchestrator plan</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">Orchestrator plan</p>
+                  <span className={cn("badge", planPreview.mode === "live_llm" ? "bg-success-soft text-success" : "bg-surface-2 text-ink-2")}>
+                    {planPreview.mode === "live_llm"
+                      ? `Live AI Plan · ${planPreview.provider || "LLM"}`
+                      : "AST Heuristic Template — No LLM Key Connected"}
+                  </span>
+                </div>
                 <h3 id="plan-preview-title" className="mt-1 font-display text-[16px] font-medium tracking-[-0.02em] text-ink">
                   {planPreview.goal || "Decomposed execution plan"}
                 </h3>
@@ -744,6 +726,13 @@ export class ApiClient {
                   <span className={cn("badge", executionStatusClass(selectedExecution.status))}>
                     {String(selectedExecution.status || "unknown").replaceAll("_", " ")}
                   </span>
+                  <span className={cn("badge", selectedExecutionMode === "live_llm" ? "bg-success-soft text-success" : "bg-surface-2 text-ink-3")}>
+                    {selectedExecutionMode === "live_llm"
+                      ? `Live LLM (${selectedPlanMeta.model || selectedPlanMeta.provider || "API"})`
+                      : selectedExecutionMode === "local_deterministic"
+                        ? "Local Deterministic Workspace Run"
+                        : "Simulated Seed Run"}
+                  </span>
                 </div>
                 <p className="mt-1.5 line-clamp-2 max-w-3xl text-[12.5px] leading-relaxed text-ink-2">{selectedExecution.prompt}</p>
               </div>
@@ -801,12 +790,14 @@ export class ApiClient {
                       <div className="flex min-w-0 items-center gap-2">
                         <FileCode className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.8} />
                         <span className="truncate font-mono text-[11px] text-ink">{diffPath}</span>
-                        <span className="shrink-0 font-mono text-[9.5px] uppercase tracking-[0.08em] text-success">+32 / −4</span>
+                        <span className="shrink-0 font-mono text-[9.5px] uppercase tracking-[0.08em] text-success">
+                          +{parsedDiff.additions} / −{parsedDiff.deletions}
+                        </span>
                       </div>
                       <p className="mt-1.5 text-[12px] leading-relaxed text-ink-3">
                         {hasRealDiff
-                          ? "Artifact diff content is recorded for this run. Editor preview below remains a read-only comparison view."
-                          : "Sample diff preview (editor). Recorded artifact content is not available for this run."}
+                          ? "Showing unified diff recorded from this execution artifact."
+                          : "No diff artifact recorded for this run."}
                       </p>
                     </div>
 
@@ -837,7 +828,7 @@ export class ApiClient {
                     {(isXlDesktop || mobilePane === "detail") && (
                       <DiffEditor
                         height="100%"
-                        language="typescript"
+                        language={parsedDiff.language}
                         original={originalCode}
                         modified={modifiedCode}
                         theme={diffTheme}

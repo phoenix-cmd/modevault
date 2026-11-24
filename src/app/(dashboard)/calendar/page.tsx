@@ -13,14 +13,32 @@ export default function CalendarPage() {
   const [subscriptions, setSubscriptions] = useState<SubscriptionData[]>([])
   const [loading, setLoading] = useState(true)
   const [now, setNow] = useState<Date | null>(null)
+  const [ratesMap, setRatesMap] = useState<{ USD_INR: number; EUR_USD: number; GBP_USD: number }>({
+    USD_INR: 84.5,
+    EUR_USD: 1.08,
+    GBP_USD: 1.27,
+  })
 
   useEffect(() => {
     setNow(new Date())
     async function load() {
       try {
         setLoading(true)
-        const res = await fetch("/api/subscriptions")
+        const [res, fxRes] = await Promise.all([
+          fetch("/api/subscriptions"),
+          fetch("/api/exchange-rates").catch(() => null),
+        ])
         const json = await res.json()
+        const fxJson = fxRes ? await fxRes.json().catch(() => null) : null
+        if (Array.isArray(fxJson?.data)) {
+          const next = { USD_INR: 84.5, EUR_USD: 1.08, GBP_USD: 1.27 }
+          for (const row of fxJson.data as Array<{ fromCurrency: string; toCurrency: string; rate: number }>) {
+            if (row.fromCurrency === "USD" && row.toCurrency === "INR" && row.rate > 0) next.USD_INR = row.rate
+            if (row.fromCurrency === "EUR" && row.toCurrency === "USD" && row.rate > 0) next.EUR_USD = row.rate
+            if (row.fromCurrency === "GBP" && row.toCurrency === "USD" && row.rate > 0) next.GBP_USD = row.rate
+          }
+          setRatesMap(next)
+        }
         if (json.data) {
           const subs: SubscriptionData[] = (json.data as RawSubscription[])
             .filter((s) => s.status === "active" && s.renewalDate)
@@ -94,7 +112,15 @@ export default function CalendarPage() {
     return date >= next
   })
 
-  const totalThisMonth = thisMonth.reduce((sum, s) => sum + s.price, 0)
+  const toUsd = (amount: number, currency: string) => {
+    const c = (currency || "USD").toUpperCase()
+    if (c === "INR") return amount / ratesMap.USD_INR
+    if (c === "EUR") return amount * ratesMap.EUR_USD
+    if (c === "GBP") return amount * ratesMap.GBP_USD
+    return amount
+  }
+
+  const totalThisMonth = thisMonth.reduce((sum, s) => sum + toUsd(s.price, s.currency), 0)
 
   const renderSection = (
     title: string,

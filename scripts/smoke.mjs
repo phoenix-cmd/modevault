@@ -143,6 +143,87 @@ async function main() {
     if (previewStop.status !== 200) failures.push(`preview stop ${previewStop.status}`)
   }
 
+  const benchmark = await request(
+    "/api/models/benchmark",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ modelSlug: "claude-3-7-sonnet", prompt: "Smoke benchmark test" }),
+    },
+    jar
+  )
+  if (benchmark.status !== 200 || !benchmark.json?.data?.output) {
+    failures.push(`model benchmark ${benchmark.status}`)
+  }
+
+  const dagRun = await request(
+    "/api/workflows/execute",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workflowName: "Smoke DAG",
+        nodes: [
+          { id: "n1", type: "trigger", data: { label: "Start", tone: "terminal" } },
+          { id: "n2", type: "agent", data: { label: "Analyze", tone: "accent" } },
+        ],
+        edges: [{ id: "e1", source: "n1", target: "n2" }],
+      }),
+    },
+    jar
+  )
+  if (dagRun.status !== 201 || !dagRun.json?.data?.executionId) {
+    failures.push(`workflow execute ${dagRun.status} ${dagRun.json?.error || ""}`)
+  }
+
+  const billingRes = await request(
+    "/api/billing",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: 25,
+        currency: "USD",
+        type: "api_topup",
+        status: "pending",
+        paymentMethod: "Corporate Card",
+      }),
+    },
+    jar
+  )
+  if (
+    billingRes.status !== 201 ||
+    billingRes.json?.data?.status !== "pending" ||
+    billingRes.json?.data?.paymentMethod !== "Corporate Card"
+  ) {
+    failures.push(`billing metadata ${billingRes.status}`)
+  }
+
+  const provRes = await request("/api/providers", {}, jar)
+  const firstProviderId = provRes.json?.data?.[0]?.id
+  if (firstProviderId) {
+    const accCreate = await request(
+      "/api/api-accounts",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          providerId: firstProviderId,
+          accountName: "Smoke Test Key",
+          prepaidBalance: 15,
+          currency: "USD",
+        }),
+      },
+      jar
+    )
+    if (accCreate.status !== 201) {
+      failures.push(`api-account create ${accCreate.status}`)
+    } else {
+      const delAcc = await request(`/api/api-accounts/${accCreate.json.data.id}`, { method: "DELETE" }, jar)
+      if (delAcc.status !== 200) failures.push(`api-account delete ${delAcc.status}`)
+    }
+  }
+
   if (failures.length) {
     console.error("Smoke test failed:", failures.join(", "))
     process.exitCode = 1

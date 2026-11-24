@@ -261,6 +261,34 @@ export async function writeWorkspaceFile(
   }
 }
 
+export async function deleteWorkspaceFile(
+  rootPath: string,
+  relativePath: string
+): Promise<void> {
+  if (!isSafeRelativePath(relativePath)) {
+    throw new Error("Invalid file path")
+  }
+  const normalized = relativePath.replace(/\\/g, "/")
+  if (normalized === ".git" || normalized.startsWith(".git/")) {
+    throw new Error("Cannot delete internal git files")
+  }
+  const resolvedRoot = path.resolve(rootPath)
+  const absolutePath = path.resolve(resolvedRoot, relativePath)
+  if (!absolutePath.startsWith(resolvedRoot + path.sep)) {
+    throw new Error("Invalid file path")
+  }
+  await rm(absolutePath, { force: true })
+}
+
+export function flattenWorkspaceTree(nodes: WorkspaceTreeNode[]): string[] {
+  const paths: string[] = []
+  for (const node of nodes) {
+    if (node.type === "file") paths.push(node.path)
+    if (node.children) paths.push(...flattenWorkspaceTree(node.children))
+  }
+  return paths
+}
+
 const HARDENED_GIT_GLOBAL_ARGS = [
   "-c",
   "core.hooksPath=",
@@ -612,13 +640,93 @@ export async function checkoutBranch(rootPath: string, branchName: string): Prom
   await git(rootPath, ["checkout", safeBranch, "--"])
 }
 
+export async function verifyCommitExists(
+  rootPath: string,
+  commitSha: string
+): Promise<boolean> {
+  if (!/^[0-9a-fA-F]{4,40}$/.test(commitSha.trim())) {
+    return false
+  }
+  try {
+    await git(rootPath, ["cat-file", "-e", `${commitSha.trim()}^{commit}`])
+    return true
+  } catch {
+    return false
+  }
+}
+
 export async function revertCommit(rootPath: string, commitSha: string): Promise<string> {
   if (!/^[0-9a-fA-F]{4,40}$/.test(commitSha.trim())) {
     throw new Error("Invalid commit SHA")
   }
-  await git(rootPath, ["revert", "--no-edit", "--no-verify", commitSha.trim()])
+  try {
+    await git(rootPath, ["revert", "--no-edit", "--no-verify", commitSha.trim()])
+  } catch (err) {
+    await git(rootPath, ["revert", "--abort"]).catch(() => {})
+    throw err
+  }
   const { stdout } = await git(rootPath, ["rev-parse", "--short", "HEAD"])
   return stdout.trim()
+}
+
+export async function mergeBranch(
+  rootPath: string,
+  sourceBranch: string,
+  targetBranch = "main"
+): Promise<{ merged: boolean; commitSha: string; output: string }> {
+  const safeSource = assertValidGitBranchName(sourceBranch)
+  const safeTarget = assertValidGitBranchName(targetBranch)
+  const current = await getCurrentGitBranch(rootPath).catch(() => safeTarget)
+  if (current === safeSource) {
+    try {
+      await git(rootPath, ["checkout", safeTarget, "--"])
+    } catch {
+      const branches = await getGitBranches(rootPath).catch(() => [])
+      const fallback = branches.find((b) => b === "main" || b === "master")
+      if (!fallback) {
+        const commitSha = await getCurrentCommitSha(rootPath).catch(() => "")
+        return { merged: false, commitSha, output: "No target base branch to merge into" }
+      }
+      await git(rootPath, ["checkout", fallback, "--"])
+    }
+  }
+  const { stdout } = await git(rootPath, ["merge", "--no-ff", "--no-verify", safeSource])
+  const commitSha = await getCurrentCommitSha(rootPath).catch(() => "")
+  return { merged: true, commitSha, output: stdout.trim() || `Merged ${safeSource}` }
+}
+
+export async function deleteBranch(rootPath: string, branchName: string): Promise<void> {
+  const safeBranch = assertValidGitBranchName(branchName)
+  if (safeBranch === "main" || safeBranch === "master") return
+  const current = await getCurrentGitBranch(rootPath).catch(() => "main")
+  if (current === safeBranch) {
+    const branches = await getGitBranches(rootPath).catch(() => [])
+    const fallback = branches.find((b) => b === "main" || b === "master") || branches.find((b) => b !== safeBranch)
+    if (fallback) {
+      await git(rootPath, ["checkout", fallback, "--"]).catch(() => {})
+    }
+  }
+  await git(rootPath, ["branch", "-D", safeBranch]).catch(() => {})
+}
+
+export async function getGitConflicts(
+  rootPath: string
+): Promise<Array<{ path: string; content: string }>> {
+  try {
+    const { stdout } = await git(rootPath, ["diff", "--name-only", "--diff-filter=U"])
+    const paths = stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && isSafeRelativePath(line))
+    const conflicts: Array<{ path: string; content: string }> = []
+    for (const filePath of paths.slice(0, 10)) {
+      const content = await readWorkspaceFile(rootPath, filePath).catch(() => "")
+      conflicts.push({ path: filePath, content: content.slice(0, 4000) })
+    }
+    return conflicts
+  } catch {
+    return []
+  }
 }
 
 export async function getLatestCommitDiff(rootPath: string): Promise<string> {

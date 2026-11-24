@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { convertCurrency, getExchangeRatesMap } from "@/lib/currency"
+
+function formatContextWindow(tokens: number): string {
+  if (tokens >= 1_000_000) {
+    const m = tokens / 1_000_000
+    return `${Number.isInteger(m) ? m : m.toFixed(1)}M`
+  }
+  if (tokens >= 1000) return `${Math.round(tokens / 1000)}K`
+  return String(tokens)
+}
 
 export async function GET(_request: NextRequest) {
   try {
@@ -8,26 +18,36 @@ export async function GET(_request: NextRequest) {
     const now = new Date()
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
 
-    // 1. Subscriptions & API accounts
-    const [subscriptions, apiAccounts, billingRecords] = await Promise.all([
-      prisma.subscription.findMany({
-        where: { userId: user.id },
-        include: { provider: true },
-      }),
-      prisma.apiAccount.findMany({
-        where: { userId: user.id },
-        include: { provider: true },
-      }),
-      prisma.billingRecord.findMany({
-        where: {
-          userId: user.id,
-          billingDate: { gte: sixMonthsAgo },
-        },
-        orderBy: { billingDate: "asc" },
-      }),
-    ])
+    const [rates, subscriptions, apiAccounts, billingRecords, apiUsageRecords, dbModels] =
+      await Promise.all([
+        getExchangeRatesMap(),
+        prisma.subscription.findMany({
+          where: { userId: user.id },
+          include: { provider: true },
+        }),
+        prisma.apiAccount.findMany({
+          where: { userId: user.id },
+          include: { provider: true },
+        }),
+        prisma.billingRecord.findMany({
+          where: {
+            userId: user.id,
+            billingDate: { gte: sixMonthsAgo },
+          },
+          orderBy: { billingDate: "asc" },
+        }),
+        prisma.apiUsageRecord.findMany({
+          where: {
+            apiAccount: { userId: user.id },
+            date: { gte: sixMonthsAgo },
+          },
+          orderBy: { date: "asc" },
+        }),
+        prisma.aiModel.findMany({
+          orderBy: [{ providerName: "asc" }, { outputPricePerM: "asc" }],
+        }),
+      ])
 
-    // 2. Spending trends by month
     const months: Record<string, { month: string; subscriptions: number; api: number; total: number }> = {}
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
@@ -43,22 +63,44 @@ export async function GET(_request: NextRequest) {
     for (const b of billingRecords) {
       const key = `${b.billingDate.getFullYear()}-${String(b.billingDate.getMonth() + 1).padStart(2, "0")}`
       if (months[key]) {
+        const inrAmount = convertCurrency(b.amount, b.currency, "INR", rates)
         if (b.type === "subscription_payment") {
-          months[key].subscriptions += b.amount
+          months[key].subscriptions += inrAmount
         } else {
-          months[key].api += b.amount
+          months[key].api += inrAmount
         }
-        months[key].total += b.amount
+        months[key].total += inrAmount
       }
     }
 
-    const spendingTrends = Object.values(months)
+    for (const u of apiUsageRecords) {
+      const key = `${u.date.getFullYear()}-${String(u.date.getMonth() + 1).padStart(2, "0")}`
+      if (months[key] && (u.cost ?? 0) > 0) {
+        const inrAmount = convertCurrency(u.cost ?? 0, u.currency, "INR", rates)
+        months[key].api += inrAmount
+        months[key].total += inrAmount
+      }
+    }
 
-    // 3. Provider breakdown
+    const spendingTrends = Object.values(months).map((m) => ({
+      month: m.month,
+      subscriptions: Math.round(m.subscriptions),
+      api: Math.round(m.api),
+      total: Math.round(m.total),
+    }))
+
     const providerMap: Record<string, { name: string; amount: number; color: string; count: number }> = {}
+    let activeSubMonthlyTotal = 0
+    let activeSubAnnualTotal = 0
+
     for (const s of subscriptions) {
       if (s.status === "active") {
-        const monthly = s.billingCycle === "yearly" ? s.price / 12 : s.price
+        const inrPrice = convertCurrency(s.price, s.currency, "INR", rates)
+        const monthly = s.billingCycle === "yearly" ? inrPrice / 12 : inrPrice
+        const annual = s.billingCycle === "yearly" ? inrPrice : inrPrice * 12
+        activeSubMonthlyTotal += monthly
+        activeSubAnnualTotal += annual
+
         if (!providerMap[s.provider.name]) {
           providerMap[s.provider.name] = {
             name: s.provider.name,
@@ -74,25 +116,13 @@ export async function GET(_request: NextRequest) {
 
     const providerBreakdown = Object.values(providerMap).sort((a, b) => b.amount - a.amount)
 
-    // 4. API vs Subscription totals
-    let activeSubMonthlyTotal = 0
-    let activeSubAnnualTotal = 0
-    for (const s of subscriptions) {
-      if (s.status === "active") {
-        const m = s.billingCycle === "yearly" ? s.price / 12 : s.price
-        activeSubMonthlyTotal += m
-        activeSubAnnualTotal += s.billingCycle === "yearly" ? s.price : s.price * 12
-      }
-    }
-
     let totalApiSpent = 0
     let totalApiBalance = 0
     for (const a of apiAccounts) {
-      totalApiSpent += a.totalSpent || 0
-      totalApiBalance += a.prepaidBalance || 0
+      totalApiSpent += convertCurrency(a.totalSpent || 0, a.currency, "USD", rates)
+      totalApiBalance += convertCurrency(a.prepaidBalance || 0, a.currency, "USD", rates)
     }
 
-    // 5. Subscription Intelligence
     const insights: Array<{
       type: "underutilized" | "overlapping" | "savings" | "heavy_spend"
       title: string
@@ -101,7 +131,6 @@ export async function GET(_request: NextRequest) {
       severity: "low" | "medium" | "high"
     }> = []
 
-    // Detect underutilized quotas (where quota is known and used < 20%)
     for (const s of subscriptions) {
       if (s.status === "active") {
         if (s.quotaMessages && s.usedMessages !== null) {
@@ -129,7 +158,6 @@ export async function GET(_request: NextRequest) {
       }
     }
 
-    // Detect overlapping coding subscriptions (e.g. Copilot + Cursor + Windsurf)
     const codingTools = subscriptions.filter(
       (s) =>
         s.status === "active" &&
@@ -137,7 +165,10 @@ export async function GET(_request: NextRequest) {
     )
     if (codingTools.length > 1) {
       const names = codingTools.map((c) => c.customPlanName || c.provider.name).join(", ")
-      const totalCost = codingTools.reduce((acc, c) => acc + (c.billingCycle === "yearly" ? c.price / 12 : c.price), 0)
+      const totalCost = codingTools.reduce((acc, c) => {
+        const inrPrice = convertCurrency(c.price, c.currency, "INR", rates)
+        return acc + (c.billingCycle === "yearly" ? inrPrice / 12 : inrPrice)
+      }, 0)
       insights.push({
         type: "overlapping",
         title: "Multiple AI Code Editors Active",
@@ -147,17 +178,13 @@ export async function GET(_request: NextRequest) {
       })
     }
 
-    // Annual savings calculation
     let potentialAnnualSavings = 0
     for (const s of subscriptions) {
       if (s.status === "active" && s.billingCycle === "monthly") {
-        // typically 15-20% discount on annual
-        const yearlyIfMonthly = s.price * 12
-        const estimatedYearlyDiscount = yearlyIfMonthly * 0.16
-        potentialAnnualSavings += estimatedYearlyDiscount
+        const inrPrice = convertCurrency(s.price, s.currency, "INR", rates)
+        potentialAnnualSavings += inrPrice * 12 * 0.16
       }
     }
-
     if (potentialAnnualSavings > 500) {
       insights.push({
         type: "savings",
@@ -168,73 +195,26 @@ export async function GET(_request: NextRequest) {
       })
     }
 
-    // 6. Model Comparison Data
-    const modelComparison = [
-      {
-        provider: "OpenAI",
-        model: "GPT-4o",
-        context: "128K",
-        inputPerM: "$2.50",
-        outputPerM: "$10.00",
-        cachedPerM: "$1.25",
-        bestFor: "Vision, multi-modal reasoning, general coding",
-      },
-      {
-        provider: "OpenAI",
-        model: "o1",
-        context: "200K",
-        inputPerM: "$15.00",
-        outputPerM: "$60.00",
-        cachedPerM: "$7.50",
-        bestFor: "Deep reasoning, math, competitive programming",
-      },
-      {
-        provider: "Anthropic",
-        model: "Claude 3.5 Sonnet",
-        context: "200K",
-        inputPerM: "$3.00",
-        outputPerM: "$15.00",
-        cachedPerM: "$0.30",
-        bestFor: "Architecture, frontend, nuanced writing",
-      },
-      {
-        provider: "Google",
-        model: "Gemini 1.5 Pro",
-        context: "2,000K",
-        inputPerM: "$1.25",
-        outputPerM: "$5.00",
-        cachedPerM: "$0.31",
-        bestFor: "Massive codebases, video/audio multimodal",
-      },
-      {
-        provider: "OpenRouter",
-        model: "Meta Llama 3.3 70B",
-        context: "128K",
-        inputPerM: "$0.40",
-        outputPerM: "$0.40",
-        cachedPerM: "—",
-        bestFor: "Open weights, cost-effective high performance",
-      },
-      {
-        provider: "Perplexity",
-        model: "Sonar Pro",
-        context: "200K",
-        inputPerM: "$3.00",
-        outputPerM: "$15.00",
-        cachedPerM: "—",
-        bestFor: "Live web search, citation-backed answers",
-      },
-    ]
+    const modelComparison = dbModels.map((m) => ({
+      provider: m.providerName,
+      model: m.name,
+      context: formatContextWindow(m.contextTokens),
+      inputPerM: `$${m.inputPricePerM.toFixed(2)}`,
+      outputPerM: `$${m.outputPricePerM.toFixed(2)}`,
+      cachedPerM: m.cachedPricePerM > 0 ? `$${m.cachedPricePerM.toFixed(2)}` : "—",
+      bestFor: m.bestFor,
+    }))
 
     return NextResponse.json({
       data: {
         spendingTrends,
         providerBreakdown,
+        exchangeRateUsdToInr: rates.USD_INR,
         overview: {
-          monthlySubscriptions: activeSubMonthlyTotal,
-          annualSubscriptions: activeSubAnnualTotal,
-          apiSpent: totalApiSpent,
-          apiBalance: totalApiBalance,
+          monthlySubscriptions: parseFloat(activeSubMonthlyTotal.toFixed(2)),
+          annualSubscriptions: parseFloat(activeSubAnnualTotal.toFixed(2)),
+          apiSpent: parseFloat(totalApiSpent.toFixed(2)),
+          apiBalance: parseFloat(totalApiBalance.toFixed(2)),
         },
         insights,
         modelComparison,

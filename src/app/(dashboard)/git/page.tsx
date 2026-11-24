@@ -47,8 +47,9 @@ export default function GitControlPage() {
   const branchDialogRef = useModalA11y(showBranchModal, () => setShowBranchModal(false))
   const [newBranchName, setNewBranchName] = useState("")
 
-  // Conflict resolution state (sample/local interaction)
-  const [conflictResolved, setConflictResolved] = useState(false)
+  const [conflicts, setConflicts] = useState<Array<{ path: string; content: string }>>([])
+  const [hasGithubToken, setHasGithubToken] = useState(false)
+  const [hasGithubRemote, setHasGithubRemote] = useState(false)
   const [pendingRollback, setPendingRollback] = useState<string | null>(null)
   const [sync, setSync] = useState<{
     hasRemote: boolean
@@ -73,6 +74,9 @@ export default function GitControlPage() {
         setCommits(json.data.commits || [])
         setPulls(json.data.pullRequests || [])
         setChanges(json.data.changes || [])
+        setConflicts(json.data.conflicts || [])
+        setHasGithubToken(Boolean(json.data.hasGithubToken))
+        setHasGithubRemote(Boolean(json.data.hasGithubRemote))
         setCurrentBranch(json.data.currentBranch || "main")
         setDiff(json.data.diff || "")
         setSync(json.data.sync || null)
@@ -132,6 +136,7 @@ export default function GitControlPage() {
   }
 
   const handleRollback = async (sha: string) => {
+    setSyncError(null)
     try {
       const res = await fetch("/api/git", {
         method: "POST",
@@ -144,13 +149,18 @@ export default function GitControlPage() {
       })
 
       const json = await res.json()
+      if (!res.ok) {
+        setSyncError(json.error || `Failed to revert commit ${sha}`)
+        setTimeout(() => setSyncError(null), 6000)
+        return
+      }
       if (json.data) {
         setActionSuccess(`Reverted commit ${sha}. Revert commit ${json.data.revertSha} created.`)
         setTimeout(() => setActionSuccess(null), 4000)
         loadGitData()
       }
     } catch (err) {
-      console.error(err)
+      setSyncError(err instanceof Error ? err.message : "Revert failed")
     } finally {
       setPendingRollback(null)
     }
@@ -159,6 +169,7 @@ export default function GitControlPage() {
   const handleCreatePr = async (e: React.FormEvent) => {
     e.preventDefault()
     setCreatingPr(true)
+    setSyncError(null)
     try {
       const res = await fetch("/api/git", {
         method: "POST",
@@ -166,23 +177,57 @@ export default function GitControlPage() {
         body: JSON.stringify({
           action: "pr",
           projectId,
-          branchName: prBranch,
-          prTitle: prTitle || "feat: AI Agent feature branch update",
+          branchName: prBranch || currentBranch,
+          prTitle: prTitle || `PR: ${prBranch || currentBranch}`,
         }),
       })
 
       const json = await res.json()
+      if (!res.ok) {
+        setSyncError(json.error || "Failed to create pull request")
+        return
+      }
       if (json.data) {
         setShowPrModal(false)
         setPrTitle("")
-        setActionSuccess(`Pull request #${json.data.pullRequestNumber} dispatched to remote.`)
-        setTimeout(() => setActionSuccess(null), 4000)
+        setActionSuccess(
+          json.data.notice
+            ? `${json.data.message} (#${json.data.pullRequestNumber}) — ${json.data.notice}`
+            : `${json.data.message}`
+        )
+        setTimeout(() => setActionSuccess(null), 6000)
         loadGitData()
       }
     } catch (err) {
       console.error(err)
     } finally {
       setCreatingPr(false)
+    }
+  }
+
+  const handleCheckoutBranch = async (branchName: string) => {
+    setSyncError(null)
+    try {
+      const res = await fetch("/api/git", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "checkout",
+          projectId,
+          branchName,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setSyncError(json.error || `Failed to checkout ${branchName}`)
+        return
+      }
+      setCurrentBranch(branchName)
+      setActionSuccess(`Checked out branch ${branchName}.`)
+      setTimeout(() => setActionSuccess(null), 3000)
+      loadGitData(projectId)
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : "Checkout failed")
     }
   }
 
@@ -544,22 +589,33 @@ export default function GitControlPage() {
               <p className="py-10 text-[13px] leading-relaxed text-ink-3">No pull requests have been opened from this project.</p>
             ) : (
               pulls.map((pr) => (
-                <div key={pr.number} className="flex flex-wrap items-center justify-between gap-4 border-b border-line py-4 last:border-b-0">
+                <div key={pr.id || pr.number} className="flex flex-wrap items-center justify-between gap-4 border-b border-line py-4 last:border-b-0">
                   <div className="flex min-w-0 items-start gap-3">
                     <GitPullRequest className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.8} />
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-baseline gap-2">
                         <span className="font-mono text-[10px] text-ink-3">#{pr.number}</span>
-                        <p className="text-[13px] font-medium text-ink">{pr.title}</p>
+                        {pr.url && pr.url.startsWith("https://") ? (
+                          <a href={pr.url} target="_blank" rel="noreferrer" className="text-[13px] font-medium text-accent hover:underline">
+                            {pr.title}
+                          </a>
+                        ) : (
+                          <p className="text-[13px] font-medium text-ink">{pr.title}</p>
+                        )}
                       </div>
                       <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-3">
                         {pr.branch} → {pr.targetBranch} · {pr.author}
                       </p>
                     </div>
                   </div>
-                  <span className={cn("badge shrink-0", pr.status === "merged" ? "bg-success-soft text-success" : "bg-accent-soft text-accent")}>
-                    {String(pr.status || "").replaceAll("_", " ")}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="badge bg-surface-2 text-ink-3">
+                      {pr.isRemote ? "GitHub Remote" : "Local Draft"}
+                    </span>
+                    <span className={cn("badge shrink-0", pr.status === "merged" ? "bg-success-soft text-success" : "bg-accent-soft text-accent")}>
+                      {String(pr.status || "").replaceAll("_", " ")}
+                    </span>
+                  </div>
                 </div>
               ))
             )}
@@ -590,11 +646,7 @@ export default function GitControlPage() {
                     </span>
                   ) : (
                     <button
-                      onClick={() => {
-                        setCurrentBranch(b.name)
-                        setActionSuccess(`Switched to branch ${b.name}.`)
-                        setTimeout(() => setActionSuccess(null), 3000)
-                      }}
+                      onClick={() => handleCheckoutBranch(b.name)}
                       className="btn-secondary btn-sm"
                     >
                       Checkout
@@ -610,43 +662,34 @@ export default function GitControlPage() {
           <div className="space-y-5 py-5">
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-3">
               <div>
-                <h3 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">Merge conflict resolution</h3>
-                <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">Sample conflict scenario for resolving an incoming agent branch against the base branch before pushing.</p>
+                <h3 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">Worktree merge conflicts</h3>
+                <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">
+                  Live unmerged conflict markers detected by <span className="font-mono">git diff --diff-filter=U</span>.
+                </p>
               </div>
-              <div className="text-right">
-                <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-accent">Sample scenario</p>
-                <p className="mt-1 font-mono text-[10px] text-ink-3">src/app/api/checkout/route.ts</p>
-              </div>
+              <span className={cn("badge", conflicts.length > 0 ? "bg-warning-soft text-warning" : "bg-success-soft text-success")}>
+                {conflicts.length > 0 ? `${conflicts.length} conflicted file(s)` : "Clean worktree"}
+              </span>
             </div>
 
-            {!conflictResolved ? (
-              <div className="space-y-3">
-                <div className="border border-danger/25 bg-danger-soft p-3.5">
-                  <p className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-danger">Incoming change · agent branch</p>
-                  <pre className="mt-2 overflow-x-auto font-mono text-[10.5px] leading-relaxed text-ink whitespace-pre-wrap">
-                    {`+ const idempotencyKey = req.headers.get("Idempotency-Key");\n+ if (!idempotencyKey) throw new Error("Missing idempotency key");`}
-                  </pre>
-                </div>
-
-                <div className="border border-info/25 bg-info-soft p-3.5">
-                  <p className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-info">Current change · base branch</p>
-                  <pre className="mt-2 overflow-x-auto font-mono text-[10.5px] leading-relaxed text-ink whitespace-pre-wrap">
-                    {`- const rawKey = req.headers.get("X-Idempotency") || "default";`}
-                  </pre>
-                </div>
-
-                <div className="flex justify-end border-t border-line pt-3">
-                  <button onClick={() => setConflictResolved(true)} className="btn-primary">
-                    <Check className="h-3.5 w-3.5" strokeWidth={2.2} />
-                    Accept incoming and mark resolved
-                  </button>
-                </div>
+            {conflicts.length === 0 ? (
+              <div className="border border-line bg-surface-2/20 px-4 py-10 text-center">
+                <CheckCircle2 className="mx-auto h-6 w-6 text-success" strokeWidth={1.8} />
+                <p className="mt-3 text-[13px] font-medium text-ink">No merge conflicts detected</p>
+                <p className="mt-1 text-[12px] text-ink-3">
+                  All tracked files in <span className="font-mono">{currentBranch}</span> are free of unmerged conflict markers.
+                </p>
               </div>
             ) : (
-              <div className="border border-success/25 bg-success-soft px-4 py-8 text-center">
-                <CheckCircle2 className="mx-auto h-6 w-6 text-success" strokeWidth={1.8} />
-                <p className="mt-3 text-[13px] font-medium text-success">Conflict marked resolved (sample state)</p>
-                <p className="mt-1 text-[12px] leading-relaxed text-ink-2">Local conflict-resolution state updated for this sample scenario. Push only when your real worktree is clean and synced.</p>
+              <div className="space-y-4">
+                {conflicts.map((conflict) => (
+                  <div key={conflict.path} className="border border-warning/30 bg-warning-soft/20 p-4">
+                    <p className="font-mono text-[11px] font-medium text-ink">{conflict.path}</p>
+                    <pre className="mt-2 max-h-64 overflow-auto border border-line bg-canvas p-3 font-mono text-[10.5px] leading-relaxed text-ink-2">
+                      {conflict.content}
+                    </pre>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -664,7 +707,14 @@ export default function GitControlPage() {
           >
             <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
               <div>
-                <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">Pull request</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">Pull request</p>
+                  <span className={cn("badge", hasGithubToken && hasGithubRemote ? "bg-success-soft text-success" : "bg-surface-2 text-ink-3")}>
+                    {hasGithubToken && hasGithubRemote
+                      ? "Live GitHub API"
+                      : "Local PR draft — connect GitHub token"}
+                  </span>
+                </div>
                 <h2 id="pr-dialog-title" className="mt-1 font-display text-[16px] font-medium tracking-[-0.02em] text-ink">Open pull request</h2>
                 <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">{currentBranch} · dispatch to remote</p>
               </div>

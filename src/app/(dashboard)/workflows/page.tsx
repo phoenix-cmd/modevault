@@ -23,6 +23,7 @@ import {
 } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
 import { StatBand } from "@/components/ui/stat-band"
+import { validateAndSortDag, type DagEdgeInput, type DagNodeInput } from "@/lib/dag-engine"
 import { useMediaQuery } from "@/lib/use-media-query"
 import { useModalA11y } from "@/lib/use-modal-a11y"
 import { cn } from "@/lib/utils"
@@ -189,6 +190,11 @@ export default function WorkflowsPage() {
   const [runningPipeline, setRunningPipeline] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [customPrompt, setCustomPrompt] = useState("")
+  const [workflowName, setWorkflowName] = useState("")
+  const [savedWorkflows, setSavedWorkflows] = useState<
+    Array<{ id: string; name: string; nodesJson: string; edgesJson: string; isTemplate?: boolean }>
+  >([])
+  const [selectedSavedId, setSelectedSavedId] = useState<string>("")
   const [validationMessage, setValidationMessage] = useState<string | null>(null)
   const [runError, setRunError] = useState<string | null>(null)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
@@ -333,18 +339,75 @@ export default function WorkflowsPage() {
     setSelectedNodeId(nextId)
   }
 
+  const loadSavedWorkflows = useCallback(async () => {
+    try {
+      const res = await fetch("/api/workflows")
+      const json = await res.json()
+      if (res.ok && Array.isArray(json?.data)) {
+        setSavedWorkflows(json.data.filter((w: { isTemplate?: boolean }) => !w.isTemplate))
+      }
+    } catch {
+      // Ignore load errors
+    }
+  }, [])
+
+  useEffect(() => {
+    loadSavedWorkflows()
+  }, [loadSavedWorkflows])
+
+  const handleLoadSavedWorkflow = (wfId: string) => {
+    setSelectedSavedId(wfId)
+    const found = savedWorkflows.find((w) => w.id === wfId)
+    if (!found) return
+    try {
+      const parsedNodes = JSON.parse(found.nodesJson || "[]") as Node[]
+      const parsedEdges = JSON.parse(found.edgesJson || "[]") as Edge[]
+      if (Array.isArray(parsedNodes) && parsedNodes.length > 0) {
+        pushHistory({ nodes, edges })
+        setNodes(parsedNodes)
+        setEdges(Array.isArray(parsedEdges) ? parsedEdges : [])
+        setWorkflowName(found.name)
+        setSelectedNodeId(null)
+      }
+    } catch {
+      // Ignore malformed graph JSON
+    }
+  }
+
+  const handleDeleteSavedWorkflow = async (wfId: string) => {
+    try {
+      const res = await fetch(`/api/workflows?id=${encodeURIComponent(wfId)}`, {
+        method: "DELETE",
+      })
+      if (res.ok) {
+        if (selectedSavedId === wfId) setSelectedSavedId("")
+        await loadSavedWorkflows()
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
   const handleSimulate = () => {
     setSimulating(true)
     setValidationMessage(null)
-    window.setTimeout(() => {
-      setSimulating(false)
-      if (edges.length === 0 && nodes.length > 1) {
-        setValidationMessage("DAG validation failed: nodes are not connected.")
-      } else {
-        setValidationMessage("DAG valid. Topological execution order verified.")
-      }
-      window.setTimeout(() => setValidationMessage(null), 4000)
-    }, 1500)
+    const result = validateAndSortDag(
+      nodes as unknown as DagNodeInput[],
+      edges as unknown as DagEdgeInput[]
+    )
+    setSimulating(false)
+    if (!result.valid) {
+      setValidationMessage(`DAG validation failed: ${result.errors.join(" ")}`)
+    } else if (result.warnings.length > 0) {
+      setValidationMessage(
+        `DAG valid (${result.layers.length} layers, ${result.order.length} nodes) — Warning: ${result.warnings.join(" ")}`
+      )
+    } else {
+      setValidationMessage(
+        `DAG valid: ${result.order.length} nodes sorted into ${result.layers.length} topological execution layer(s).`
+      )
+    }
+    window.setTimeout(() => setValidationMessage(null), 5000)
   }
 
   const handleRunPipeline = async () => {
@@ -355,13 +418,17 @@ export default function WorkflowsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          workflowId: activeTemplate,
+          workflowId: selectedSavedId || activeTemplate,
+          workflowName: workflowName.trim() || templateLabel,
           customPrompt,
+          nodes,
+          edges,
         }),
       })
       const json = await res.json()
-      if (res.ok && json.data?.executionId) {
-        router.push(`/agents?executionId=${json.data.executionId}`)
+      const execId = json.data?.executionId || json.data?.id
+      if (res.ok && execId) {
+        router.push(`/agents?executionId=${encodeURIComponent(execId)}`)
       } else {
         setRunError(json.error || "Failed to start pipeline")
       }
@@ -373,20 +440,28 @@ export default function WorkflowsPage() {
   }
 
   const handleSave = async () => {
+    setRunError(null)
     try {
-      await fetch("/api/workflows", {
+      const res = await fetch("/api/workflows", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: `${activeTemplate} custom build`,
+          name: workflowName.trim() || `${activeTemplate} build`,
           nodes,
           edges,
         }),
       })
+      const json = await res.json()
+      if (!res.ok) {
+        setRunError(json.error || "Failed to save workflow")
+        return
+      }
       setSaveSuccess(true)
+      if (json.data?.id) setSelectedSavedId(json.data.id)
+      await loadSavedWorkflows()
       window.setTimeout(() => setSaveSuccess(false), 3000)
     } catch {
-      // Leave unsaved on failure.
+      setRunError("Failed to save workflow")
     }
   }
 
@@ -428,6 +503,50 @@ export default function WorkflowsPage() {
               </button>
             </div>
           </div>
+
+          <label className="block">
+            <span className="label">Workflow name</span>
+            <input
+              type="text"
+              value={workflowName}
+              onChange={(e) => setWorkflowName(e.target.value)}
+              placeholder={`${activeTemplate} build`}
+              aria-label="Workflow name"
+              className="field field-sm"
+            />
+          </label>
+
+          {savedWorkflows.length > 0 && (
+            <div className="space-y-1.5">
+              <span className="label">Saved workflows ({savedWorkflows.length})</span>
+              <div className="flex gap-1.5">
+                <select
+                  value={selectedSavedId}
+                  onChange={(e) => handleLoadSavedWorkflow(e.target.value)}
+                  aria-label="Load saved workflow"
+                  className="select select-sm flex-1 text-[11.5px]"
+                >
+                  <option value="">Select saved graph…</option>
+                  {savedWorkflows.map((wf) => (
+                    <option key={wf.id} value={wf.id}>
+                      {wf.name}
+                    </option>
+                  ))}
+                </select>
+                {selectedSavedId && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteSavedWorkflow(selectedSavedId)}
+                    className="icon-btn shrink-0 hover:border-danger/30 hover:bg-danger-soft hover:text-danger"
+                    title="Delete saved workflow"
+                    aria-label="Delete saved workflow"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           <label className="block">
             <span className="label">Custom trigger prompt</span>
@@ -621,7 +740,12 @@ export default function WorkflowsPage() {
       <PageHeader
         eyebrow="Orchestration · Workflow builder"
         title="Workflows"
-        description="Compose and trigger DAG-based agent pipelines across interactive canvas or responsive stage views."
+        description="Compose, validate, and execute topological DAG agent pipelines across interactive canvas or responsive stage views."
+        badge={
+          <span className="badge bg-surface-2 text-ink-2">
+            Topological DAG Runner · In-process execution
+          </span>
+        }
         action={
           <>
             <button

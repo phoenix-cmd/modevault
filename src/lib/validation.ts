@@ -134,8 +134,11 @@ export const executionCreateSchema = z.object({
 
 export const workflowExecuteSchema = z.object({
   workflowId: z.string().max(128).optional(),
+  workflowName: z.string().max(200).optional(),
   projectId: idSchema.optional(),
   customPrompt: z.string().max(20000).optional(),
+  nodes: z.array(z.record(z.string(), z.unknown())).max(100).optional(),
+  edges: z.array(z.record(z.string(), z.unknown())).max(200).optional(),
 })
 
 export const approvalSchema = z.object({

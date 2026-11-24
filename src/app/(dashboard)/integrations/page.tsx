@@ -7,7 +7,9 @@ import {
   Key,
   Lock,
   Minus,
+  RefreshCw,
   ShieldCheck,
+  Trash2,
   X,
 } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
@@ -23,6 +25,8 @@ interface ProviderIntegrationState {
   status: "connected" | "manual" | "not_connected"
   lastSync: string | null
   keyPreview?: string | null
+  hasKey?: boolean
+  lastSyncMessage?: string | null
   features: {
     subscriptionQuotas: boolean
     apiTokens: boolean
@@ -35,50 +39,65 @@ const INTEGRATION_CATALOG: ProviderIntegrationState[] = [
   {
     slug: "openai",
     name: "OpenAI / ChatGPT",
-    status: "connected",
-    lastSync: "10 mins ago",
+    status: "not_connected",
+    lastSync: null,
+    hasKey: false,
     features: { subscriptionQuotas: false, apiTokens: true, invoices: true },
-    notes: "Developer API usage and billing data syncs automatically when connected.",
+    notes: "Connect an OpenAI API key to verify model access and power live agent runs.",
   },
   {
     slug: "anthropic",
     name: "Anthropic / Claude",
-    status: "connected",
-    lastSync: "1 hour ago",
+    status: "not_connected",
+    lastSync: null,
+    hasKey: false,
     features: { subscriptionQuotas: false, apiTokens: true, invoices: true },
-    notes: "Claude Pro quotas are not available via API and remain manual.",
+    notes: "Connect an Anthropic API key for live Claude model verification and agent runs.",
   },
   {
     slug: "google",
     name: "Google / Gemini",
-    status: "manual",
-    lastSync: "Yesterday",
-    features: { subscriptionQuotas: false, apiTokens: false, invoices: false },
-    notes: "Consumer subscription data is tracked manually in this workspace.",
+    status: "not_connected",
+    lastSync: null,
+    hasKey: false,
+    features: { subscriptionQuotas: false, apiTokens: true, invoices: false },
+    notes: "Connect a Google AI Studio key for Gemini model checks and orchestration.",
+  },
+  {
+    slug: "openrouter",
+    name: "OpenRouter",
+    status: "not_connected",
+    lastSync: null,
+    hasKey: false,
+    features: { subscriptionQuotas: true, apiTokens: true, invoices: true },
+    notes: "Supports live credit usage & limit sync plus multi-model LLM routing.",
   },
   {
     slug: "github",
     name: "GitHub / Copilot",
-    status: "manual",
-    lastSync: "2 days ago",
-    features: { subscriptionQuotas: false, apiTokens: false, invoices: false },
-    notes: "Seat and Copilot usage tracking is managed manually.",
+    status: "not_connected",
+    lastSync: null,
+    hasKey: false,
+    features: { subscriptionQuotas: false, apiTokens: true, invoices: false },
+    notes: "Connect a GitHub PAT (repo scope) to open real remote Pull Requests.",
   },
   {
     slug: "perplexity",
     name: "Perplexity",
     status: "not_connected",
     lastSync: null,
-    features: { subscriptionQuotas: false, apiTokens: false, invoices: false },
-    notes: "Connect a key to enable API usage monitoring for this provider.",
+    hasKey: false,
+    features: { subscriptionQuotas: false, apiTokens: true, invoices: false },
+    notes: "Encrypted key storage for Perplexity API accounts (manual usage logging).",
   },
   {
     slug: "cursor",
     name: "Cursor",
-    status: "not_connected",
+    status: "manual",
     lastSync: null,
+    hasKey: false,
     features: { subscriptionQuotas: false, apiTokens: false, invoices: false },
-    notes: "Pro request tracking is currently managed manually.",
+    notes: "Cursor consumer seat quotas are tracked manually.",
   },
 ]
 
@@ -88,7 +107,9 @@ function mergeIntegrations(
     status?: string
     lastSyncAt?: string | null
     keyPreview?: string | null
+    hasKey?: boolean
     notes?: string | null
+    lastSyncLog?: { status?: string; message?: string | null } | null
     features?: {
       subscriptionQuotas?: boolean
       apiTokens?: boolean
@@ -107,6 +128,7 @@ function mergeIntegrations(
     return {
       ...item,
       status,
+      hasKey: Boolean(saved.hasKey),
       lastSync: saved.lastSyncAt
         ? new Date(saved.lastSyncAt).toLocaleString("en-IN", {
             day: "numeric",
@@ -114,8 +136,9 @@ function mergeIntegrations(
             hour: "2-digit",
             minute: "2-digit",
           })
-        : item.lastSync,
-      keyPreview: saved.keyPreview ?? item.keyPreview,
+        : null,
+      lastSyncMessage: saved.lastSyncLog?.message || null,
+      keyPreview: saved.keyPreview ?? null,
       notes: saved.notes || item.notes,
       features: {
         subscriptionQuotas: saved.features?.subscriptionQuotas ?? item.features.subscriptionQuotas,
@@ -132,8 +155,10 @@ export default function IntegrationsPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [selected, setSelected] = useState<ProviderIntegrationState | null>(null)
   const [keyValue, setKeyValue] = useState("")
-  const [statusValue, setStatusValue] = useState<"connected" | "manual" | "not_connected">("manual")
+  const [statusValue, setStatusValue] = useState<"connected" | "manual" | "not_connected">("connected")
   const [saving, setSaving] = useState(false)
+  const [syncingSlug, setSyncingSlug] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const modalRef = useModalA11y(modalOpen, () => setModalOpen(false))
@@ -159,7 +184,7 @@ export default function IntegrationsPage() {
 
   const openModal = (item: ProviderIntegrationState) => {
     setSelected(item)
-    setStatusValue(item.status)
+    setStatusValue(item.status === "not_connected" ? "connected" : item.status)
     setKeyValue("")
     setError(null)
     setModalOpen(true)
@@ -169,12 +194,14 @@ export default function IntegrationsPage() {
     if (!selected) return
     setSaving(true)
     setError(null)
+    setNotice(null)
     try {
       const res = await fetch("/api/integrations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           providerSlug: selected.slug,
+          action: "save",
           status: statusValue,
           apiKey: keyValue || undefined,
           notes: selected.notes,
@@ -183,6 +210,11 @@ export default function IntegrationsPage() {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || "Failed to save integration")
+      if (json.verification?.message) {
+        setNotice(json.verification.message)
+      } else {
+        setNotice(`${selected.name} configuration saved.`)
+      }
       await load()
       setModalOpen(false)
       setKeyValue("")
@@ -190,6 +222,50 @@ export default function IntegrationsPage() {
       setError(err instanceof Error ? err.message : "Failed to save integration")
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDisconnect = async () => {
+    if (!selected) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/integrations?providerSlug=${encodeURIComponent(selected.slug)}`, {
+        method: "DELETE",
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || "Failed to disconnect")
+      setNotice(`Disconnected ${selected.name} and removed encrypted key.`)
+      await load()
+      setModalOpen(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to disconnect")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleLiveSync = async (item: ProviderIntegrationState) => {
+    setSyncingSlug(item.slug)
+    setError(null)
+    setNotice(null)
+    try {
+      const res = await fetch("/api/integrations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          providerSlug: item.slug,
+          action: "sync",
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || "Live verification failed")
+      setNotice(json.verification?.message || `Synced ${item.name}`)
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sync failed")
+    } finally {
+      setSyncingSlug(null)
     }
   }
 
@@ -202,11 +278,11 @@ export default function IntegrationsPage() {
       <PageHeader
         eyebrow="Operations · Connections"
         title="Integrations"
-        description="Provider connections for automated usage sync, billing, and quota data. Catalog entries without a saved record are shown with local defaults."
+        description="Connect provider credentials with AES-256-GCM encryption at rest and run live API verification and balance checks."
         action={
           <span className="badge bg-success-soft text-success">
             <ShieldCheck className="h-3 w-3" strokeWidth={2} />
-            Keys stored encrypted
+            Encrypted at rest · Live API verification
           </span>
         }
       />
@@ -217,11 +293,27 @@ export default function IntegrationsPage() {
         <StatBand
           columns={3}
           items={[
-            { label: "Connected", value: String(connected), meta: "API sync active", accent: true },
-            { label: "Manual", value: String(manual), meta: "Tracked without sync" },
-            { label: "Pending", value: String(pending), meta: "Not yet configured" },
+            { label: "Connected", value: String(connected), meta: "Saved credentials in DB", accent: connected > 0 },
+            { label: "Manual", value: String(manual), meta: "Tracked without API key" },
+            { label: "Not connected", value: String(pending), meta: "Unconfigured providers" },
           ]}
         />
+      )}
+
+      {notice && (
+        <div className="flex items-center justify-between gap-2 border border-success/25 bg-success-soft/40 px-4 py-2.5 text-[12px] text-success">
+          <span className="flex items-center gap-2">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+            {notice}
+          </span>
+          <button type="button" onClick={() => setNotice(null)} className="icon-btn" aria-label="Dismiss">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {error && !modalOpen && (
+        <div className="border border-danger/25 bg-danger-soft/40 px-3 py-2.5 text-[12px] text-danger">{error}</div>
       )}
 
       <section className="border-t border-line pt-5">
@@ -229,14 +321,10 @@ export default function IntegrationsPage() {
           <div>
             <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">Provider catalog</h2>
             <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">
-              Connect a provider API key to enable automated sync where supported.
+              Connect an API key to verify model access live, track OpenRouter balances, or enable live GitHub PRs and agent runs.
             </p>
           </div>
         </div>
-
-        {error && !modalOpen && (
-          <div className="mb-4 border border-danger/25 bg-danger-soft/40 px-3 py-2.5 text-[12px] text-danger">{error}</div>
-        )}
 
         {loading ? (
           <div className="border-t border-line">
@@ -259,10 +347,9 @@ export default function IntegrationsPage() {
                   <tr>
                     <th>Provider</th>
                     <th>Status</th>
-                    <th className="hidden text-center xl:table-cell">Sub quotas</th>
-                    <th className="text-center">API tokens</th>
-                    <th className="text-center">Invoices</th>
-                    <th className="hidden lg:table-cell">Last sync</th>
+                    <th className="hidden text-center xl:table-cell">Quotas</th>
+                    <th className="text-center">API</th>
+                    <th className="hidden lg:table-cell">Last verification</th>
                     <th className="text-right">Action</th>
                   </tr>
                 </thead>
@@ -274,9 +361,9 @@ export default function IntegrationsPage() {
                           <ProviderIcon slug={item.slug} size="sm" />
                           <div className="min-w-0">
                             <p className="text-[13px] font-medium text-ink">{item.name}</p>
-                            <p className="max-w-[360px] truncate text-[11px] text-ink-3">
+                            <p className="max-w-[380px] truncate text-[11px] text-ink-3">
                               {item.keyPreview ? `Key ${item.keyPreview} · ` : ""}
-                              {item.notes}
+                              {item.lastSyncMessage || item.notes}
                             </p>
                           </div>
                         </div>
@@ -296,21 +383,30 @@ export default function IntegrationsPage() {
                           <Minus className="mx-auto h-3.5 w-3.5 text-ink-3/50" strokeWidth={2} />
                         )}
                       </td>
-                      <td className="text-center">
-                        {item.features.invoices ? (
-                          <Check className="mx-auto h-3.5 w-3.5 text-success" strokeWidth={2.2} />
-                        ) : (
-                          <Minus className="mx-auto h-3.5 w-3.5 text-ink-3/50" strokeWidth={2} />
-                        )}
+                      <td className="hidden whitespace-nowrap font-mono text-[10.5px] text-ink-3 lg:table-cell">
+                        {item.lastSync || "Never verified"}
                       </td>
-                      <td className="hidden whitespace-nowrap font-mono text-[10.5px] text-ink-3 lg:table-cell">{item.lastSync || "Never"}</td>
                       <td className="text-right">
-                        <button
-                          onClick={() => openModal(item)}
-                          className={cn(item.status === "connected" ? "btn-ghost btn-sm" : "btn-secondary btn-sm")}
-                        >
-                          {item.status === "connected" ? "Manage" : "Connect"}
-                        </button>
+                        <div className="inline-flex items-center gap-1.5">
+                          {item.hasKey && (
+                            <button
+                              type="button"
+                              onClick={() => handleLiveSync(item)}
+                              disabled={syncingSlug === item.slug}
+                              className="btn-secondary btn-sm"
+                              title="Verify live key against provider API"
+                            >
+                              <RefreshCw className={cn("h-3 w-3", syncingSlug === item.slug && "animate-spin")} />
+                              {syncingSlug === item.slug ? "Syncing…" : "Verify"}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => openModal(item)}
+                            className={cn(item.status === "connected" ? "btn-ghost btn-sm" : "btn-secondary btn-sm")}
+                          >
+                            {item.status === "connected" || item.hasKey ? "Manage" : "Connect"}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -326,25 +422,30 @@ export default function IntegrationsPage() {
                       <ProviderIcon slug={item.slug} size="sm" />
                       <div className="min-w-0">
                         <p className="truncate text-[13px] font-medium text-ink">{item.name}</p>
-                        <p className="mt-0.5 text-[11px] text-ink-3">{item.lastSync ? `Synced ${item.lastSync}` : "Never synced"}</p>
+                        <p className="mt-0.5 text-[11px] text-ink-3">{item.lastSync ? `Verified ${item.lastSync}` : "Not verified"}</p>
                       </div>
                     </div>
                     <StatusBadge status={item.status} />
                   </div>
-                  <p className="mt-2 line-clamp-2 text-[11.5px] leading-relaxed text-ink-3 sm:pl-10">{item.notes}</p>
-                  <div className="mt-3 flex items-center justify-between gap-2 sm:pl-10">
-                    <div className="flex items-center gap-3 font-mono text-[9.5px] uppercase tracking-[0.08em] text-ink-3">
-                      <span className={item.features.apiTokens ? "text-ink-2" : ""}>API</span>
-                      <span className={item.features.invoices ? "text-ink-2" : ""}>Invoices</span>
-                      <span className={item.features.subscriptionQuotas ? "text-ink-2" : ""}>Quotas</span>
-                    </div>
+                  <p className="mt-2 line-clamp-2 text-[11.5px] leading-relaxed text-ink-3 sm:pl-10">
+                    {item.lastSyncMessage || item.notes}
+                  </p>
+                  <div className="mt-3 flex items-center justify-end gap-2 sm:pl-10">
+                    {item.hasKey && (
+                      <button
+                        type="button"
+                        onClick={() => handleLiveSync(item)}
+                        disabled={syncingSlug === item.slug}
+                        className="btn-ghost btn-sm"
+                      >
+                        <RefreshCw className={cn("h-3 w-3", syncingSlug === item.slug && "animate-spin")} />
+                        Verify
+                      </button>
+                    )}
                     <button onClick={() => openModal(item)} className="btn-secondary btn-sm shrink-0">
-                      {item.status === "connected" ? "Manage" : "Connect"}
+                      {item.status === "connected" || item.hasKey ? "Manage" : "Connect"}
                     </button>
                   </div>
-                  {item.keyPreview && (
-                    <p className="mt-2 font-mono text-[10px] text-ink-3 sm:pl-10">Key preview: {item.keyPreview}</p>
-                  )}
                 </div>
               ))}
             </div>
@@ -367,7 +468,7 @@ export default function IntegrationsPage() {
                 <div>
                   <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">Provider connection</p>
                   <h2 id="integration-modal-title" className="mt-1 font-display text-[16px] font-medium tracking-[-0.02em] text-ink">
-                    {selected.status === "connected" ? "Manage" : "Connect"} {selected.name}
+                    {selected.hasKey ? "Manage" : "Connect"} {selected.name}
                   </h2>
                 </div>
               </div>
@@ -382,7 +483,7 @@ export default function IntegrationsPage() {
               )}
 
               <div>
-                <label className="label">API key</label>
+                <label className="label">API key / token</label>
                 <div className="relative">
                   <Key className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3" strokeWidth={1.8} />
                   <input
@@ -392,14 +493,14 @@ export default function IntegrationsPage() {
                     placeholder={
                       selected.keyPreview
                         ? `Leave blank to keep ${selected.keyPreview}`
-                        : "sk-… or provider API key"
+                        : "sk-… or provider API token"
                     }
                     className="field pl-9"
                   />
                 </div>
                 <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-ink-3">
                   <Lock className="h-3 w-3" strokeWidth={2} />
-                  Keys are encrypted at rest. Leave blank to keep the existing key.
+                  Encrypted with AES-256-GCM. Verified immediately against provider API when saved.
                 </p>
               </div>
 
@@ -410,36 +511,33 @@ export default function IntegrationsPage() {
                   onChange={(e) => setStatusValue(e.target.value as "connected" | "manual" | "not_connected")}
                   className="select"
                 >
-                  <option value="connected">Connected — enable automated sync</option>
-                  <option value="manual">Manual — track without sync</option>
+                  <option value="connected">Connected — enable live verification &amp; agent routing</option>
+                  <option value="manual">Manual — track without automated API calls</option>
                   <option value="not_connected">Not connected</option>
                 </select>
               </div>
-
-              <div className="border border-line bg-surface-2/30 p-3.5">
-                <p className="font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-ink-3">Sync capabilities</p>
-                <ul className="mt-2 space-y-1.5 text-[12px] text-ink-2">
-                  <li className="flex items-center gap-2">
-                    {selected.features.apiTokens ? <CheckCircle2 className="h-3.5 w-3.5 text-success" strokeWidth={2} /> : <Minus className="h-3.5 w-3.5 text-ink-3" strokeWidth={2} />}
-                    API token usage
-                  </li>
-                  <li className="flex items-center gap-2">
-                    {selected.features.invoices ? <CheckCircle2 className="h-3.5 w-3.5 text-success" strokeWidth={2} /> : <Minus className="h-3.5 w-3.5 text-ink-3" strokeWidth={2} />}
-                    Billing and invoices
-                  </li>
-                  <li className="flex items-center gap-2">
-                    {selected.features.subscriptionQuotas ? <CheckCircle2 className="h-3.5 w-3.5 text-success" strokeWidth={2} /> : <Minus className="h-3.5 w-3.5 text-ink-3" strokeWidth={2} />}
-                    Subscription quotas
-                  </li>
-                </ul>
-              </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3.5">
-              <button type="button" onClick={() => setModalOpen(false)} className="btn-ghost">Cancel</button>
-              <button onClick={handleConnect} disabled={saving} className="btn-primary">
-                {saving ? "Saving…" : "Save integration"}
-              </button>
+            <div className="flex items-center justify-between gap-2 border-t border-line px-5 py-3.5">
+              {selected.hasKey || selected.status !== "not_connected" ? (
+                <button
+                  type="button"
+                  onClick={handleDisconnect}
+                  disabled={saving}
+                  className="btn-ghost text-danger hover:bg-danger-soft"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Disconnect
+                </button>
+              ) : (
+                <span />
+              )}
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setModalOpen(false)} className="btn-ghost">Cancel</button>
+                <button onClick={handleConnect} disabled={saving} className="btn-primary">
+                  {saving ? "Saving & verifying…" : "Save & verify"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

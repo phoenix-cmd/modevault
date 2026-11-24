@@ -3,13 +3,69 @@ import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
 import { getUserAccessibleWorkspaceIds, requireProjectAccess } from "@/lib/permissions"
 import {
-  createBranch,
+  analyzeSourceCodeAst,
   commitWorkspace,
+  createBranch,
+  flattenWorkspaceTree,
   getLatestCommitDiff,
+  listWorkspaceTree,
+  readWorkspaceFile,
   writeWorkspaceFile,
 } from "@/lib/project-workspace"
+import {
+  estimateTokenCost,
+  invokeLlmCompletion,
+  resolveUserProviderKey,
+  type LlmProviderName,
+} from "@/lib/llm-provider"
+import { publishExecutionComplete, publishExecutionEvent } from "@/lib/event-bus"
+import { scanExecutionDiffServerSide } from "@/app/api/executions/[id]/verify/route"
 import { executionCreateSchema, parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
+
+function mapAgentPreferences(agentId?: string): {
+  displayName: string
+  preferredProviders: LlmProviderName[]
+} {
+  if (agentId === "agent_codex") {
+    return { displayName: "Codex 5.2 (OpenAI)", preferredProviders: ["openai", "openrouter", "anthropic"] }
+  }
+  if (agentId === "agent_gemini_cli") {
+    return { displayName: "Gemini CLI 2.5 (Google)", preferredProviders: ["google", "openrouter", "anthropic"] }
+  }
+  if (agentId === "multi_agent") {
+    return {
+      displayName: "Multi-Agent Team",
+      preferredProviders: ["anthropic", "openai", "google", "openrouter"],
+    }
+  }
+  return {
+    displayName: "Claude Code 3.7 (Anthropic)",
+    preferredProviders: ["anthropic", "openai", "google", "openrouter"],
+  }
+}
+
+function selectRelevantFiles(files: string[], prompt: string): string[] {
+  const words = prompt
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 3)
+
+  return files
+    .map((file) => {
+      const lower = file.toLowerCase()
+      let score = 0
+      for (const word of words) {
+        if (lower.includes(word)) score += 5
+      }
+      if (/\.(ts|tsx|js|jsx|py)$/.test(lower)) score += 2
+      if (lower.startsWith("src/")) score += 2
+      return { file, score }
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map((x) => x.file)
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -44,21 +100,17 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const startedAt = Date.now()
   try {
     const user = await requireAuthenticatedUser()
     const parsed = await parseJson(req, executionCreateSchema)
     if ("response" in parsed) return parsed.response
-    const { projectId, prompt, targetBranch } = parsed.data
-
-    if (!projectId || !prompt) {
-      return NextResponse.json({ error: "projectId and prompt are required" }, { status: 400 })
-    }
+    const { projectId, prompt, targetBranch, agentId, agentSlug } = parsed.data
 
     const project = await prisma.project.findUnique({
       where: { id: projectId },
       include: { sources: true },
     })
-
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
     }
@@ -67,202 +119,267 @@ export async function POST(req: NextRequest) {
 
     const branch = targetBranch || `feature/ai-${Date.now().toString(36)}`
     const title = prompt.length > 70 ? `${prompt.slice(0, 67)}...` : prompt
+    const agentConfig = mapAgentPreferences(agentId || agentSlug)
+    const providerKey = await resolveUserProviderKey(user.id, agentConfig.preferredProviders)
 
-    // Create execution with orchestrated multi-agent plan
+    const source = project.sources?.find(
+      (item: unknown) => (item as { sourcePath?: string }).sourcePath
+    ) as { sourcePath?: string } | undefined
+
+    let executionMode: "live_llm" | "local_deterministic" = "local_deterministic"
+    let llmMeta: { provider: string; model: string; inputTokens: number; outputTokens: number; totalTokens: number; estimatedCost: number } | null = null
+    let workspaceFiles: string[] = []
+    let targetFilePath = "MODELVAULT_EXECUTION.md"
+    let realDiff = ""
+    let realCommitSha = ""
+
     const execution = await prisma.execution.create({
       data: {
         projectId,
         workspaceId: project.workspaceId,
+        userId: user.id,
         title,
         prompt,
-        status: "awaiting_approval",
+        status: "running",
         targetBranch: branch,
-        totalTokens: 38400 + Math.floor(Math.random() * 8000),
-        inputTokens: 28000 + Math.floor(Math.random() * 4000),
-        outputTokens: 10400 + Math.floor(Math.random() * 4000),
-        estimatedCost: parseFloat((0.14 + Math.random() * 0.08).toFixed(4)),
-        durationMs: 42000 + Math.floor(Math.random() * 20000),
         planJson: JSON.stringify({
           goal: prompt,
+          agent: agentConfig.displayName,
+          executionMode: providerKey ? "live_llm" : "local_deterministic",
           stages: [
-            { name: "Repository Inspection & AST Analysis", agent: "Claude Code 3.7", status: "completed" },
-            { name: "Code Synthesis & Test Generation", agent: "Codex 5.2", status: "completed" },
-            { name: "Quality Assurance & Diff Verification", agent: "OpenCode Reviewer", status: "awaiting_approval" },
+            { name: "Repository & AST Inspection", agent: agentConfig.displayName, status: "running" },
+            { name: "Workspace Mutation & Git Commit", agent: agentConfig.displayName, status: "pending" },
+            { name: "Security Scan & Diff Verification", agent: "Verification Scanner", status: "pending" },
           ],
         }),
         tasks: {
           create: [
             {
-              title: "Inspect repository AST and dependency tree",
-              description: "Analyze imports, type definitions, and affected call sites",
+              title: "Inspect workspace tree and AST symbols",
+              description: "Index workspace files and compute target symbol boundaries",
               agentRole: "Lead Architect",
-              agentName: "Claude Code 3.7",
+              agentName: agentConfig.displayName,
               status: "completed",
               orderIndex: 0,
             },
             {
-              title: "Synthesize target logic and unit verifications",
-              description: "Apply file mutations and run test assertions in cloud worktree",
-              agentRole: "Backend Engineer",
-              agentName: "Codex 5.2",
-              status: "completed",
+              title: "Synthesize workspace change and commit diff",
+              description: providerKey
+                ? `Run live ${providerKey.provider} completion (${providerKey.model}) against workspace`
+                : "Generate deterministic execution artifact in Git feature branch",
+              agentRole: "Engineer",
+              agentName: agentConfig.displayName,
+              status: "running",
               orderIndex: 1,
             },
             {
-              title: "Code review, security linting & diff generation",
-              description: "Validate against project style guide and ensure zero regressions",
+              title: "Security diff scan & approval gate",
+              description: "Scan generated diff lines and stage branch for review",
               agentRole: "QA Reviewer",
-              agentName: "OpenCode Reviewer",
-              status: "running",
+              agentName: "Verification Scanner",
+              status: "pending",
               orderIndex: 2,
             },
           ],
         },
       },
-      include: {
-        tasks: true,
-      },
+      include: { tasks: true },
     })
 
-    // If the project has a real extracted workspace, apply a real file change
-    // and capture the resulting Git diff instead of using a synthetic patch.
-    const source = project.sources?.find(
-      (item: unknown) => (item as { sourcePath?: string }).sourcePath
-    ) as { sourcePath?: string } | undefined
-    let realDiff = ""
-    let realCommitSha = ""
-    if (source?.sourcePath) {
-      try {
-        await createBranch(source.sourcePath, branch)
-        const changePath = "MODELVAULT_EXECUTION.md"
-        await writeWorkspaceFile(
-          source.sourcePath,
-          changePath,
-          `# MODELVAULT execution\n\nPrompt: ${prompt}\nExecution: ${execution.id}\nCreated: ${new Date().toISOString()}\n`
-        )
-        realCommitSha = await commitWorkspace(source.sourcePath, `feat(agent): ${title}`)
-        realDiff = await getLatestCommitDiff(source.sourcePath)
+    const appendEvent = async (
+      seq: number,
+      eventType: string,
+      level: string,
+      taskId: string | undefined,
+      payload: Record<string, unknown>
+    ) => {
+      const created = await prisma.agentEvent.create({
+        data: {
+          executionId: execution.id,
+          taskId,
+          seq,
+          eventType,
+          level,
+          payloadJson: JSON.stringify(payload),
+        },
+      })
+      publishExecutionEvent(execution.id, {
+        id: created.id,
+        executionId: execution.id,
+        taskId: created.taskId,
+        seq: created.seq,
+        eventType: created.eventType,
+        level: created.level,
+        payload,
+        createdAt: created.createdAt.toISOString(),
+      })
+    }
 
-        await prisma.execution.update({
-          where: { id: execution.id },
-          data: {
-            totalTokens: 0,
-            inputTokens: 0,
-            outputTokens: 0,
-            estimatedCost: 0,
-            durationMs: 0,
-          },
-        })
-      } catch (err) {
-        console.error("Local execution workspace update failed:", err)
+    if (source?.sourcePath) {
+      const tree = await listWorkspaceTree(source.sourcePath).catch(() => [])
+      workspaceFiles = flattenWorkspaceTree(tree)
+    }
+
+    const relevantFiles = selectRelevantFiles(workspaceFiles, prompt)
+    await appendEvent(1, "tool_call", "info", execution.tasks[0]?.id, {
+      tool: "list_workspace_tree",
+      fileCount: workspaceFiles.length,
+      selectedTargets: relevantFiles,
+    })
+
+    let editedSummary = `Recorded workspace execution for: ${prompt}`
+    let updatedFileContent = `# MODELVAULT Execution\n\nPrompt: ${prompt}\nAgent: ${agentConfig.displayName}\nBranch: ${branch}\nTimestamp: ${new Date().toISOString()}\n`
+
+    if (source?.sourcePath && relevantFiles[0]) {
+      const candidateContent = await readWorkspaceFile(source.sourcePath, relevantFiles[0]).catch(() => "")
+      const ast = candidateContent ? analyzeSourceCodeAst(relevantFiles[0], candidateContent) : null
+      if (ast) {
+        updatedFileContent += `\n## Target File Analysis (${relevantFiles[0]})\n- Lines: ${ast.lineCount}\n- Exports: ${ast.exportedSymbols.join(", ") || "None"}\n- Imports: ${ast.importedModules.join(", ") || "None"}\n- Cyclomatic complexity: ${ast.complexityScore} (${ast.complexityRating})\n`
       }
     }
 
-    // Create realistic agent activity events
-    const sampleEvents = [
-      {
-        executionId: execution.id,
-        taskId: execution.tasks[0]?.id,
-        seq: 1,
-        eventType: "tool_call",
-        level: "info",
-        payloadJson: JSON.stringify({
-          tool: "glob_files",
-          pattern: "src/**/*.{ts,tsx}",
-          resultCount: 24,
-          durationMs: 85,
-        }),
-      },
-      {
-        executionId: execution.id,
-        taskId: execution.tasks[1]?.id,
-        seq: 2,
-        eventType: "file_change",
-        level: "action",
-        payloadJson: JSON.stringify({
-          path: "src/lib/services/api-client.ts",
-          action: "modify",
-          linesAdded: 32,
-          linesRemoved: 4,
-        }),
-      },
-      {
-        executionId: execution.id,
-        taskId: execution.tasks[1]?.id,
-        seq: 3,
-        eventType: "terminal",
-        level: "info",
-        payloadJson: JSON.stringify({
-          command: "npm run test:fast",
-          output: "✓ 8 test suites passed in 1.42s (0 failures, 24 assertions)",
-          exitCode: 0,
-        }),
-      },
-      {
-        executionId: execution.id,
-        taskId: execution.tasks[2]?.id,
-        seq: 4,
-        eventType: "diff_ready",
-        level: "action",
-        payloadJson: JSON.stringify({
-          summary: "Prepared atomic commit for review",
-          branch,
-        }),
-      },
-    ]
+    if (providerKey) {
+      try {
+        const snippets: string[] = []
+        if (source?.sourcePath) {
+          for (const rel of relevantFiles.slice(0, 2)) {
+            const content = await readWorkspaceFile(source.sourcePath, rel).catch(() => "")
+            if (content) {
+              snippets.push(`### ${rel}\n\`\`\`\n${content.slice(0, 2500)}\n\`\`\``)
+            }
+          }
+        }
 
-    for (const ev of sampleEvents) {
-      await prisma.agentEvent.create({ data: ev })
+        const llm = await invokeLlmCompletion({
+          provider: providerKey.provider,
+          apiKey: providerKey.apiKey,
+          model: providerKey.model,
+          maxTokens: 1600,
+          timeoutMs: 25000,
+          systemPrompt:
+            "You are a coding agent. Respond ONLY with valid JSON: { \"targetFile\": \"relative/path\", \"summary\": \"short description\", \"content\": \"full updated file content\" }. Pick an existing file from the provided workspace files when safe, or write a detailed implementation guide to MODELVAULT_EXECUTION.md.",
+          userPrompt: `Task: ${prompt}\nProject: ${project.name} (${project.framework || "web"})\nWorkspace files: ${workspaceFiles.slice(0, 25).join(", ") || "none"}\n\n${snippets.join("\n\n")}`,
+        })
+
+        const cost = await estimateTokenCost(
+          providerKey.provider,
+          llm.model,
+          llm.inputTokens,
+          llm.outputTokens
+        )
+        executionMode = "live_llm"
+        llmMeta = {
+          provider: providerKey.provider,
+          model: llm.model,
+          inputTokens: llm.inputTokens,
+          outputTokens: llm.outputTokens,
+          totalTokens: llm.totalTokens,
+          estimatedCost: cost,
+        }
+
+        const match = llm.content.match(/\{[\s\S]*\}/)
+        if (match) {
+          const obj = JSON.parse(match[0]) as {
+            targetFile?: string
+            summary?: string
+            content?: string
+          }
+          if (obj.content && typeof obj.content === "string") {
+            updatedFileContent = obj.content
+            if (obj.targetFile && typeof obj.targetFile === "string" && !obj.targetFile.includes("..")) {
+              targetFilePath = obj.targetFile.replace(/^\/+/, "")
+            }
+            if (obj.summary) editedSummary = obj.summary
+          }
+        } else if (llm.content.trim()) {
+          updatedFileContent = llm.content
+        }
+      } catch (err) {
+        logger.warn("Live LLM execution failed; falling back to local deterministic workspace mutation", errorContext(err))
+      }
     }
 
-    // Create realistic Git Diff Artifact
-    const diffContent = `--- a/src/lib/services/api-client.ts
-+++ b/src/lib/services/api-client.ts
-@@ -10,6 +10,34 @@ export interface RequestConfig {
-   timeoutMs?: number;
-+  retryAttempts?: number;
-+  idempotencyKey?: string;
- }
+    if (source?.sourcePath) {
+      try {
+        await createBranch(source.sourcePath, branch)
+        await writeWorkspaceFile(source.sourcePath, targetFilePath, updatedFileContent)
+        realCommitSha = await commitWorkspace(source.sourcePath, `feat(agent): ${title}`)
+        realDiff = await getLatestCommitDiff(source.sourcePath)
+      } catch (err) {
+        logger.warn("Workspace git commit failed", errorContext(err))
+      }
+    }
 
- export class ApiClient {
-+  /**
-+   * Execute request with exponential backoff and automatic idempotency key generation.
-+   */
-+  async request<T>(endpoint: string, options: RequestConfig = {}): Promise<T> {
-+    const maxRetries = options.retryAttempts ?? 3;
-+    let lastError: Error | null = null;
-+
-+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-+      try {
-+        const headers: Record<string, string> = {
-+          "Content-Type": "application/json",
-+          ...(options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : {}),
-+        };
-+        const res = await fetch(endpoint, { headers, signal: AbortSignal.timeout(options.timeoutMs ?? 15000) });
-+        if (!res.ok) throw new Error(\`HTTP \${res.status}: \${res.statusText}\`);
-+        return await res.json() as T;
-+      } catch (err: any) {
-+        lastError = err;
-+        if (attempt < maxRetries) {
-+          await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 200));
-+        }
-+      }
-+    }
-+    throw lastError ?? new Error("Request failed after retries");
-+  }
- }`
+    if (!realDiff) {
+      const addedLines = updatedFileContent.split(/\r?\n/).map((line) => `+${line}`).join("\n")
+      realDiff = `--- /dev/null\n+++ b/${targetFilePath}\n@@ -0,0 +1,${updatedFileContent.split(/\r?\n/).length} @@\n${addedLines}`
+    }
+
+    const lineCount = updatedFileContent.split(/\r?\n/).length
+    await appendEvent(2, "file_change", "action", execution.tasks[1]?.id, {
+      path: targetFilePath,
+      action: "write",
+      linesAdded: lineCount,
+      linesRemoved: 0,
+      mode: executionMode,
+    })
+
+    const scan = scanExecutionDiffServerSide(realDiff, targetFilePath)
+    await appendEvent(3, "security_scan", scan.findings.length > 0 ? "warning" : "info", execution.tasks[2]?.id, {
+      scanner: "modelvault-verify-engine/2.0.0",
+      findingsCount: scan.findings.length,
+      diffSha256: scan.diffSha256,
+    })
+
+    await appendEvent(4, "diff_ready", "action", execution.tasks[2]?.id, {
+      summary: editedSummary,
+      branch,
+      commitSha: realCommitSha || null,
+      mode: executionMode,
+    })
+
+    const durationMs = Math.max(1, Date.now() - startedAt)
+
+    await prisma.executionTask.updateMany({
+      where: { executionId: execution.id, orderIndex: { in: [0, 1] } },
+      data: { status: "completed", completedAt: new Date() },
+    })
+    await prisma.executionTask.updateMany({
+      where: { executionId: execution.id, orderIndex: 2 },
+      data: { status: "running" },
+    })
+
+    await prisma.execution.update({
+      where: { id: execution.id },
+      data: {
+        status: "awaiting_approval",
+        inputTokens: llmMeta?.inputTokens ?? 0,
+        outputTokens: llmMeta?.outputTokens ?? 0,
+        totalTokens: llmMeta?.totalTokens ?? 0,
+        estimatedCost: llmMeta?.estimatedCost ?? 0,
+        durationMs,
+        planJson: JSON.stringify({
+          goal: prompt,
+          agent: agentConfig.displayName,
+          executionMode,
+          provider: llmMeta?.provider || null,
+          model: llmMeta?.model || null,
+          targetFiles: [targetFilePath, ...relevantFiles].slice(0, 5),
+          hasWorkspace: Boolean(source?.sourcePath),
+        }),
+      },
+    })
 
     await prisma.executionArtifact.create({
       data: {
         executionId: execution.id,
         type: "git_diff",
-        path: "src/lib/services/api-client.ts",
-        summary: `Implemented: ${prompt}`,
-        content: realDiff || diffContent,
+        path: targetFilePath,
+        summary: editedSummary,
+        content: realDiff,
       },
     })
 
-    // Also register Git Operation
     await prisma.gitOperation.create({
       data: {
         projectId,
@@ -274,9 +391,34 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    if (llmMeta && llmMeta.totalTokens > 0) {
+      const apiAccount = await prisma.apiAccount.findFirst({
+        where: { userId: user.id, provider: { slug: llmMeta.provider } },
+      })
+      if (apiAccount) {
+        await prisma.apiUsageRecord.create({
+          data: {
+            apiAccountId: apiAccount.id,
+            date: new Date(),
+            model: llmMeta.model,
+            inputTokens: llmMeta.inputTokens,
+            outputTokens: llmMeta.outputTokens,
+            totalTokens: llmMeta.totalTokens,
+            cost: llmMeta.estimatedCost,
+            currency: "USD",
+            requestCount: 1,
+            dataSource: "agent_execution",
+          },
+        })
+      }
+    }
+
+    publishExecutionComplete(execution.id, "awaiting_approval")
+
     const finalExec = await prisma.execution.findUnique({
       where: { id: execution.id },
       include: {
+        project: true,
         tasks: true,
         events: true,
         artifacts: true,

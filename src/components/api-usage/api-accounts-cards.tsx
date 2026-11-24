@@ -1,6 +1,6 @@
 "use client"
 
-import { Key } from "lucide-react"
+import { Key, Trash2, Plus } from "lucide-react"
 import { ProviderIcon } from "@/components/ui/provider-icon"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { formatCurrency } from "@/lib/utils"
@@ -9,20 +9,35 @@ import type { ApiAccountData } from "@/lib/types"
 interface ApiAccountsCardsProps {
   accounts: ApiAccountData[]
   onAddLog: (accountId: string) => void
+  onCreateAccount?: () => void
+  onDeleteAccount?: (accountId: string) => void
 }
 
-export function ApiAccountsCards({ accounts, onAddLog }: ApiAccountsCardsProps) {
+export function ApiAccountsCards({
+  accounts,
+  onAddLog,
+  onCreateAccount,
+  onDeleteAccount,
+}: ApiAccountsCardsProps) {
   if (accounts.length === 0) {
     return (
       <section className="border-t border-line pt-5">
-        <div className="pb-4">
-          <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">Developer accounts</h2>
-          <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">Prepaid balances and credit consumption per account.</p>
+        <div className="flex flex-wrap items-end justify-between gap-3 pb-4">
+          <div>
+            <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">Developer accounts</h2>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">Prepaid balances and credit consumption per account.</p>
+          </div>
+          {onCreateAccount && (
+            <button type="button" onClick={onCreateAccount} className="btn-secondary btn-sm">
+              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+              Add API account
+            </button>
+          )}
         </div>
         <div className="border-y border-line py-10">
           <p className="text-[13px] font-medium text-ink">No developer accounts</p>
           <p className="mt-1 text-[12px] leading-relaxed text-ink-3">
-            Developer accounts appear here once created in the dashboard data.
+            Add a developer API account first to track prepaid balances and log token usage.
           </p>
         </div>
       </section>
@@ -84,7 +99,20 @@ export function ApiAccountsCards({ accounts, onAddLog }: ApiAccountsCardsProps) 
                     : "Manual"}
                 </td>
                 <td className="text-right">
-                  <button onClick={() => onAddLog(acc.id)} className="btn-ghost btn-sm">Log usage</button>
+                  <div className="inline-flex items-center gap-1.5">
+                    <button onClick={() => onAddLog(acc.id)} className="btn-ghost btn-sm">Log usage</button>
+                    {onDeleteAccount && (
+                      <button
+                        type="button"
+                        onClick={() => onDeleteAccount(acc.id)}
+                        className="icon-btn hover:border-danger/30 hover:bg-danger-soft hover:text-danger"
+                        title="Delete API account"
+                        aria-label={`Delete ${acc.accountName || acc.providerName}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -123,30 +151,20 @@ export function ApiAccountsCards({ accounts, onAddLog }: ApiAccountsCardsProps) 
 
             <div className="mt-3 flex items-center justify-between">
               <span className="text-[11px] text-ink-3">{acc.rateLimit ? `${acc.rateLimit} RPM` : "Default rate limit"}</span>
-              <button onClick={() => onAddLog(acc.id)} className="btn-ghost btn-sm">Log usage</button>
-            </div>
-
-            <details className="mt-2">
-              <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3 select-none">
-                Sync &amp; limit metadata
-              </summary>
-              <div className="mt-2 space-y-1 border-t border-line/70 pt-2 font-mono text-[10.5px] text-ink-3">
-                <div className="flex justify-between gap-3">
-                  <span>Last sync</span>
-                  <span className="text-ink-2">
-                    {acc.lastSyncAt
-                      ? new Date(acc.lastSyncAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
-                      : "Manual"}
-                  </span>
-                </div>
-                {acc.rateLimitTokens && (
-                  <div className="flex justify-between gap-3">
-                    <span>Token ceiling</span>
-                    <span className="tabular-nums text-ink-2">{acc.rateLimitTokens.toLocaleString()} TPM</span>
-                  </div>
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => onAddLog(acc.id)} className="btn-ghost btn-sm">Log usage</button>
+                {onDeleteAccount && (
+                  <button
+                    type="button"
+                    onClick={() => onDeleteAccount(acc.id)}
+                    className="icon-btn hover:border-danger/30 hover:bg-danger-soft hover:text-danger"
+                    aria-label="Delete API account"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  </button>
                 )}
               </div>
-            </details>
+            </div>
           </div>
         ))}
       </div>

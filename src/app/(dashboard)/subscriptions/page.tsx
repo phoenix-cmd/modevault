@@ -8,6 +8,7 @@ import {
   LayoutGrid,
   List,
   Plus,
+  RefreshCw,
   Search,
 } from "lucide-react"
 import { SubscriptionCard } from "@/components/subscriptions/subscription-card"
@@ -42,6 +43,8 @@ export default function SubscriptionsPage() {
 
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [syncingRenewals, setSyncingRenewals] = useState(false)
+  const [syncSummary, setSyncSummary] = useState<string | null>(null)
 
   const fetchSubscriptions = async () => {
     try {
@@ -91,6 +94,25 @@ export default function SubscriptionsPage() {
   useEffect(() => {
     fetchSubscriptions()
   }, [])
+
+  const handleSyncRenewals = async () => {
+    setSyncingRenewals(true)
+    setSyncSummary(null)
+    try {
+      const res = await fetch("/api/subscriptions/sync", { method: "POST" })
+      const json = await res.json()
+      if (res.ok && json.data) {
+        const { renewalsProcessed, quotasReset, alertsEmitted } = json.data
+        setSyncSummary(
+          `Processed ${renewalsProcessed} renewal(s), reset ${quotasReset} quota counter(s), emitted ${alertsEmitted} alert(s).`
+        )
+        setTimeout(() => setSyncSummary(null), 5000)
+        await fetchSubscriptions()
+      }
+    } finally {
+      setSyncingRenewals(false)
+    }
+  }
 
   const filtered = subscriptions.filter((sub) => {
     const matchesSearch =
@@ -166,12 +188,24 @@ export default function SubscriptionsPage() {
         title="Subscriptions"
         description="Every AI plan and developer account in one portfolio, with live quota, renewal, and spend tracking."
         action={
-          <button onClick={openCreate} className="btn-primary btn-sm">
-            <Plus className="h-3.5 w-3.5" strokeWidth={2.2} />
-            Add subscription
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={handleSyncRenewals} disabled={syncingRenewals} className="btn-secondary btn-sm">
+              <RefreshCw className={`h-3.5 w-3.5 ${syncingRenewals ? "animate-spin" : ""}`} strokeWidth={1.8} />
+              {syncingRenewals ? "Syncing…" : "Sync renewals"}
+            </button>
+            <button onClick={openCreate} className="btn-primary btn-sm">
+              <Plus className="h-3.5 w-3.5" strokeWidth={2.2} />
+              Add subscription
+            </button>
+          </div>
         }
       />
+
+      {syncSummary && (
+        <div className="border border-success/25 bg-success-soft/40 px-4 py-2.5 text-[12px] text-success">
+          {syncSummary}
+        </div>
+      )}
 
       {loading ? <StatBandSkeleton columns={3} /> : <StatBand items={metrics} columns={3} />}
 

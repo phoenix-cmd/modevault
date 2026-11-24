@@ -3,6 +3,7 @@ import { z } from "zod"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { packBillingDescription, unpackBillingDescription } from "@/lib/billing-meta"
 import { parseJson, safeUrlSchema } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
@@ -14,7 +15,22 @@ const billingCreateSchema = z.object({
   billingDate: z.string().max(64).optional(),
   description: z.string().max(1000).nullable().optional(),
   invoiceUrl: safeUrlSchema.nullable().optional(),
+  status: z.enum(["paid", "pending", "failed"]).optional(),
+  paymentMethod: z.string().max(120).nullable().optional(),
 })
+
+function serializeBillingRecord<
+  T extends { description: string | null }
+>(record: T) {
+  const meta = unpackBillingDescription(record.description)
+  return {
+    ...record,
+    status: meta.status,
+    paymentMethod: meta.paymentMethod,
+    notes: meta.notes,
+    description: meta.notes,
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -45,7 +61,9 @@ export async function GET(request: NextRequest) {
       take: limit,
     })
 
-    return NextResponse.json({ data: records })
+    return NextResponse.json({
+      data: records.map((r) => serializeBillingRecord(r)),
+    })
   } catch (err: unknown) {
     logger.error("Billing records GET error", errorContext(err))
     return authErrorResponse(err, "Failed to fetch billing records")
@@ -65,6 +83,8 @@ export async function POST(request: NextRequest) {
       billingDate,
       description,
       invoiceUrl,
+      status,
+      paymentMethod,
     } = parsed.data
 
     if (subscriptionId) {
@@ -79,6 +99,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const packedDescription = packBillingDescription({
+      description,
+      status,
+      paymentMethod,
+    })
+
     const record = await prisma.billingRecord.create({
       data: {
         userId: user.id,
@@ -87,12 +113,12 @@ export async function POST(request: NextRequest) {
         amount,
         currency: currency || "INR",
         billingDate: billingDate ? new Date(billingDate) : new Date(),
-        description: description || null,
+        description: packedDescription,
         invoiceUrl: invoiceUrl || null,
       },
     })
 
-    return NextResponse.json({ data: record }, { status: 201 })
+    return NextResponse.json({ data: serializeBillingRecord(record) }, { status: 201 })
   } catch (err: unknown) {
     logger.error("Billing creation error", errorContext(err))
     return authErrorResponse(err, "Failed to create billing record")

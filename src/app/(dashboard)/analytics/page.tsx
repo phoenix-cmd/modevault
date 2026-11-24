@@ -21,6 +21,7 @@ interface AnalyticsData {
     color: string
     count: number
   }>
+  exchangeRateUsdToInr?: number
   overview: {
     monthlySubscriptions: number
     annualSubscriptions: number
@@ -54,7 +55,7 @@ export default function AnalyticsPage() {
     loadAnalytics()
   }, [])
 
-  const rate = 84.5 // USD to INR
+  const rate = data?.exchangeRateUsdToInr || 84.5 // From ExchangeRate table
   const inr = (amount: number) =>
     currency === "INR"
       ? formatCurrency(amount, "INR")

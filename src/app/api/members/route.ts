@@ -1,7 +1,9 @@
+import crypto from "node:crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { emitNotification } from "@/lib/notifications"
 import { requireOrganizationAccess, resolveUserDefaultWorkspace } from "@/lib/permissions"
 import { emailSchema, parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
@@ -122,7 +124,7 @@ export async function POST(req: NextRequest) {
 
     let targetUser = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, name: true, email: true },
+      select: { id: true, name: true, email: true, passwordHash: true },
     })
 
     if (!targetUser) {
@@ -133,7 +135,7 @@ export async function POST(req: NextRequest) {
           currency: "INR",
           timezone: "Asia/Kolkata",
         },
-        select: { id: true, name: true, email: true },
+        select: { id: true, name: true, email: true, passwordHash: true },
       })
     }
 
@@ -160,6 +162,26 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    const inviteToken = crypto.randomBytes(24).toString("hex")
+    const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    await prisma.verificationToken
+      .create({
+        data: {
+          identifier: `invite:${organizationId}:${email}`,
+          token: inviteToken,
+          expires,
+        },
+      })
+      .catch(() => {})
+
+    await emitNotification(user.id, {
+      type: "general",
+      title: `Invited ${name} (${role})`,
+      message: `Created organization membership and invitation link for ${email}.`,
+      severity: "info",
+      actionUrl: "/permissions",
+    })
+
     const uiRole = dbRoleToUiRole(membership.role)
     return NextResponse.json(
       {
@@ -170,6 +192,8 @@ export async function POST(req: NextRequest) {
           name: membership.user.name || name,
           email: membership.user.email,
           role: uiRole,
+          inviteUrl: `/register?invite=${encodeURIComponent(inviteToken)}&email=${encodeURIComponent(email)}`,
+          inviteExpiresAt: expires.toISOString(),
           ...capabilitiesForRole(uiRole),
         },
       },
@@ -198,7 +222,6 @@ export async function PATCH(req: NextRequest) {
       })
       if (!existing) continue
 
-      // Map capability toggles or explicit role selection to the closest DB role
       let nextUiRole: UiRole = item.role
       if (item.role !== "Owner") {
         if (item.canMerge || item.canViewBilling) {

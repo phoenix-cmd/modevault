@@ -3,6 +3,13 @@ import { z } from "zod"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
 import { getUserAccessibleWorkspaceIds, requireProjectAccess } from "@/lib/permissions"
+import {
+  analyzeSourceCodeAst,
+  flattenWorkspaceTree,
+  listWorkspaceTree,
+  readWorkspaceFile,
+} from "@/lib/project-workspace"
+import { estimateTokenCost, invokeLlmCompletion, resolveUserProviderKey } from "@/lib/llm-provider"
 import { idSchema, parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
@@ -10,6 +17,30 @@ const orchestratorPlanSchema = z.object({
   projectId: idSchema.optional(),
   prompt: z.string().trim().min(1).max(20000),
 })
+
+function rankWorkspaceFiles(files: string[], prompt: string): string[] {
+  const words = prompt
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 3)
+
+  const scored = files.map((file) => {
+    const lower = file.toLowerCase()
+    let score = 0
+    for (const word of words) {
+      if (lower.includes(word)) score += 5
+    }
+    if (/\.(ts|tsx|js|jsx|py)$/.test(lower)) score += 2
+    if (lower.startsWith("src/")) score += 2
+    if (lower.includes("package.json") || lower.includes("readme.md")) score += 1
+    return { file, score }
+  })
+
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+    .map((s) => s.file)
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,7 +52,10 @@ export async function POST(req: NextRequest) {
     let project = null
     if (projectId) {
       await requireProjectAccess(projectId, user.id, "viewer")
-      project = await prisma.project.findUnique({ where: { id: projectId } })
+      project = await prisma.project.findUnique({
+        where: { id: projectId },
+        include: { sources: true },
+      })
       if (!project) {
         return NextResponse.json({ error: "Project not found" }, { status: 404 })
       }
@@ -29,91 +63,171 @@ export async function POST(req: NextRequest) {
       const workspaceIds = await getUserAccessibleWorkspaceIds(user.id, "viewer")
       project = await prisma.project.findFirst({
         where: { workspaceId: { in: workspaceIds } },
+        include: { sources: true },
         orderBy: { updatedAt: "desc" },
       })
     }
 
-    const isUiRelated = /ui|button|modal|component|page|css|tailwind|style|design/i.test(prompt)
-    const isApiRelated = /api|backend|database|prisma|stripe|checkout|auth|endpoint|sql/i.test(prompt)
-
-    const targetFiles: string[] = []
-    if (isUiRelated) targetFiles.push("src/components/checkout-button.tsx")
-    if (isApiRelated || (!isUiRelated && !isApiRelated)) {
-      targetFiles.push("src/app/api/checkout/route.ts")
-      targetFiles.push("src/lib/services/api-client.ts")
+    const sourcePath = project?.sources?.find((s) => s.sourcePath)?.sourcePath || null
+    let allFiles: string[] = []
+    let primaryAstSummary = null
+    if (sourcePath) {
+      const tree = await listWorkspaceTree(sourcePath).catch(() => [])
+      allFiles = flattenWorkspaceTree(tree)
     }
+
+    const targetFiles =
+      allFiles.length > 0
+        ? rankWorkspaceFiles(allFiles, prompt)
+        : ["MODELVAULT_EXECUTION.md"]
+
+    if (sourcePath && targetFiles[0]) {
+      const firstContent = await readWorkspaceFile(sourcePath, targetFiles[0]).catch(() => "")
+      if (firstContent) {
+        primaryAstSummary = analyzeSourceCodeAst(targetFiles[0], firstContent)
+      }
+    }
+
+    const targetBranch = `feature/ai-${Date.now().toString(36)}`
+    const providerKey = await resolveUserProviderKey(user.id)
+
+    if (providerKey) {
+      try {
+        const llm = await invokeLlmCompletion({
+          provider: providerKey.provider,
+          apiKey: providerKey.apiKey,
+          model: providerKey.model,
+          maxTokens: 900,
+          timeoutMs: 12000,
+          systemPrompt:
+            "You are a software architecture planner. Return ONLY valid JSON with key `stages`: an array of 3-4 objects { id, name, agentName, agentRole, estimatedTokens, description, tasks }.",
+          userPrompt: `Goal: ${prompt}\nProject: ${project?.name || "Workspace"}\nFiles: ${allFiles.slice(0, 35).join(", ") || "No workspace files yet"}`,
+        })
+
+        const jsonMatch = llm.content.match(/\{[\s\S]*\}/)
+        const parsedPlan = jsonMatch
+          ? (JSON.parse(jsonMatch[0]) as {
+              stages?: Array<{
+                id?: string
+                name?: string
+                agentName?: string
+                agentRole?: string
+                estimatedTokens?: number
+                description?: string
+                tasks?: string[]
+              }>
+            })
+          : null
+
+        if (Array.isArray(parsedPlan?.stages) && parsedPlan.stages.length > 0) {
+          const stages = parsedPlan.stages.slice(0, 6).map((s, idx) => ({
+            id: s.id || `stage-${idx + 1}`,
+            name: s.name || `Stage ${idx + 1}`,
+            agentName: s.agentName || `${providerKey.provider} (${providerKey.model})`,
+            agentRole: s.agentRole || "Engineer",
+            estimatedTokens: Number(s.estimatedTokens) || 4000,
+            dependencies: idx === 0 ? [] : [`stage-${idx}`],
+            description: s.description || "Execute workspace step",
+            tasks: Array.isArray(s.tasks) ? s.tasks : [],
+          }))
+
+          const totalEstimatedTokens = stages.reduce((sum, s) => sum + s.estimatedTokens, 0)
+          const estimatedCost = await estimateTokenCost(
+            providerKey.provider,
+            providerKey.model,
+            Math.round(totalEstimatedTokens * 0.7),
+            Math.round(totalEstimatedTokens * 0.3)
+          )
+
+          return NextResponse.json({
+            data: {
+              mode: "live_llm",
+              provider: providerKey.provider,
+              model: llm.model,
+              goal: prompt,
+              projectName: project?.name || "Workspace",
+              targetBranch,
+              targetFiles,
+              workspaceFileCount: allFiles.length,
+              stages,
+              metrics: {
+                totalEstimatedTokens,
+                estimatedCost,
+                estimatedDurationSec: Math.max(8, Math.round(llm.durationMs / 1000) * 4),
+                planningLatencyMs: llm.durationMs,
+                parallelStages: Math.min(2, stages.length),
+              },
+            },
+          })
+        }
+      } catch (err) {
+        logger.warn("Live LLM planner failed; falling back to AST heuristic", errorContext(err))
+      }
+    }
+
+    const primaryFile = targetFiles[0] || "MODELVAULT_EXECUTION.md"
+    const exportedCount = primaryAstSummary?.exportedSymbols?.length || 0
+    const importCount = primaryAstSummary?.importedModules?.length || 0
 
     const planStages = [
       {
         id: "stage-1-arch",
-        name: "Stage 1: Lead Architect — AST & Dependency Decomposition",
-        agentName: "Claude Code 3.7",
+        name: "Stage 1: Workspace Inspection & AST Decomposition",
+        agentName: "Local AST Analyzer",
         agentRole: "Lead Architect",
-        estimatedTokens: 12400,
+        estimatedTokens: 0,
         dependencies: [],
-        description: "Analyze TypeScript types, call sites, and AST imports across target repository.",
+        description: `Inspected ${allFiles.length} workspace file(s). Primary target ${primaryFile} (${exportedCount} exports, ${importCount} imports).`,
         tasks: [
-          "Scan repository AST for imported symbols",
-          "Draft strict interfaces and mutation boundaries",
+          `Scan repository tree (${allFiles.length} files indexed)`,
+          `Target files: ${targetFiles.slice(0, 3).join(", ")}`,
         ],
       },
       {
-        id: "stage-2-backend",
-        name: "Stage 2: Backend Engineer — Atomic Logic & State Mutation",
-        agentName: "Codex 5.2",
-        agentRole: "Backend Engineer",
-        estimatedTokens: 16800,
+        id: "stage-2-synthesis",
+        name: "Stage 2: Branch Creation & Change Synthesis",
+        agentName: "Deterministic Workspace Writer",
+        agentRole: "Engineer",
+        estimatedTokens: 0,
         dependencies: ["stage-1-arch"],
-        description: "Implement API route handler, database transaction locks, and error boundaries.",
+        description: `Create branch ${targetBranch}, record implementation patch against ${primaryFile}, and stage clean commit.`,
         tasks: [
-          `Implement mutation logic in ${targetFiles[0] || "src/app/api/route.ts"}`,
-          "Ensure thread-safe idempotency verification and database TTL locks",
+          `Checkout feature branch ${targetBranch}`,
+          `Apply workspace update and capture unified Git diff`,
         ],
       },
       {
-        id: "stage-3-frontend",
-        name: "Stage 3: Frontend Engineer — Reactive State & UI Components",
-        agentName: "Gemini CLI 2.5",
-        agentRole: "Frontend Engineer",
-        estimatedTokens: 11200,
-        dependencies: ["stage-1-arch"],
-        description: "Build accessible UI components with Motion animations and optimistic updates.",
-        tasks: [
-          "Render status feedback and loading transitions",
-          "Wire idempotency headers into client request dispatcher",
-        ],
-      },
-      {
-        id: "stage-4-qa",
-        name: "Stage 4: QA & Security Auditor — Automated Vitest Verification",
-        agentName: "OpenCode Reviewer",
+        id: "stage-3-qa",
+        name: "Stage 3: Diff Verification & Approval Gate",
+        agentName: "Verification Scanner",
         agentRole: "QA Reviewer",
-        estimatedTokens: 9600,
-        dependencies: ["stage-2-backend", "stage-3-frontend"],
-        description: "Execute regression tests, check coverage, verify zero breaking changes, and build git diff patch.",
+        estimatedTokens: 0,
+        dependencies: ["stage-2-synthesis"],
+        description:
+          "Run server-side security diff checks and hold changes behind human approval before merging.",
         tasks: [
-          "Run test suite: vitest run --coverage",
-          "Security scan for unvalidated input parameters and memory leaks",
+          "Compute SHA-256 diff digest and scan added lines",
+          "Await reviewer approval on Verification Center or Agent Center",
         ],
       },
     ]
 
-    const totalEstimatedTokens = planStages.reduce((sum, s) => sum + s.estimatedTokens, 0)
-    const estimatedCost = parseFloat(((totalEstimatedTokens / 1000000) * 4.25).toFixed(4))
-    const estimatedDurationSec = Math.floor(totalEstimatedTokens / 450) + 12
-
     return NextResponse.json({
       data: {
+        mode: "heuristic_ast",
+        notice:
+          "AST Heuristic Template — connect an OpenAI, Anthropic, or Google key in Integrations for live AI planning.",
         goal: prompt,
-        projectName: project?.name || "Global Workspace",
-        targetBranch: `feature/ai-${Date.now().toString(36)}`,
+        projectName: project?.name || "Workspace",
+        targetBranch,
         targetFiles,
+        workspaceFileCount: allFiles.length,
         stages: planStages,
         metrics: {
-          totalEstimatedTokens,
-          estimatedCost,
-          estimatedDurationSec,
-          parallelStages: 2,
+          totalEstimatedTokens: 0,
+          estimatedCost: 0,
+          estimatedDurationSec: 4,
+          parallelStages: 1,
         },
       },
     })

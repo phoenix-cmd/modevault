@@ -203,11 +203,37 @@ export default function ModelLibraryPage() {
     }
   }, [])
 
-  const handleRunBenchmark = () => {
+  const [benchmarkResult, setBenchmarkResult] = useState<{
+    isLive: boolean
+    output: string
+    latencyMs: number
+    speedTokensPerSec: number
+    inputTokens?: number
+    outputTokens?: number
+    notice?: string
+  } | null>(null)
+
+  const handleRunBenchmark = async () => {
+    if (!activeModel) return
     setBenchmarking(true)
-    setTimeout(() => {
+    try {
+      const res = await fetch("/api/models/benchmark", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          modelSlug: activeModel.id,
+          prompt: testPrompt || "Implement atomic idempotency verification",
+        }),
+      })
+      const json = await res.json()
+      if (res.ok && json.data) {
+        setBenchmarkResult(json.data)
+      }
+    } catch {
+      // Fallback gracefully
+    } finally {
       setBenchmarking(false)
-    }, 600)
+    }
   }
 
   const activeModel: ModelEntry | null =
@@ -385,10 +411,12 @@ export default function ModelLibraryPage() {
               <div className="flex flex-wrap items-start justify-between gap-4 pb-5">
                 <div>
                   <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
-                    Benchmark preview
+                    Benchmark runner
                   </h2>
                   <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
-                    Simulated locally · no provider request is sent
+                    {benchmarkResult?.isLive
+                      ? `Live provider benchmark · ${benchmarkResult.latencyMs}ms TTFT`
+                      : "Uses connected provider API key when configured; otherwise reference catalog"}
                   </p>
                 </div>
 
@@ -426,8 +454,16 @@ export default function ModelLibraryPage() {
             <StatBand
               columns={4}
               items={[
-                { label: "First token", value: `${activeModel.latencyMs} ms`, meta: "Catalog median" },
-                { label: "Throughput", value: `${activeModel.speedTokensPerSec} t/s`, meta: "Peak stream burst" },
+                {
+                  label: "Latency",
+                  value: `${benchmarkResult?.latencyMs ?? activeModel.latencyMs} ms`,
+                  meta: benchmarkResult?.isLive ? "Measured live" : "Catalog median",
+                },
+                {
+                  label: "Throughput",
+                  value: `${benchmarkResult?.speedTokensPerSec ?? activeModel.speedTokensPerSec} t/s`,
+                  meta: benchmarkResult?.isLive ? "Measured stream" : "Reference estimate",
+                },
                 {
                   label: "Input / 1M",
                   value: `$${activeModel.inputPricePerM.toFixed(2)}`,
@@ -440,16 +476,22 @@ export default function ModelLibraryPage() {
             <section className="border-t border-line pt-5">
               <div className="flex flex-wrap items-baseline justify-between gap-3 pb-4">
                 <div>
-                  <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">Reference output</h2>
+                  <h2 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">
+                    {benchmarkResult?.isLive ? "Live model output" : "Reference output"}
+                  </h2>
                   <p className="mt-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
-                    Stored sample · {activeModel.name}
+                    {benchmarkResult?.isLive
+                      ? `${activeModel.name} · ${benchmarkResult.inputTokens ?? 0} in / ${benchmarkResult.outputTokens ?? 0} out tokens`
+                      : `Stored sample · ${activeModel.name}`}
                   </p>
                 </div>
-                <span className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-3">Not a live response</span>
+                <span className={benchmarkResult?.isLive ? "badge bg-success-soft text-success" : "font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-3"}>
+                  {benchmarkResult?.isLive ? "Live API response" : "Reference sample — connect key in Integrations"}
+                </span>
               </div>
 
-              <pre className="overflow-x-auto border border-line bg-canvas p-4 font-mono text-[11px] leading-relaxed text-ink-2">
-                {activeModel.sampleResponse}
+              <pre className="overflow-x-auto border border-line bg-canvas p-4 font-mono text-[11px] leading-relaxed text-ink-2 whitespace-pre-wrap">
+                {benchmarkResult?.output || activeModel.sampleResponse}
               </pre>
             </section>
           </div>

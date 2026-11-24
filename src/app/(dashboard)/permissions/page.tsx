@@ -119,6 +119,7 @@ export default function PermissionsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
+  const [lastInviteUrl, setLastInviteUrl] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
   const [inviteOpen, setInviteOpen] = useState(false)
@@ -225,8 +226,11 @@ export default function PermissionsPage() {
       setInviteRole("Developer")
       setInviteOpen(false)
       await loadMembers()
-      setSaveMsg("Team member added to organization.")
-      window.setTimeout(() => setSaveMsg(null), 3000)
+      if (json.data?.inviteUrl && typeof window !== "undefined") {
+        setLastInviteUrl(`${window.location.origin}${json.data.inviteUrl}`)
+      }
+      setSaveMsg("Team member added & invitation link generated.")
+      window.setTimeout(() => setSaveMsg(null), 4000)
     } catch (err: unknown) {
       setErrorMsg(err instanceof Error ? err.message : "Failed to invite member")
     } finally {
@@ -278,6 +282,32 @@ export default function PermissionsPage() {
         <div className="flex items-center gap-2 border border-success/30 bg-success-soft/40 px-4 py-2.5 text-[12px] text-success animate-fade-in">
           <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} />
           {saveMsg}
+        </div>
+      )}
+
+      {lastInviteUrl && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border border-accent/30 bg-accent-soft/40 px-4 py-2.5 text-[12px] text-ink">
+          <div className="min-w-0 flex-1">
+            <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-accent">Invitation link</p>
+            <p className="truncate font-mono text-[11px] text-ink-2">{lastInviteUrl}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => navigator.clipboard?.writeText(lastInviteUrl)}
+              className="btn-secondary btn-sm"
+            >
+              Copy link
+            </button>
+            <button
+              type="button"
+              onClick={() => setLastInviteUrl(null)}
+              className="icon-btn"
+              aria-label="Dismiss invite link"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       )}
 

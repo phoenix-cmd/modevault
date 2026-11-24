@@ -1,78 +1,90 @@
-import { NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
+import { NextRequest } from "next/server"
+import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { convertCurrency, getExchangeRatesMap } from "@/lib/currency"
 
 export async function GET(_request: NextRequest) {
   try {
     const user = await requireAuthenticatedUser()
-    const now = new Date();
-    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const now = new Date()
+    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
 
-    // Active subscriptions count
-    const activeSubscriptions = await prisma.subscription.count({
-      where: { userId: user.id, status: "active" },
-    });
-
-    // Total monthly spend (sum of active monthly subscription prices)
-    const activeMonthlyAgg = await prisma.subscription.aggregate({
-      where: { userId: user.id, status: "active", billingCycle: "monthly" },
-      _sum: { price: true },
-    });
-    const activeYearlyAgg = await prisma.subscription.aggregate({
-      where: { userId: user.id, status: "active", billingCycle: "yearly" },
-      _sum: { price: true },
-    });
-
-    const monthlyFromMonthly = activeMonthlyAgg._sum.price ?? 0;
-    const monthlyFromYearly = (activeYearlyAgg._sum.price ?? 0) / 12;
-    const totalMonthlySpend = monthlyFromMonthly + monthlyFromYearly;
-    const totalAnnualSpend = monthlyFromMonthly * 12 + (activeYearlyAgg._sum.price ?? 0);
-
-    // Total API balance
-    const apiBalanceAgg = await prisma.apiAccount.aggregate({
-      where: { userId: user.id },
-      _sum: { prepaidBalance: true },
-    });
-    const totalApiBalance = apiBalanceAgg._sum.prepaidBalance ?? 0;
-
-    // Upcoming renewals (next 30 days)
-    const upcomingRenewals = await prisma.subscription.count({
-      where: {
-        userId: user.id,
-        status: "active",
-        renewalDate: { gte: now, lte: thirtyDaysFromNow },
-      },
-    });
-
-    // Recent activity — last 10 events combined from billing, notifications, sync logs
-    const [recentBilling, recentNotifications, recentSyncLogs] = await Promise.all([
-      prisma.billingRecord.findMany({
-        where: { userId: user.id },
-        orderBy: { createdAt: "desc" },
-        take: 10,
+    const [rates, dbUser, subscriptions, apiAccounts, upcomingRenewals] = await Promise.all([
+      getExchangeRatesMap(),
+      prisma.user.findUnique({ where: { id: user.id }, select: { currency: true } }),
+      prisma.subscription.findMany({
+        where: { userId: user.id, status: "active" },
+        include: { provider: true },
       }),
-      prisma.notification.findMany({
+      prisma.apiAccount.findMany({
         where: { userId: user.id },
-        orderBy: { createdAt: "desc" },
-        take: 10,
+        select: { id: true, prepaidBalance: true, currency: true },
       }),
-      prisma.syncLog.findMany({
-        where: { userId: user.id },
-        orderBy: { createdAt: "desc" },
-        take: 10,
+      prisma.subscription.count({
+        where: {
+          userId: user.id,
+          status: "active",
+          renewalDate: { gte: now, lte: thirtyDaysFromNow },
+        },
       }),
-    ]);
+    ])
 
-    type ActivityItem = {
-      id: string;
-      type: string;
-      title: string;
-      description: string | null;
-      date: Date;
-    };
+    const targetCurrency = dbUser?.currency || "INR"
 
-    const recentActivity: ActivityItem[] = [
+    let totalMonthlySpend = 0
+    let totalAnnualSpend = 0
+    const providerSpending: Record<string, number> = {}
+
+    for (const sub of subscriptions) {
+      const normalizedPrice = convertCurrency(sub.price, sub.currency, targetCurrency, rates)
+      const monthly = sub.billingCycle === "yearly" ? normalizedPrice / 12 : normalizedPrice
+      const annual = sub.billingCycle === "yearly" ? normalizedPrice : normalizedPrice * 12
+      totalMonthlySpend += monthly
+      totalAnnualSpend += annual
+      const name = sub.provider.name
+      providerSpending[name] = (providerSpending[name] ?? 0) + monthly
+    }
+
+    const totalApiBalance = apiAccounts.reduce(
+      (sum, acc) => sum + convertCurrency(acc.prepaidBalance ?? 0, acc.currency, "USD", rates),
+      0
+    )
+
+    const [recentBilling, recentNotifications, recentSyncLogs, billingRecords, apiUsageRecords] =
+      await Promise.all([
+        prisma.billingRecord.findMany({
+          where: { userId: user.id },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+        }),
+        prisma.notification.findMany({
+          where: { userId: user.id },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+        }),
+        prisma.syncLog.findMany({
+          where: { userId: user.id },
+          orderBy: { createdAt: "desc" },
+          take: 10,
+        }),
+        prisma.billingRecord.findMany({
+          where: {
+            userId: user.id,
+            billingDate: { gte: sixMonthsAgo },
+          },
+          orderBy: { billingDate: "asc" },
+        }),
+        prisma.apiUsageRecord.findMany({
+          where: {
+            apiAccount: { userId: user.id },
+            date: { gte: sixMonthsAgo },
+          },
+          orderBy: { date: "asc" },
+        }),
+      ])
+
+    const recentActivity = [
       ...recentBilling.map((b) => ({
         id: b.id,
         type: "billing" as const,
@@ -96,50 +108,70 @@ export async function GET(_request: NextRequest) {
       })),
     ]
       .sort((a, b) => b.date.getTime() - a.date.getTime())
-      .slice(0, 10);
+      .slice(0, 10)
 
-    // Spending by month (last 6 months from billing records)
-    const billingRecords = await prisma.billingRecord.findMany({
-      where: {
-        userId: user.id,
-        billingDate: { gte: sixMonthsAgo },
-      },
-      orderBy: { billingDate: "asc" },
-    });
+    const spendingByMonth: Record<string, number> = {}
+    const spendingByMonthDetailed: Record<
+      string,
+      { month: string; subscriptions: number; api: number; total: number }
+    > = {}
 
-    const spendingByMonth: Record<string, number> = {};
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+      spendingByMonth[key] = 0
+      spendingByMonthDetailed[key] = {
+        month: d.toLocaleString("default", { month: "short" }),
+        subscriptions: 0,
+        api: 0,
+        total: 0,
+      }
+    }
+
     for (const record of billingRecords) {
-      const key = `${record.billingDate.getFullYear()}-${String(record.billingDate.getMonth() + 1).padStart(2, "0")}`;
-      spendingByMonth[key] = (spendingByMonth[key] ?? 0) + record.amount;
+      const key = `${record.billingDate.getFullYear()}-${String(record.billingDate.getMonth() + 1).padStart(2, "0")}`
+      if (!spendingByMonthDetailed[key]) continue
+      const converted = convertCurrency(record.amount, record.currency, targetCurrency, rates)
+      if (record.type === "subscription_payment") {
+        spendingByMonthDetailed[key].subscriptions += converted
+      } else {
+        spendingByMonthDetailed[key].api += converted
+      }
+      spendingByMonthDetailed[key].total += converted
+      spendingByMonth[key] = (spendingByMonth[key] ?? 0) + converted
     }
 
-    // Provider spending
-    const subscriptionsWithProvider = await prisma.subscription.findMany({
-      where: { userId: user.id, status: "active" },
-      include: { provider: true },
-    });
-
-    const providerSpending: Record<string, number> = {};
-    for (const sub of subscriptionsWithProvider) {
-      const name = sub.provider.name;
-      const monthlyPrice =
-        sub.billingCycle === "yearly" ? sub.price / 12 : sub.price;
-      providerSpending[name] = (providerSpending[name] ?? 0) + monthlyPrice;
+    for (const usage of apiUsageRecords) {
+      const key = `${usage.date.getFullYear()}-${String(usage.date.getMonth() + 1).padStart(2, "0")}`
+      if (!spendingByMonthDetailed[key]) continue
+      const converted = convertCurrency(usage.cost ?? 0, usage.currency, targetCurrency, rates)
+      spendingByMonthDetailed[key].api += converted
+      spendingByMonthDetailed[key].total += converted
+      spendingByMonth[key] = (spendingByMonth[key] ?? 0) + converted
     }
+
+    const detailedTrend = Object.values(spendingByMonthDetailed).map((point) => ({
+      month: point.month,
+      subscriptions: Math.round(point.subscriptions),
+      api: Math.round(point.api),
+      total: Math.round(point.total),
+    }))
 
     return Response.json({
       data: {
-        activeSubscriptions,
-        totalMonthlySpend,
-        totalAnnualSpend,
-        totalApiBalance,
+        activeSubscriptions: subscriptions.length,
+        totalMonthlySpend: parseFloat(totalMonthlySpend.toFixed(2)),
+        totalAnnualSpend: parseFloat(totalAnnualSpend.toFixed(2)),
+        totalApiBalance: parseFloat(totalApiBalance.toFixed(2)),
         upcomingRenewals,
+        currency: targetCurrency,
         recentActivity,
         spendingByMonth,
+        spendingByMonthDetailed: detailedTrend,
         providerSpending,
       },
-    });
+    })
   } catch (error) {
-    return authErrorResponse(error, "Failed to fetch dashboard data", "Dashboard API error");
+    return authErrorResponse(error, "Failed to fetch dashboard data", "Dashboard API error")
   }
 }

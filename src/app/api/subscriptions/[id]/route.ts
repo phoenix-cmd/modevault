@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { emitNotification } from "@/lib/notifications"
 import { parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
@@ -164,6 +165,7 @@ export async function PATCH(
 
     const existing = await prisma.subscription.findFirst({
       where: { id, userId: user.id },
+      include: { provider: true, plan: true },
     })
 
     if (!existing) {
@@ -182,6 +184,27 @@ export async function PATCH(
         ...(body.usedCredits !== undefined && { usedCredits: body.usedCredits }),
       },
     })
+
+    const ratios: Array<{ label: string; pct: number }> = []
+    if (existing.quotaMessages && (subscription.usedMessages ?? 0) > 0) {
+      ratios.push({ label: "messages", pct: ((subscription.usedMessages ?? 0) / existing.quotaMessages) * 100 })
+    }
+    if (existing.quotaRequests && (subscription.usedRequests ?? 0) > 0) {
+      ratios.push({ label: "requests", pct: ((subscription.usedRequests ?? 0) / existing.quotaRequests) * 100 })
+    }
+    if (existing.quotaTokens && (subscription.usedTokens ?? 0) > 0) {
+      ratios.push({ label: "tokens", pct: ((subscription.usedTokens ?? 0) / existing.quotaTokens) * 100 })
+    }
+    const highest = ratios.sort((a, b) => b.pct - a.pct)[0]
+    if (highest && highest.pct >= 80) {
+      await emitNotification(user.id, {
+        type: "quota_warning",
+        title: `${existing.provider.name} ${highest.label} at ${Math.round(highest.pct)}%`,
+        message: `${existing.customPlanName || existing.plan?.name || "Subscription"} has reached ${Math.round(highest.pct)}% of its ${highest.label} quota.`,
+        severity: highest.pct >= 100 ? "critical" : "warning",
+        actionUrl: "/subscriptions",
+      })
+    }
 
     return NextResponse.json({ data: subscription })
   } catch (err: unknown) {

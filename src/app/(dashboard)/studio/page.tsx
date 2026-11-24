@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import dynamic from "next/dynamic"
+import { useRouter } from "next/navigation"
 import {
   Play,
   RotateCw,
@@ -15,10 +16,15 @@ import {
   PanelLeft,
   Square,
   AlertTriangle,
+  Plus,
+  Trash2,
+  Sparkles,
+  X,
 } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
 import { StatBand } from "@/components/ui/stat-band"
 import { useMediaQuery } from "@/lib/use-media-query"
+import { useModalA11y } from "@/lib/use-modal-a11y"
 import { cn } from "@/lib/utils"
 
 const Editor = dynamic(() => import("@monaco-editor/react"), {
@@ -31,6 +37,7 @@ const Editor = dynamic(() => import("@monaco-editor/react"), {
 })
 
 export default function StudioPage() {
+  const router = useRouter()
   const [projects, setProjects] = useState<any[]>([])
   const [projectId, setProjectId] = useState<string>("")
   const [selectedFile, setSelectedFile] = useState("")
@@ -38,8 +45,16 @@ export default function StudioPage() {
   const [code, setCode] = useState("")
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewRunning, setPreviewRunning] = useState(false)
+  const [previewSimulated, setPreviewSimulated] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [previewFrameKey, setPreviewFrameKey] = useState(0)
+
+  const [newFileName, setNewFileName] = useState("")
+  const [creatingFile, setCreatingFile] = useState(false)
+  const [agentModalOpen, setAgentModalOpen] = useState(false)
+  const [agentPrompt, setAgentPrompt] = useState("")
+  const [dispatchingAgent, setDispatchingAgent] = useState(false)
+  const agentDialogRef = useModalA11y(agentModalOpen, () => setAgentModalOpen(false))
   const isMdUp = useMediaQuery("(min-width: 768px)")
   const isXlUp = useMediaQuery("(min-width: 1280px)")
   const [explorerOverride, setExplorerOverride] = useState<boolean | null>(null)
@@ -69,16 +84,12 @@ export default function StudioPage() {
     return () => observer.disconnect()
   }, [])
 
-  // DevTools logs (local/sample session data)
+  // Real DevTools logs emitted by editor/preview actions
   const [logs, setLogs] = useState<Array<{ id: number; time: string; type: string; text: string }>>([
-    { id: 1, time: "12:04:12", type: "system", text: "Sandbox nodejs-20 environment initialized on port 3001" },
-    { id: 2, time: "12:04:13", type: "build", text: "Ready in 1.4s — Fast Refresh enabled" },
-    { id: 3, time: "12:04:15", type: "http", text: "GET / 200 OK — 24ms" },
+    { id: 1, time: "init", type: "system", text: "Studio workspace initialized. Select a project and file to inspect." },
   ])
 
-  const [networkRequests, setNetworkRequests] = useState<Array<{ id: number; method: string; path: string; status: number; duration: string }>>([
-    { id: 1, method: "GET", path: "/api/projects", status: 200, duration: "14ms" },
-  ])
+  const [networkRequests, setNetworkRequests] = useState<Array<{ id: number; method: string; path: string; status: number; duration: string }>>([])
   const [astSummary, setAstSummary] = useState<{
     lineCount?: number
     byteSize?: number
@@ -216,6 +227,81 @@ export default function StudioPage() {
     }
   }
 
+  const handleCreateFile = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!projectId || !newFileName.trim()) return
+    setCreatingFile(true)
+    try {
+      const target = newFileName.trim()
+      const res = await fetch(`/api/projects/${projectId}/files`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file: target, content: `// ${target}\n` }),
+      })
+      const json = await res.json()
+      if (res.ok && Array.isArray(json.data?.allFiles)) {
+        setFileList(json.data.allFiles)
+        setSelectedFile(target)
+        setNewFileName("")
+        setLogs((prev) => [
+          ...prev,
+          { id: Date.now(), time: new Date().toLocaleTimeString(), type: "build", text: `Created ${target}` },
+        ])
+      }
+    } finally {
+      setCreatingFile(false)
+    }
+  }
+
+  const handleDeleteFile = async (target: string) => {
+    if (!projectId || !target) return
+    const res = await fetch(
+      `/api/projects/${projectId}/files?file=${encodeURIComponent(target)}`,
+      { method: "DELETE" }
+    )
+    const json = await res.json()
+    if (res.ok && Array.isArray(json.data?.allFiles)) {
+      setFileList(json.data.allFiles)
+      if (selectedFile === target) {
+        setSelectedFile(json.data.allFiles[0] || "")
+        if (!json.data.allFiles[0]) setCode("")
+      }
+      setLogs((prev) => [
+        ...prev,
+        { id: Date.now(), time: new Date().toLocaleTimeString(), type: "warning", text: `Deleted ${target}` },
+      ])
+    }
+  }
+
+  const handleRunAgentOnFile = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!projectId || !agentPrompt.trim()) return
+    setDispatchingAgent(true)
+    try {
+      if (selectedFile) {
+        await handleSave()
+      }
+      const res = await fetch("/api/executions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          prompt: selectedFile
+            ? `Target file ${selectedFile}: ${agentPrompt.trim()}`
+            : agentPrompt.trim(),
+        }),
+      })
+      const json = await res.json()
+      if (res.ok && json.data?.id) {
+        setAgentModalOpen(false)
+        setAgentPrompt("")
+        router.push(`/agents?executionId=${encodeURIComponent(json.data.id)}`)
+      }
+    } finally {
+      setDispatchingAgent(false)
+    }
+  }
+
   const handleStartPreview = async () => {
     if (!projectId) return
     setPreviewError(null)
@@ -225,8 +311,13 @@ export default function StudioPage() {
       if (!res.ok || !json.data?.port) {
         throw new Error(json.error || "Failed to start preview")
       }
+      const isSim = json.data.status === "simulated"
+      setPreviewSimulated(isSim)
       setPreviewUrl(json.data.url || `http://localhost:${json.data.port}`)
-      setPreviewRunning(true)
+      setPreviewRunning(!isSim)
+      if (isSim) {
+        setPreviewError("Live dev server spawn is disabled on Vercel serverless; workspace preview requires a local runner.")
+      }
       setPreviewFrameKey((key) => key + 1)
     } catch (err) {
       setPreviewRunning(false)
@@ -286,9 +377,17 @@ export default function StudioPage() {
               {previewRunning ? <Square className="h-3 w-3" strokeWidth={2} /> : <Play className="h-3 w-3 fill-current" strokeWidth={1.8} />}
               {previewRunning ? "Stop preview" : "Start preview"}
             </button>
-            <button onClick={handleSave} className="btn-primary btn-sm" disabled={!projectId || !selectedFile}>
+            <button onClick={handleSave} className="btn-secondary btn-sm" disabled={!projectId || !selectedFile}>
               <Save className="h-3.5 w-3.5" strokeWidth={1.8} />
               {saveSuccess ? "Saved" : "Save changes"}
+            </button>
+            <button
+              onClick={() => setAgentModalOpen(true)}
+              className="btn-primary btn-sm"
+              disabled={!projectId}
+            >
+              <Sparkles className="h-3.5 w-3.5" strokeWidth={1.8} />
+              Save &amp; Run Agent
             </button>
           </div>
         }
@@ -299,8 +398,13 @@ export default function StudioPage() {
         items={[
           { label: "Projects", value: String(projects.length), meta: activeProject?.name || "No project selected" },
           { label: "Workspace files", value: filesLoading ? "—" : String(fileList.length), meta: selectedFile || "No file selected" },
-          { label: "Preview", value: previewRunning ? "Live" : "Stopped", meta: previewUrl || "Sandbox not running", accent: previewRunning },
-          { label: "DevTools", value: showDevTools ? "Open" : "Hidden", meta: "Local sample session" },
+          {
+            label: "Preview",
+            value: previewRunning ? "Live" : previewSimulated ? "Simulated" : "Stopped",
+            meta: previewSimulated ? "Local spawn disabled on serverless" : previewUrl || "Sanitized local process",
+            accent: previewRunning,
+          },
+          { label: "DevTools", value: showDevTools ? "Open" : "Hidden", meta: "Live file & network telemetry" },
         ]}
       />
 
@@ -409,6 +513,26 @@ export default function StudioPage() {
                   <span className="font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">Explorer</span>
                   <span className="font-mono text-[10px] tabular-nums text-ink-3">{String(fileList.length).padStart(2, "0")}</span>
                 </div>
+                <form onSubmit={handleCreateFile} className="flex gap-1 border-b border-line px-2 py-2">
+                  <input
+                    type="text"
+                    value={newFileName}
+                    onChange={(e) => setNewFileName(e.target.value)}
+                    placeholder="src/new-file.ts"
+                    aria-label="New file path"
+                    className="field field-sm flex-1 font-mono text-[10.5px]"
+                    disabled={!projectId}
+                  />
+                  <button
+                    type="submit"
+                    disabled={creatingFile || !newFileName.trim() || !projectId}
+                    className="icon-btn shrink-0"
+                    title="Create file"
+                    aria-label="Create file"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                </form>
                 <div className="flex-1 overflow-y-auto py-1">
                   {filesLoading && (
                     <div className="space-y-2 px-3 py-3">
@@ -429,25 +553,39 @@ export default function StudioPage() {
                     const name = parts.pop()
                     const folder = parts.join("/")
                     return (
-                      <button
+                      <div
                         key={file}
-                        onClick={() => {
-                          setSelectedFile(file)
-                          if (!isMdUp) setMobileTab("code")
-                        }}
-                        title={file}
                         className={cn(
-                          "relative flex min-h-[44px] w-full items-center gap-2 px-3 py-2 text-left transition-colors md:min-h-0",
+                          "group relative flex min-h-[44px] w-full items-center justify-between gap-1 px-3 py-2 transition-colors md:min-h-0",
                           isSelected ? "bg-surface-2/80 text-ink" : "text-ink-2 hover:bg-surface-2/50 hover:text-ink"
                         )}
                       >
-                        <span className={cn("absolute inset-y-1 left-0 w-[2px] rounded-full bg-accent transition-opacity", isSelected ? "opacity-100" : "opacity-0")} />
-                        <FileCode className={cn("h-3.5 w-3.5 shrink-0", isSelected ? "text-accent" : "text-ink-3")} strokeWidth={1.8} />
-                        <span className="min-w-0">
-                          <span className="block truncate font-mono text-[11px] md:text-[10.5px]">{name}</span>
-                          {folder && <span className="block truncate font-mono text-[9.5px] text-ink-3 md:text-[9px]">{folder}</span>}
-                        </span>
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedFile(file)
+                            if (!isMdUp) setMobileTab("code")
+                          }}
+                          title={file}
+                          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                        >
+                          <span className={cn("absolute inset-y-1 left-0 w-[2px] rounded-full bg-accent transition-opacity", isSelected ? "opacity-100" : "opacity-0")} />
+                          <FileCode className={cn("h-3.5 w-3.5 shrink-0", isSelected ? "text-accent" : "text-ink-3")} strokeWidth={1.8} />
+                          <span className="min-w-0">
+                            <span className="block truncate font-mono text-[11px] md:text-[10.5px]">{name}</span>
+                            {folder && <span className="block truncate font-mono text-[9.5px] text-ink-3 md:text-[9px]">{folder}</span>}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteFile(file)}
+                          className="icon-btn h-6 w-6 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 hover:text-danger"
+                          title={`Delete ${file}`}
+                          aria-label={`Delete ${file}`}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
                     )
                   })}
                 </div>
@@ -640,7 +778,7 @@ export default function StudioPage() {
                     </button>
                   ))}
                 </div>
-                <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[#77736c]">Sample session · sandbox PID 8192 · local UI data</span>
+                <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[#77736c]">Live workspace telemetry</span>
               </div>
 
               <div className="flex-1 space-y-1 overflow-y-auto p-3 font-mono text-[10.5px] leading-relaxed sm:px-4">
@@ -730,6 +868,52 @@ export default function StudioPage() {
           )}
         </div>
       </section>
+
+      {agentModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 backdrop-blur-[1px] animate-fade-in sm:p-4">
+          <div
+            ref={agentDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="studio-agent-title"
+            className="panel max-h-[90dvh] w-full max-w-md overflow-y-auto shadow-float"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">Studio Dispatch</p>
+                <h2 id="studio-agent-title" className="mt-1 font-display text-[16px] font-medium tracking-[-0.02em] text-ink">
+                  Save &amp; Run Agent
+                </h2>
+                <p className="mt-1 font-mono text-[10px] text-ink-3">{selectedFile || activeProject?.name}</p>
+              </div>
+              <button onClick={() => setAgentModalOpen(false)} className="icon-btn -mr-1 -mt-1" aria-label="Close">
+                <X className="h-4 w-4" strokeWidth={2} />
+              </button>
+            </div>
+            <form onSubmit={handleRunAgentOnFile} className="space-y-4 p-5">
+              <div>
+                <label className="label">Agent instruction</label>
+                <textarea
+                  required
+                  value={agentPrompt}
+                  onChange={(e) => setAgentPrompt(e.target.value)}
+                  placeholder="Describe what the agent should modify or add..."
+                  className="field min-h-[100px]"
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2 border-t border-line pt-3">
+                <button type="button" onClick={() => setAgentModalOpen(false)} className="btn-ghost">
+                  Cancel
+                </button>
+                <button type="submit" disabled={dispatchingAgent || !agentPrompt.trim()} className="btn-primary">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {dispatchingAgent ? "Dispatching…" : "Run agent"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

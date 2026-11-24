@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
 import { requireProjectAccess } from "@/lib/permissions"
+import { deleteBranch, mergeBranch } from "@/lib/project-workspace"
+import { publishExecutionComplete, publishExecutionEvent } from "@/lib/event-bus"
 import { approvalSchema, parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
@@ -24,6 +26,7 @@ export async function POST(
     const execution = await prisma.execution.findUnique({
       where: { id },
       include: {
+        project: { include: { sources: true } },
         artifacts: true,
         gitOperations: true,
       },
@@ -68,6 +71,25 @@ export async function POST(
     if (action === "reject") nextStatus = "cancelled"
     else if (action === "request_revision") nextStatus = "running"
 
+    const sourcePath = execution.project?.sources?.find((s) => s.sourcePath)?.sourcePath || null
+    let mergeResult: { merged: boolean; commitSha: string; output: string } | null = null
+
+    if (sourcePath && execution.targetBranch) {
+      if (action === "approve") {
+        try {
+          mergeResult = await mergeBranch(
+            sourcePath,
+            execution.targetBranch,
+            execution.project?.defaultBranch || "main"
+          )
+        } catch (err) {
+          logger.warn("Git merge during approval skipped", errorContext(err))
+        }
+      } else if (action === "reject") {
+        await deleteBranch(sourcePath, execution.targetBranch).catch(() => {})
+      }
+    }
+
     const updated = await prisma.execution.update({
       where: { id },
       data: {
@@ -79,44 +101,76 @@ export async function POST(
     const taskStatus = action === "approve" ? "completed" : action === "reject" ? "failed" : "pending"
     await prisma.executionTask.updateMany({
       where: { executionId: id },
-      data: { status: taskStatus },
+      data: { status: taskStatus, completedAt: taskStatus === "completed" ? new Date() : null },
     })
+
+    const gitStatus =
+      action === "approve"
+        ? mergeResult?.merged
+          ? "merged"
+          : "committed"
+        : action === "reject"
+          ? "reverted"
+          : "staged"
 
     await prisma.gitOperation.updateMany({
       where: { executionId: id },
       data: {
-        status:
-          action === "approve"
-            ? "committed"
-            : action === "reject"
-            ? "reverted"
-            : "staged",
+        status: gitStatus,
+        ...(mergeResult?.commitSha ? { commitSha: mergeResult.commitSha } : {}),
       },
     })
 
-    await prisma.agentEvent.create({
+    const lastEvent = await prisma.agentEvent.findFirst({
+      where: { executionId: id },
+      orderBy: { seq: "desc" },
+      select: { seq: true },
+    })
+    const nextSeq = (lastEvent?.seq ?? 0) + 1
+    const payload = {
+      action,
+      feedback: feedback || null,
+      reviewerId: user.id,
+      reviewerEmail: user.email,
+      commitSha: mergeResult?.commitSha || latestCommitSha,
+      merged: Boolean(mergeResult?.merged),
+      diffSha256,
+      timestamp: new Date().toISOString(),
+    }
+
+    const eventRecord = await prisma.agentEvent.create({
       data: {
         executionId: id,
+        seq: nextSeq,
         eventType: action === "approve" ? "approval_granted" : "approval_denied",
         level: action === "approve" ? "action" : "warning",
-        payloadJson: JSON.stringify({
-          action,
-          feedback: feedback || null,
-          reviewerId: user.id,
-          reviewerEmail: user.email,
-          commitSha: latestCommitSha,
-          diffSha256,
-          timestamp: new Date().toISOString(),
-        }),
+        payloadJson: JSON.stringify(payload),
       },
     })
+
+    publishExecutionEvent(id, {
+      id: eventRecord.id,
+      executionId: id,
+      taskId: null,
+      seq: nextSeq,
+      eventType: eventRecord.eventType,
+      level: eventRecord.level,
+      payload,
+      createdAt: eventRecord.createdAt.toISOString(),
+    })
+
+    if (nextStatus === "completed" || nextStatus === "cancelled") {
+      publishExecutionComplete(id, nextStatus)
+    }
 
     return NextResponse.json({
       data: {
         ...updated,
+        gitStatus,
+        merged: Boolean(mergeResult?.merged),
         approvalProvenance: {
           reviewerId: user.id,
-          commitSha: latestCommitSha,
+          commitSha: mergeResult?.commitSha || latestCommitSha,
           diffSha256,
         },
       },

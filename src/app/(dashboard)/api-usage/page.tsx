@@ -3,13 +3,14 @@
 /* eslint-disable react-hooks/set-state-in-effect -- session state is hydrated from the API on mount */
 
 import { useEffect, useState } from "react"
-import { Plus, RefreshCw } from "lucide-react"
+import { Plus, RefreshCw, X } from "lucide-react"
 import { ApiAccountsCards } from "@/components/api-usage/api-accounts-cards"
 import { ApiTokenChart } from "@/components/api-usage/api-token-chart"
 import { ApiRecordsTable } from "@/components/api-usage/api-records-table"
 import { AddApiRecordModal } from "@/components/api-usage/add-api-record-modal"
 import { PageHeader } from "@/components/ui/page-header"
 import { StatBand, StatBandSkeleton } from "@/components/ui/stat-band"
+import { useModalA11y } from "@/lib/use-modal-a11y"
 import { formatNumber } from "@/lib/utils"
 import type {
   ApiAccountData,
@@ -21,26 +22,47 @@ import type {
 export default function ApiUsagePage() {
   const [loading, setLoading] = useState(true)
   const [accounts, setAccounts] = useState<ApiAccountData[]>([])
+  const [providers, setProviders] = useState<Array<{ id: string; name: string; slug: string }>>([])
   const [records, setRecords] = useState<ApiUsageRecordData[]>([])
   const [summary, setSummary] = useState<ApiUsageSummaryData | null>(null)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
 
+  const [accountModalOpen, setAccountModalOpen] = useState(false)
+  const accountDialogRef = useModalA11y(accountModalOpen, () => setAccountModalOpen(false))
+  const [newProviderId, setNewProviderId] = useState("")
+  const [newAccountName, setNewAccountName] = useState("")
+  const [newKeyLastFour, setNewKeyLastFour] = useState("")
+  const [newBalance, setNewBalance] = useState("50")
+  const [newCurrency, setNewCurrency] = useState("USD")
+  const [newRateLimit, setNewRateLimit] = useState("")
+  const [creatingAccount, setCreatingAccount] = useState(false)
+  const [accountError, setAccountError] = useState<string | null>(null)
+
   const fetchData = async () => {
     try {
       setLoading(true)
-      const [accRes, recRes, sumRes] = await Promise.all([
+      const [accRes, recRes, sumRes, provRes] = await Promise.all([
         fetch("/api/api-accounts"),
         fetch("/api/api-usage?limit=100"),
         fetch("/api/api-usage/summary"),
+        fetch("/api/providers"),
       ])
 
-      const [accJson, recJson, sumJson] = await Promise.all([
+      const [accJson, recJson, sumJson, provJson] = await Promise.all([
         accRes.json(),
         recRes.json(),
         sumRes.json(),
+        provRes.json().catch(() => ({ data: [] })),
       ])
+
+      if (Array.isArray(provJson?.data)) {
+        setProviders(provJson.data)
+        if (provJson.data.length > 0) {
+          setNewProviderId((cur) => cur || provJson.data[0].id)
+        }
+      }
 
       if (accJson.data) {
         const mappedAcc: ApiAccountData[] = accJson.data.map((a: RawApiAccount) => ({
@@ -79,6 +101,51 @@ export default function ApiUsagePage() {
     fetchData()
   }, [])
 
+  const handleCreateAccount = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newProviderId) return
+    setCreatingAccount(true)
+    setAccountError(null)
+    try {
+      const res = await fetch("/api/api-accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          providerId: newProviderId,
+          accountName: newAccountName.trim() || null,
+          apiKeyLastFour: newKeyLastFour.trim() || null,
+          prepaidBalance: Number(newBalance) || 0,
+          currency: newCurrency,
+          rateLimit: newRateLimit ? Number.parseInt(newRateLimit, 10) : null,
+          integrationStatus: "manual",
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || "Failed to create API account")
+      setAccountModalOpen(false)
+      setNewAccountName("")
+      setNewKeyLastFour("")
+      setNewBalance("50")
+      setNewRateLimit("")
+      await fetchData()
+    } catch (err) {
+      setAccountError(err instanceof Error ? err.message : "Failed to create API account")
+    } finally {
+      setCreatingAccount(false)
+    }
+  }
+
+  const handleDeleteAccount = async (accountId: string) => {
+    try {
+      const res = await fetch(`/api/api-accounts/${encodeURIComponent(accountId)}`, {
+        method: "DELETE",
+      })
+      if (res.ok) await fetchData()
+    } catch (err) {
+      console.error("Failed to delete API account:", err)
+    }
+  }
+
   const metrics = summary
     ? [
         {
@@ -89,7 +156,7 @@ export default function ApiUsagePage() {
         {
           label: "API spend",
           value: `$${summary.totalCost.toFixed(2)}`,
-          meta: `~₹${(summary.totalCost * 84.5).toFixed(0)} at current rates`,
+          meta: `Recorded across API usage logs`,
         },
         {
           label: "Requests",
@@ -111,22 +178,33 @@ export default function ApiUsagePage() {
         title="Usage"
         description="Token throughput, prepaid credit reserves, and per-model unit economics across your developer API accounts."
         action={
-          <>
+          <div className="flex flex-wrap items-center gap-2">
             <button onClick={fetchData} disabled={loading} className="btn-secondary btn-sm">
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} strokeWidth={1.8} />
               Refresh
             </button>
             <button
               onClick={() => {
+                setAccountError(null)
+                setAccountModalOpen(true)
+              }}
+              className="btn-secondary btn-sm"
+            >
+              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+              Add API account
+            </button>
+            <button
+              onClick={() => {
                 setSelectedAccountId(null)
                 setModalOpen(true)
               }}
+              disabled={accounts.length === 0}
               className="btn-primary btn-sm"
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={2.2} />
               Log usage
             </button>
-          </>
+          </div>
         }
       />
 
@@ -158,6 +236,8 @@ export default function ApiUsagePage() {
             setSelectedAccountId(id)
             setModalOpen(true)
           }}
+          onCreateAccount={() => setAccountModalOpen(true)}
+          onDeleteAccount={handleDeleteAccount}
         />
       )}
 
@@ -195,6 +275,123 @@ export default function ApiUsagePage() {
         }}
         onSuccess={fetchData}
       />
+
+      {accountModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 backdrop-blur-[1px] animate-fade-in sm:p-4">
+          <div
+            ref={accountDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="add-api-account-title"
+            className="panel max-h-[90dvh] w-full max-w-md overflow-y-auto shadow-float"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">Developer billing</p>
+                <h2 id="add-api-account-title" className="mt-1 font-display text-[16px] font-medium tracking-[-0.02em] text-ink">
+                  Add API account
+                </h2>
+              </div>
+              <button onClick={() => setAccountModalOpen(false)} className="icon-btn -mr-1 -mt-1" aria-label="Close">
+                <X className="h-4 w-4" strokeWidth={2} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateAccount}>
+              <div className="space-y-4 px-5 py-4">
+                {accountError && (
+                  <div className="border border-danger/25 bg-danger-soft px-3 py-2 text-[12px] text-danger">
+                    {accountError}
+                  </div>
+                )}
+
+                <div>
+                  <label className="label">Provider</label>
+                  <select
+                    value={newProviderId}
+                    onChange={(e) => setNewProviderId(e.target.value)}
+                    className="select"
+                    required
+                  >
+                    {providers.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="label">Account label</label>
+                  <input
+                    type="text"
+                    value={newAccountName}
+                    onChange={(e) => setNewAccountName(e.target.value)}
+                    placeholder="e.g. Production OpenAI Org"
+                    className="field"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Prepaid balance</label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={newBalance}
+                      onChange={(e) => setNewBalance(e.target.value)}
+                      className="field tnum"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Currency</label>
+                    <select value={newCurrency} onChange={(e) => setNewCurrency(e.target.value)} className="select">
+                      <option value="USD">USD</option>
+                      <option value="INR">INR</option>
+                      <option value="EUR">EUR</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Key last 4 (optional)</label>
+                    <input
+                      type="text"
+                      maxLength={8}
+                      value={newKeyLastFour}
+                      onChange={(e) => setNewKeyLastFour(e.target.value)}
+                      placeholder="4a9f"
+                      className="field font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Rate limit (RPM)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={newRateLimit}
+                      onChange={(e) => setNewRateLimit(e.target.value)}
+                      placeholder="5000"
+                      className="field tnum"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-3.5">
+                <button type="button" onClick={() => setAccountModalOpen(false)} className="btn-ghost">
+                  Cancel
+                </button>
+                <button type="submit" disabled={creatingAccount || !newProviderId} className="btn-primary">
+                  {creatingAccount ? "Creating…" : "Create account"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

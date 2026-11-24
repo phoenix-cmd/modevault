@@ -2,6 +2,7 @@ import crypto from "node:crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { emitNotification } from "@/lib/notifications"
 import { requireProjectAccess } from "@/lib/permissions"
 import { logger, errorContext } from "@/lib/logger"
 
@@ -137,6 +138,16 @@ export async function GET(
     const diffText = diffArtifact?.content || ""
     const scan = scanExecutionDiffServerSide(diffText, diffArtifact?.path || "workspace")
     const commitSha = execution.gitOperations[0]?.commitSha || null
+
+    if (scan.findings.some((f) => f.severity === "critical")) {
+      await emitNotification(user.id, {
+        type: "sync_error",
+        title: `Critical diff finding on ${execution.title}`,
+        message: `${scan.findings.length} security finding(s) detected in execution diff (${execution.targetBranch}). Review before merging.`,
+        severity: "critical",
+        actionUrl: "/verify",
+      })
+    }
 
     return NextResponse.json({
       data: {

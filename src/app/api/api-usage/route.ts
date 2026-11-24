@@ -3,6 +3,7 @@ import { z } from "zod"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { emitNotification } from "@/lib/notifications"
 import { parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
@@ -82,9 +83,9 @@ export async function POST(request: NextRequest) {
       dataSource,
     } = parsed.data
 
-    // Enforce tenant/user ownership of target ApiAccount
     const account = await prisma.apiAccount.findFirst({
       where: { id: apiAccountId, userId: user.id },
+      include: { provider: true },
     })
     if (!account) {
       return NextResponse.json(
@@ -113,13 +114,23 @@ export async function POST(request: NextRequest) {
     })
 
     if (safeCost > 0) {
-      await prisma.apiAccount.update({
+      const updatedAccount = await prisma.apiAccount.update({
         where: { id: account.id },
         data: {
           totalSpent: { increment: safeCost },
           prepaidBalance: { decrement: safeCost },
         },
       })
+
+      if ((updatedAccount.prepaidBalance ?? 0) < 5) {
+        await emitNotification(user.id, {
+          type: "credit_low",
+          title: `Low API credits: ${account.accountName || account.provider.name}`,
+          message: `Prepaid balance dropped to ${account.currency} ${(updatedAccount.prepaidBalance ?? 0).toFixed(2)}. Top up to avoid API interruptions.`,
+          severity: (updatedAccount.prepaidBalance ?? 0) <= 0 ? "critical" : "warning",
+          actionUrl: "/api-usage",
+        })
+      }
     }
 
     return NextResponse.json({ data: record }, { status: 201 })

@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
-import { encryptSecret, keyPreview } from "@/lib/crypto"
+import { decryptSecret, encryptSecret, keyPreview } from "@/lib/crypto"
+import { verifyAndSyncProvider } from "@/lib/provider-sync"
 import { parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
 const integrationSchema = z.object({
   providerSlug: z.string().trim().min(1).max(80),
+  action: z.enum(["save", "sync"]).optional(),
   apiKey: z.string().trim().max(500).optional(),
   status: z.enum(["connected", "manual", "not_connected"]).optional(),
   notes: z.string().max(2000).optional(),
@@ -55,14 +57,38 @@ function safeParse(value: string): unknown {
 export async function GET() {
   try {
     const user = await requireAuthenticatedUser()
-    const records = await prisma.integrationCredential.findMany({
-      where: {
-        userId: user.id,
-        NOT: { providerSlug: "__user_preferences__" },
-      },
-      orderBy: { providerSlug: "asc" },
+    const [records, syncLogs] = await Promise.all([
+      prisma.integrationCredential.findMany({
+        where: {
+          userId: user.id,
+          NOT: { providerSlug: "__user_preferences__" },
+        },
+        orderBy: { providerSlug: "asc" },
+      }),
+      prisma.syncLog.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: "desc" },
+        take: 30,
+      }),
+    ])
+
+    const latestLogByProvider = new Map<string, { status: string; message: string | null; duration: number | null }>()
+    for (const log of syncLogs) {
+      if (!latestLogByProvider.has(log.provider)) {
+        latestLogByProvider.set(log.provider, {
+          status: log.status,
+          message: log.message,
+          duration: log.duration,
+        })
+      }
+    }
+
+    return NextResponse.json({
+      data: records.map((rec) => ({
+        ...serialize(rec),
+        lastSyncLog: latestLogByProvider.get(rec.providerSlug) || null,
+      })),
     })
-    return NextResponse.json({ data: records.map(serialize) })
   } catch (err) {
     logger.error("Failed to load integrations", errorContext(err))
     return authErrorResponse(err, "Failed to load integrations")
@@ -74,34 +100,58 @@ export async function POST(req: NextRequest) {
     const user = await requireAuthenticatedUser()
     const parsed = await parseJson(req, integrationSchema)
     if ("response" in parsed) return parsed.response
-    const { providerSlug, apiKey, status, notes, features } = parsed.data
+    const { providerSlug, action, apiKey, status, notes, features } = parsed.data
 
     const existing = await prisma.integrationCredential.findUnique({
       where: { userId_providerSlug: { userId: user.id, providerSlug } },
     })
 
+    let plaintextKey = apiKey || ""
+    if (!plaintextKey && existing?.encryptedKey) {
+      try {
+        plaintextKey = decryptSecret(existing.encryptedKey)
+      } catch {
+        plaintextKey = ""
+      }
+    }
+
+    if (action === "sync" && !plaintextKey) {
+      return NextResponse.json(
+        { error: "Connect and save an API key before running live verification." },
+        { status: 400 }
+      )
+    }
+
     const encryptedKey = apiKey ? encryptSecret(apiKey) : existing?.encryptedKey || null
     const preview = apiKey ? keyPreview(apiKey) : existing?.keyPreview || null
+
+    const shouldVerify = Boolean(plaintextKey) && (action === "sync" || Boolean(apiKey))
+    const verification = shouldVerify
+      ? await verifyAndSyncProvider(providerSlug, plaintextKey)
+      : null
+
+    const nextStatus = status || (encryptedKey ? "connected" : existing?.status || "manual")
+    const syncTimestamp = verification || apiKey ? new Date() : existing?.lastSyncAt || null
 
     const record = await prisma.integrationCredential.upsert({
       where: { userId_providerSlug: { userId: user.id, providerSlug } },
       update: {
-        status: status || (apiKey ? "connected" : existing?.status || "manual"),
+        status: nextStatus,
         notes: notes ?? existing?.notes ?? null,
         featuresJson: features ? JSON.stringify(features) : existing?.featuresJson || null,
         encryptedKey,
         keyPreview: preview,
-        lastSyncAt: apiKey ? new Date() : existing?.lastSyncAt || null,
+        lastSyncAt: syncTimestamp,
       },
       create: {
         userId: user.id,
         providerSlug,
-        status: status || (apiKey ? "connected" : "manual"),
+        status: nextStatus,
         notes: notes || null,
         featuresJson: features ? JSON.stringify(features) : null,
         encryptedKey,
         keyPreview: preview,
-        lastSyncAt: apiKey ? new Date() : null,
+        lastSyncAt: syncTimestamp,
       },
     })
 
@@ -109,16 +159,71 @@ export async function POST(req: NextRequest) {
       data: {
         userId: user.id,
         provider: providerSlug,
-        status: "success",
-        message: apiKey
-          ? `Encrypted key stored (${preview || "••••"}) and quota sync initialized`
+        status: verification ? verification.status : "success",
+        message: verification
+          ? verification.message
           : `Integration mode updated to ${record.status}`,
-        duration: 140,
+        duration: verification?.durationMs ?? 12,
       },
     })
 
-    logger.info("Integration credential saved", { providerSlug, userId: user.id })
-    return NextResponse.json({ data: serialize(record) }, { status: 201 })
+    // Keep linked ApiAccount in sync when provider exists in Provider table
+    if (verification && plaintextKey) {
+      const providerRow = await prisma.provider.findUnique({ where: { slug: providerSlug } })
+      if (providerRow) {
+        const existingAccount = await prisma.apiAccount.findFirst({
+          where: { userId: user.id, providerId: providerRow.id },
+        })
+        const lastFour = plaintextKey.slice(-4)
+        if (existingAccount) {
+          await prisma.apiAccount.update({
+            where: { id: existingAccount.id },
+            data: {
+              apiKeyLastFour: lastFour,
+              integrationStatus: verification.ok ? "connected" : "error",
+              lastSyncAt: new Date(),
+              lastSyncStatus: verification.status,
+              lastSyncError: verification.ok ? null : verification.message,
+              ...(verification.creditsRemaining !== undefined && {
+                prepaidBalance: verification.creditsRemaining,
+              }),
+              ...(verification.creditsUsed !== undefined && {
+                totalSpent: verification.creditsUsed,
+              }),
+            },
+          })
+        } else if (verification.ok) {
+          await prisma.apiAccount.create({
+            data: {
+              userId: user.id,
+              providerId: providerRow.id,
+              accountName: verification.accountLabel || `${providerRow.name} API`,
+              apiKeyLastFour: lastFour,
+              prepaidBalance: verification.creditsRemaining ?? 0,
+              totalSpent: verification.creditsUsed ?? 0,
+              currency: "USD",
+              integrationStatus: "connected",
+              lastSyncAt: new Date(),
+              lastSyncStatus: "success",
+            },
+          })
+        }
+      }
+    }
+
+    logger.info("Integration credential saved", { providerSlug, userId: user.id, verified: verification?.ok })
+    return NextResponse.json(
+      {
+        data: {
+          ...serialize(record),
+          lastSyncLog: verification
+            ? { status: verification.status, message: verification.message, duration: verification.durationMs }
+            : null,
+        },
+        verification,
+      },
+      { status: 201 }
+    )
   } catch (err) {
     logger.error("Failed to save integration", errorContext(err))
     return authErrorResponse(err, "Failed to save integration")

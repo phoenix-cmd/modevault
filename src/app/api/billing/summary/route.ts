@@ -1,21 +1,25 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { convertCurrency, getExchangeRatesMap } from "@/lib/currency"
 
 export async function GET(_request: NextRequest) {
   try {
     const user = await requireAuthenticatedUser()
-    const records = await prisma.billingRecord.findMany({
-      where: { userId: user.id },
-      include: {
-        subscription: {
-          include: {
-            provider: true,
+    const [rates, records] = await Promise.all([
+      getExchangeRatesMap(),
+      prisma.billingRecord.findMany({
+        where: { userId: user.id },
+        include: {
+          subscription: {
+            include: {
+              provider: true,
+            },
           },
         },
-      },
-      orderBy: { billingDate: "asc" },
-    })
+        orderBy: { billingDate: "asc" },
+      }),
+    ])
 
     const now = new Date()
     const currentMonth = now.getMonth()
@@ -29,13 +33,13 @@ export async function GET(_request: NextRequest) {
 
     for (const r of records) {
       const bDate = new Date(r.billingDate)
-      const amount = r.amount
+      const usdAmount = convertCurrency(r.amount, r.currency, "USD", rates)
 
-      totalSpentAllTime += amount
+      totalSpentAllTime += usdAmount
       if (bDate.getFullYear() === currentYear) {
-        totalSpentCurrentYear += amount
+        totalSpentCurrentYear += usdAmount
         if (bDate.getMonth() === currentMonth) {
-          totalSpentCurrentMonth += amount
+          totalSpentCurrentMonth += usdAmount
         }
       }
 
@@ -50,20 +54,21 @@ export async function GET(_request: NextRequest) {
       }
 
       if (r.type === "subscription_payment") {
-        monthlyMap[monthKey].subscription += amount
+        monthlyMap[monthKey].subscription += usdAmount
       } else {
-        monthlyMap[monthKey].api += amount
+        monthlyMap[monthKey].api += usdAmount
       }
-      monthlyMap[monthKey].total += amount
+      monthlyMap[monthKey].total += usdAmount
     }
 
     const monthlyHistory = Object.values(monthlyMap)
 
     return NextResponse.json({
       data: {
-        totalSpentCurrentMonth,
-        totalSpentCurrentYear,
-        totalSpentAllTime,
+        totalSpentCurrentMonth: parseFloat(totalSpentCurrentMonth.toFixed(2)),
+        totalSpentCurrentYear: parseFloat(totalSpentCurrentYear.toFixed(2)),
+        totalSpentAllTime: parseFloat(totalSpentAllTime.toFixed(2)),
+        baseCurrency: "USD",
         monthlyHistory,
       },
     })

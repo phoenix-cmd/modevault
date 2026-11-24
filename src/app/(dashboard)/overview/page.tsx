@@ -31,6 +31,7 @@ interface DashboardApiData {
   totalApiBalance: number
   upcomingRenewals: number
   spendingByMonth?: Record<string, number>
+  spendingByMonthDetailed?: SpendingDataPoint[]
   providerSpending?: Record<string, number>
   recentActivity?: Array<{
     id: string
@@ -118,15 +119,17 @@ export default function OverviewPage() {
             currency: "INR",
           })
 
-          if (d.spendingByMonth) {
+          if (Array.isArray(d.spendingByMonthDetailed) && d.spendingByMonthDetailed.length > 0) {
+            setSpendingHistory(d.spendingByMonthDetailed)
+          } else if (d.spendingByMonth) {
             const points: SpendingDataPoint[] = Object.entries(d.spendingByMonth).map(
               ([key, amount]) => {
                 const date = new Date(`${key}-01`)
                 const month = date.toLocaleString("default", { month: "short" })
                 return {
                   month,
-                  subscriptions: Math.round(Number(amount) * 0.7),
-                  api: Math.round(Number(amount) * 0.3),
+                  subscriptions: Math.round(Number(amount)),
+                  api: 0,
                   total: Math.round(Number(amount)),
                 }
               }
