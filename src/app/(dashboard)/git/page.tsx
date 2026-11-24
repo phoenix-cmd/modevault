@@ -48,6 +48,8 @@ export default function GitControlPage() {
   const [newBranchName, setNewBranchName] = useState("")
 
   const [conflicts, setConflicts] = useState<Array<{ path: string; content: string }>>([])
+  const [editingConflictPath, setEditingConflictPath] = useState<string | null>(null)
+  const [editingConflictContent, setEditingConflictContent] = useState<string>("")
   const [hasGithubToken, setHasGithubToken] = useState(false)
   const [hasGithubRemote, setHasGithubRemote] = useState(false)
   const [pendingRollback, setPendingRollback] = useState<string | null>(null)
@@ -259,12 +261,103 @@ export default function GitControlPage() {
     }
   }
 
+  const handleFileAction = async (
+    action: "stage" | "unstage" | "discard",
+    files?: string[]
+  ) => {
+    if (!projectId) return
+    setSyncError(null)
+    try {
+      const res = await fetch("/api/git", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, projectId, files }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setSyncError(json.error || `Failed to ${action} files`)
+        return
+      }
+      setActionSuccess(
+        files && files.length === 1
+          ? `${action === "stage" ? "Staged" : action === "unstage" ? "Unstaged" : "Discarded"} ${files[0]}`
+          : `${action === "stage" ? "Staged" : action === "unstage" ? "Unstaged" : "Discarded"} worktree changes`
+      )
+      setTimeout(() => setActionSuccess(null), 3500)
+      await loadGitData(projectId)
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : `Failed to ${action}`)
+    }
+  }
+
+  const handleResolveConflict = async (
+    file: string,
+    strategy: "ours" | "theirs" | "manual",
+    content?: string
+  ) => {
+    if (!projectId) return
+    setSyncError(null)
+    try {
+      const res = await fetch("/api/git", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "resolve_conflict",
+          projectId,
+          file,
+          strategy,
+          content,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setSyncError(json.error || `Failed to resolve conflict in ${file}`)
+        return
+      }
+      setEditingConflictPath(null)
+      setEditingConflictContent("")
+      setActionSuccess(json.data?.message || `Resolved conflict in ${file}`)
+      setTimeout(() => setActionSuccess(null), 4000)
+      await loadGitData(projectId)
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : "Failed to resolve conflict")
+    }
+  }
+
+  const handleMergePr = async (pr: { id?: string; branch: string; targetBranch?: string }) => {
+    if (!projectId) return
+    setSyncError(null)
+    try {
+      const res = await fetch("/api/git", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "merge",
+          projectId,
+          branchName: pr.branch,
+          targetBranch: pr.targetBranch || "main",
+          operationId: pr.id,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setSyncError(json.error || `Failed to merge ${pr.branch}`)
+        return
+      }
+      setActionSuccess(json.data?.message || `Merged ${pr.branch}`)
+      setTimeout(() => setActionSuccess(null), 4000)
+      await loadGitData(projectId)
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : "Failed to merge branch")
+    }
+  }
+
   const tabs = [
     { id: "changes" as const, label: "Changes", count: changes.length },
     { id: "commits" as const, label: "Commits", count: commits.length },
     { id: "pulls" as const, label: "Pull requests", count: pulls.length },
     { id: "branches" as const, label: "Branches", count: branches.length },
-    { id: "conflicts" as const, label: "Conflicts" },
+    { id: "conflicts" as const, label: "Conflicts", count: conflicts.length },
   ]
 
   const activeProject = projects.find((p) => p.id === projectId)
@@ -450,34 +543,32 @@ export default function GitControlPage() {
                   <h3 className="font-display text-[15px] font-medium tracking-[-0.02em] text-ink">Working tree changes</h3>
                   <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">Stage or unstage files before committing the selected worktree.</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
-                    onClick={async () => {
-                      await fetch("/api/git", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ action: "stage", projectId }),
-                      })
-                      loadGitData(projectId)
-                    }}
+                    onClick={() => handleFileAction("stage")}
                     className="btn-secondary btn-sm"
-                    disabled={!projectId}
+                    disabled={!projectId || changes.length === 0}
                   >
                     Stage all
                   </button>
                   <button
-                    onClick={async () => {
-                      await fetch("/api/git", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ action: "unstage", projectId }),
-                      })
-                      loadGitData(projectId)
-                    }}
+                    onClick={() => handleFileAction("unstage")}
                     className="btn-ghost btn-sm"
-                    disabled={!projectId}
+                    disabled={!projectId || changes.length === 0}
                   >
                     Unstage all
+                  </button>
+                  <button
+                    onClick={() =>
+                      handleFileAction(
+                        "discard",
+                        changes.map((c: { path: string }) => c.path)
+                      )
+                    }
+                    className="btn-ghost btn-sm text-danger hover:text-danger"
+                    disabled={!projectId || changes.length === 0}
+                  >
+                    Discard all
                   </button>
                 </div>
               </div>
@@ -491,9 +582,44 @@ export default function GitControlPage() {
               ) : (
                 <ul className="border-t border-line">
                   {changes.map((change: any) => (
-                    <li key={change.path} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-line py-2.5 last:border-b-0">
-                      <span className="truncate font-mono text-[11px] text-ink">{change.path}</span>
-                      <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3">{change.code}</span>
+                    <li key={change.path} className="flex flex-wrap items-center justify-between gap-3 border-b border-line py-2.5 last:border-b-0">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <span
+                          className={cn(
+                            "badge font-mono text-[9.5px]",
+                            change.staged ? "bg-success-soft text-success" : "bg-surface-2 text-ink-3"
+                          )}
+                        >
+                          {change.code?.trim() || "M"} · {change.staged ? "Staged" : "Unstaged"}
+                        </span>
+                        <span className="truncate font-mono text-[11px] text-ink">{change.path}</span>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {change.staged ? (
+                          <button
+                            type="button"
+                            onClick={() => handleFileAction("unstage", [change.path])}
+                            className="btn-ghost btn-sm"
+                          >
+                            Unstage
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleFileAction("stage", [change.path])}
+                            className="btn-secondary btn-sm"
+                          >
+                            Stage
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleFileAction("discard", [change.path])}
+                          className="btn-ghost btn-sm text-danger hover:text-danger"
+                        >
+                          Discard
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -553,7 +679,12 @@ export default function GitControlPage() {
                     <div className="min-w-0">
                       <p className="text-[13px] font-medium leading-snug text-ink">{c.message}</p>
                       <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-3">
-                        {c.author} · {c.branch} · {new Date(c.timestamp).toLocaleString()}
+                        {c.author} · {c.branch} · {new Date(c.timestamp).toLocaleString()} ·{" "}
+                        <span className="text-ink-2">
+                          {c.filesChanged ?? 0} file(s)
+                        </span>{" "}
+                        (<span className="text-success">+{c.additions ?? 0}</span> /{" "}
+                        <span className="text-danger">-{c.deletions ?? 0}</span>)
                       </p>
                     </div>
                   </div>
@@ -608,13 +739,22 @@ export default function GitControlPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="badge bg-surface-2 text-ink-3">
-                      {pr.isRemote ? "GitHub Remote" : "Local Draft"}
+                      {pr.isRemote ? "GitHub Remote" : "Local Branch PR"}
                     </span>
                     <span className={cn("badge shrink-0", pr.status === "merged" ? "bg-success-soft text-success" : "bg-accent-soft text-accent")}>
                       {String(pr.status || "").replaceAll("_", " ")}
                     </span>
+                    {pr.status !== "merged" && (
+                      <button
+                        type="button"
+                        onClick={() => handleMergePr(pr)}
+                        className="btn-secondary btn-sm"
+                      >
+                        Merge into {pr.targetBranch || "main"}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))
@@ -682,14 +822,79 @@ export default function GitControlPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {conflicts.map((conflict) => (
-                  <div key={conflict.path} className="border border-warning/30 bg-warning-soft/20 p-4">
-                    <p className="font-mono text-[11px] font-medium text-ink">{conflict.path}</p>
-                    <pre className="mt-2 max-h-64 overflow-auto border border-line bg-canvas p-3 font-mono text-[10.5px] leading-relaxed text-ink-2">
-                      {conflict.content}
-                    </pre>
-                  </div>
-                ))}
+                {conflicts.map((conflict) => {
+                  const isEditing = editingConflictPath === conflict.path
+                  return (
+                    <div key={conflict.path} className="border border-warning/30 bg-warning-soft/20 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-mono text-[11px] font-medium text-ink">{conflict.path}</p>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleResolveConflict(conflict.path, "ours")}
+                            className="btn-secondary btn-sm"
+                          >
+                            Accept current (ours)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleResolveConflict(conflict.path, "theirs")}
+                            className="btn-secondary btn-sm"
+                          >
+                            Accept incoming (theirs)
+                          </button>
+                          {isEditing ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleResolveConflict(conflict.path, "manual", editingConflictContent)
+                                }
+                                className="btn-primary btn-sm"
+                              >
+                                Save &amp; mark resolved
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingConflictPath(null)
+                                  setEditingConflictContent("")
+                                }}
+                                className="btn-ghost btn-sm"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingConflictPath(conflict.path)
+                                setEditingConflictContent(conflict.content)
+                              }}
+                              className="btn-ghost btn-sm"
+                            >
+                              Edit manually
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {isEditing ? (
+                        <textarea
+                          value={editingConflictContent}
+                          onChange={(e) => setEditingConflictContent(e.target.value)}
+                          rows={10}
+                          aria-label={`Resolve conflict in ${conflict.path}`}
+                          className="field mt-2 w-full font-mono text-[11px] leading-relaxed"
+                        />
+                      ) : (
+                        <pre className="mt-2 max-h-64 overflow-auto border border-line bg-canvas p-3 font-mono text-[10.5px] leading-relaxed text-ink-2">
+                          {conflict.content}
+                        </pre>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>

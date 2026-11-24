@@ -173,14 +173,21 @@ export const gitActionSchema = z.object({
     "push",
     "pull",
     "fetch",
+    "resolve_conflict",
+    "merge",
   ]),
   projectId: idSchema.optional(),
   branchName: gitBranchNameSchema.optional(),
+  targetBranch: gitBranchNameSchema.optional(),
+  operationId: z.string().max(128).optional(),
   commitMessage: z.string().max(2000).optional(),
   commitSha: z.string().max(120).optional(),
   prTitle: z.string().max(300).optional(),
   prBody: z.string().max(10000).optional(),
   files: z.array(z.string().max(1024)).max(500).optional(),
+  file: z.string().max(1024).optional(),
+  strategy: z.enum(["ours", "theirs", "manual"]).optional(),
+  content: z.string().max(500000).optional(),
 })
 
 export const loginSchema = z.object({

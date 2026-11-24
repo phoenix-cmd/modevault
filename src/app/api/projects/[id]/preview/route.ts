@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
 import { requireProjectAccess } from "@/lib/permissions"
-import { startPreview, stopPreview, getPreview } from "@/lib/preview-manager"
+import { startPreview, stopPreview, getPreviewWithDbSync } from "@/lib/preview-manager"
 
 export async function GET(
   _req: NextRequest,
@@ -11,7 +11,7 @@ export async function GET(
     const user = await requireAuthenticatedUser()
     const { id } = await params
     await requireProjectAccess(id, user.id, "viewer")
-    return NextResponse.json({ data: getPreview(id) })
+    return NextResponse.json({ data: await getPreviewWithDbSync(id) })
   } catch (err: unknown) {
     return authErrorResponse(err, "Failed to load preview status")
   }

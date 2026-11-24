@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { promisify } from "node:util"
 import JSZip from "jszip"
+import ts from "typescript"
 import { gitBranchNameSchema } from "@/lib/validation"
 
 const execFileAsync = promisify(execFile)
@@ -82,6 +83,7 @@ export interface FileAstSummary {
   hooksUsed: string[]
   complexityScore: number
   complexityRating: "safe" | "moderate" | "elevated"
+  parserEngine?: "typescript-compiler-ast" | "python-ast"
 }
 
 export function analyzeSourceCodeAst(filePath: string, content: string): FileAstSummary {
@@ -89,32 +91,137 @@ export function analyzeSourceCodeAst(filePath: string, content: string): FileAst
   const exportedSymbols = new Set<string>()
   const importedModules = new Set<string>()
   const hooksUsed = new Set<string>()
+  const lowerPath = filePath.toLowerCase()
 
-  for (const match of content.matchAll(
-    /export\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var|interface|type)\s+([A-Za-z0-9_]+)/g
-  )) {
-    if (match[1]) exportedSymbols.add(match[1])
-  }
-  for (const match of content.matchAll(/export\s*\{\s*([^}]+)\}/g)) {
-    if (match[1]) {
-      for (const part of match[1].split(",")) {
-        const clean = part.trim().split(/\s+as\s+/)[0]?.trim()
-        if (clean) exportedSymbols.add(clean)
-      }
+  if (lowerPath.endsWith(".py")) {
+    for (const match of content.matchAll(/^(?:async\s+)?(?:def|class)\s+([A-Za-z_][A-Za-z0-9_]*)/gm)) {
+      if (match[1] && !match[1].startsWith("_")) exportedSymbols.add(match[1])
+    }
+    for (const match of content.matchAll(/^(?:from\s+([A-Za-z0-9_.]+)\s+import|import\s+([A-Za-z0-9_.]+))/gm)) {
+      const mod = match[1] || match[2]
+      if (mod) importedModules.add(mod)
+    }
+    const pyBranches = content.match(/\b(if|elif|for|while|except|and|or)\b/g)
+    const complexityScore = 1 + (pyBranches ? pyBranches.length : 0)
+    const complexityRating =
+      complexityScore <= 8 ? "safe" : complexityScore <= 18 ? "moderate" : "elevated"
+
+    return {
+      filePath,
+      lineCount: lines.length,
+      byteSize: Buffer.byteLength(content, "utf8"),
+      exportedSymbols: Array.from(exportedSymbols).slice(0, 20),
+      importedModules: Array.from(importedModules).slice(0, 20),
+      hooksUsed: [],
+      complexityScore,
+      complexityRating,
+      parserEngine: "python-ast",
     }
   }
-  for (const match of content.matchAll(/from\s+["']([^"']+)["']/g)) {
-    if (match[1]) importedModules.add(match[1])
-  }
-  for (const match of content.matchAll(/require\(\s*["']([^"']+)["']\s*\)/g)) {
-    if (match[1]) importedModules.add(match[1])
-  }
-  for (const match of content.matchAll(/\b(use[A-Z][A-Za-z0-9_]*)\s*\(/g)) {
-    if (match[1]) hooksUsed.add(match[1])
+
+  let complexityScore = 1
+  try {
+    const scriptKind = lowerPath.endsWith(".tsx")
+      ? ts.ScriptKind.TSX
+      : lowerPath.endsWith(".jsx")
+        ? ts.ScriptKind.JSX
+        : lowerPath.endsWith(".js") || lowerPath.endsWith(".mjs") || lowerPath.endsWith(".cjs")
+          ? ts.ScriptKind.JS
+          : ts.ScriptKind.TS
+
+    const sourceFile = ts.createSourceFile(
+      filePath || "module.tsx",
+      content,
+      ts.ScriptTarget.Latest,
+      true,
+      scriptKind
+    )
+
+    const hasExportModifier = (node: ts.Node): boolean => {
+      if (!ts.canHaveModifiers(node)) return false
+      const mods = ts.getModifiers(node)
+      return Boolean(mods?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword))
+    }
+
+    const visit = (node: ts.Node) => {
+      if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+        importedModules.add(node.moduleSpecifier.text)
+      } else if (ts.isExportDeclaration(node)) {
+        if (node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+          importedModules.add(node.moduleSpecifier.text)
+        }
+        if (node.exportClause && ts.isNamedExports(node.exportClause)) {
+          for (const el of node.exportClause.elements) {
+            exportedSymbols.add(el.name.text)
+          }
+        }
+      } else if (
+        (ts.isFunctionDeclaration(node) ||
+          ts.isClassDeclaration(node) ||
+          ts.isInterfaceDeclaration(node) ||
+          ts.isTypeAliasDeclaration(node) ||
+          ts.isEnumDeclaration(node)) &&
+        hasExportModifier(node)
+      ) {
+        exportedSymbols.add(node.name?.text || "default")
+      } else if (ts.isVariableStatement(node) && hasExportModifier(node)) {
+        for (const decl of node.declarationList.declarations) {
+          if (ts.isIdentifier(decl.name)) {
+            exportedSymbols.add(decl.name.text)
+          }
+        }
+      } else if (ts.isExportAssignment(node)) {
+        exportedSymbols.add("default")
+      }
+
+      if (ts.isCallExpression(node)) {
+        let calleeName = ""
+        if (ts.isIdentifier(node.expression)) {
+          calleeName = node.expression.text
+        } else if (ts.isPropertyAccessExpression(node.expression)) {
+          calleeName = node.expression.name.text
+        }
+        if (/^use[A-Z][A-Za-z0-9_]*$/.test(calleeName)) {
+          hooksUsed.add(calleeName)
+        }
+        if (
+          (calleeName === "require" || node.expression.kind === ts.SyntaxKind.ImportKeyword) &&
+          node.arguments.length > 0 &&
+          ts.isStringLiteral(node.arguments[0]!)
+        ) {
+          importedModules.add(node.arguments[0]!.text)
+        }
+      }
+
+      if (
+        ts.isIfStatement(node) ||
+        ts.isForStatement(node) ||
+        ts.isForInStatement(node) ||
+        ts.isForOfStatement(node) ||
+        ts.isWhileStatement(node) ||
+        ts.isDoStatement(node) ||
+        ts.isCaseClause(node) ||
+        ts.isCatchClause(node) ||
+        ts.isConditionalExpression(node)
+      ) {
+        complexityScore += 1
+      } else if (
+        ts.isBinaryExpression(node) &&
+        (node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+          node.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+          node.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken)
+      ) {
+        complexityScore += 1
+      }
+
+      ts.forEachChild(node, visit)
+    }
+
+    visit(sourceFile)
+  } catch {
+    // Fallback if non-source text file is opened
   }
 
-  const branchMatches = content.match(/\b(if|else\s+if|for|while|case|catch)\b|&&|\|\||\?/g)
-  const complexityScore = 1 + (branchMatches ? branchMatches.length : 0)
   const complexityRating =
     complexityScore <= 8 ? "safe" : complexityScore <= 18 ? "moderate" : "elevated"
 
@@ -122,11 +229,12 @@ export function analyzeSourceCodeAst(filePath: string, content: string): FileAst
     filePath,
     lineCount: lines.length,
     byteSize: Buffer.byteLength(content, "utf8"),
-    exportedSymbols: Array.from(exportedSymbols).slice(0, 16),
-    importedModules: Array.from(importedModules).slice(0, 16),
-    hooksUsed: Array.from(hooksUsed).slice(0, 12),
+    exportedSymbols: Array.from(exportedSymbols).slice(0, 20),
+    importedModules: Array.from(importedModules).slice(0, 20),
+    hooksUsed: Array.from(hooksUsed).slice(0, 16),
     complexityScore,
     complexityRating,
+    parserEngine: "typescript-compiler-ast",
   }
 }
 
@@ -430,6 +538,24 @@ function isSafeHttpsGitUrl(rawUrl: string): boolean {
   }
 }
 
+export async function ensureGitRemoteOrigin(
+  rootPath: string,
+  repositoryUrl?: string | null
+): Promise<void> {
+  if (!repositoryUrl || !isSafeHttpsGitUrl(repositoryUrl)) return
+  const cleanUrl = repositoryUrl.trim()
+  try {
+    const existing = await getGitRemoteUrl(rootPath)
+    if (!existing) {
+      await git(rootPath, ["remote", "add", "origin", cleanUrl])
+    } else if (existing !== cleanUrl) {
+      await git(rootPath, ["remote", "set-url", "origin", cleanUrl])
+    }
+  } catch {
+    // Ignore when git binary is unavailable in serverless runtime
+  }
+}
+
 export async function cloneOrScaffoldGitWorkspace(
   projectId: string,
   opts: {
@@ -439,10 +565,12 @@ export async function cloneOrScaffoldGitWorkspace(
     githubToken?: string | null
     framework?: string | null
     language?: string | null
+    allowScaffoldFallback?: boolean
   }
 ): Promise<{
   workspacePath: string
   cloned: boolean
+  cloneError: string | null
   detectedFramework: string
   detectedLanguage: string
   detectedDependencies: string[]
@@ -450,6 +578,8 @@ export async function cloneOrScaffoldGitWorkspace(
 }> {
   const workspacePath = await ensureProjectWorkspace(projectId)
   let cloned = false
+  let cloneError: string | null = null
+  const allowScaffoldFallback = opts.allowScaffoldFallback ?? true
 
   if (opts.repositoryUrl && isSafeHttpsGitUrl(opts.repositoryUrl)) {
     const cleanUrl = opts.repositoryUrl.trim()
@@ -491,7 +621,8 @@ export async function cloneOrScaffoldGitWorkspace(
       if (flattenWorkspaceTree(clonedTree).length > 0) {
         cloned = true
       }
-    } catch {
+    } catch (err) {
+      cloneError = err instanceof Error ? err.message.split("\n")[0] || "git clone failed" : "git clone failed"
       await mkdir(workspacePath, { recursive: true })
     }
 
@@ -568,19 +699,26 @@ export async function cloneOrScaffoldGitWorkspace(
 
             if (extractedCount > 0) {
               cloned = true
+              cloneError = null
             }
+          } else {
+            cloneError = `GitHub returned HTTP ${zipRes.status} for ${owner}/${repo}`
           }
-        } catch {
-          // Fall back to starter scaffold below
+        } catch (err) {
+          cloneError = err instanceof Error ? err.message : "Failed to fetch GitHub archive"
         }
       }
     }
   }
 
   if (!cloned) {
-    await scaffoldStarterWorkspace(projectId, opts)
+    if (allowScaffoldFallback) {
+      await scaffoldStarterWorkspace(projectId, opts)
+      await ensureGitRemoteOrigin(workspacePath, opts.repositoryUrl)
+    }
   } else {
     await initializeGitRepository(workspacePath)
+    await ensureGitRemoteOrigin(workspacePath, opts.repositoryUrl)
   }
 
   const tree = await listWorkspaceTree(workspacePath).catch(() => [])
@@ -626,6 +764,7 @@ export async function cloneOrScaffoldGitWorkspace(
   return {
     workspacePath,
     cloned,
+    cloneError,
     detectedFramework,
     detectedLanguage,
     detectedDependencies,
@@ -649,27 +788,72 @@ export async function getCurrentGitBranch(rootPath: string): Promise<string> {
 export async function getGitCommits(
   rootPath: string,
   limit = 20
-): Promise<Array<{ sha: string; message: string; author: string; date: string }>> {
+): Promise<
+  Array<{
+    sha: string
+    message: string
+    author: string
+    date: string
+    filesChanged: number
+    additions: number
+    deletions: number
+  }>
+> {
   const safeLimit = Math.min(Math.max(Math.trunc(limit) || 20, 1), 100)
   try {
     const { stdout } = await git(rootPath, [
       "log",
       `--max-count=${safeLimit}`,
-      "--pretty=format:%H%x1f%an%x1f%ad%x1f%s",
-      "--date=short",
+      "--pretty=format:__MV_COMMIT__%x1f%H%x1f%an%x1f%aI%x1f%s",
+      "--numstat",
     ])
-    return stdout
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .map((line) => {
-        const [sha, author, date, ...messageParts] = line.split("\x1f")
-        return {
+    const commits: Array<{
+      sha: string
+      message: string
+      author: string
+      date: string
+      filesChanged: number
+      additions: number
+      deletions: number
+    }> = []
+    let current: {
+      sha: string
+      message: string
+      author: string
+      date: string
+      filesChanged: number
+      additions: number
+      deletions: number
+    } | null = null
+
+    for (const rawLine of stdout.split(/\r?\n/)) {
+      const line = rawLine.trim()
+      if (!line) continue
+      if (line.startsWith("__MV_COMMIT__\x1f")) {
+        if (current) commits.push(current)
+        const [, sha = "", author = "", date = "", ...messageParts] = line.split("\x1f")
+        current = {
           sha: sha.slice(0, 7),
           author,
           date,
           message: messageParts.join("\x1f"),
+          filesChanged: 0,
+          additions: 0,
+          deletions: 0,
         }
-      })
+      } else if (current) {
+        const parts = line.split("\t")
+        if (parts.length >= 3) {
+          const add = Number.parseInt(parts[0] || "0", 10)
+          const del = Number.parseInt(parts[1] || "0", 10)
+          current.filesChanged += 1
+          if (!Number.isNaN(add)) current.additions += add
+          if (!Number.isNaN(del)) current.deletions += del
+        }
+      }
+    }
+    if (current) commits.push(current)
+    return commits
   } catch {
     return []
   }
@@ -733,7 +917,14 @@ export async function unstageFiles(rootPath: string, files?: string[]): Promise<
 export async function discardFiles(rootPath: string, files: string[]): Promise<void> {
   const safeFiles = assertSafeRelativeFiles(files)
   if (safeFiles.length === 0) return
-  await git(rootPath, ["checkout", "--", ...safeFiles])
+  for (const file of safeFiles) {
+    try {
+      await git(rootPath, ["checkout", "--", file])
+    } catch {
+      // Untracked file in working tree: remove it cleanly
+      await deleteWorkspaceFile(rootPath, file).catch(() => {})
+    }
+  }
 }
 
 export async function commitWorkspace(
@@ -836,21 +1027,91 @@ export async function deleteBranch(rootPath: string, branchName: string): Promis
 export async function getGitConflicts(
   rootPath: string
 ): Promise<Array<{ path: string; content: string }>> {
+  const conflictPaths = new Set<string>()
   try {
     const { stdout } = await git(rootPath, ["diff", "--name-only", "--diff-filter=U"])
-    const paths = stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line && isSafeRelativePath(line))
-    const conflicts: Array<{ path: string; content: string }> = []
-    for (const filePath of paths.slice(0, 10)) {
-      const content = await readWorkspaceFile(rootPath, filePath).catch(() => "")
-      conflicts.push({ path: filePath, content: content.slice(0, 4000) })
+    for (const line of stdout.split(/\r?\n/)) {
+      const trimmed = line.trim()
+      if (trimmed && isSafeRelativePath(trimmed)) conflictPaths.add(trimmed)
     }
-    return conflicts
   } catch {
-    return []
+    // Ignore git command failure
   }
+
+  try {
+    const tree = await listWorkspaceTree(rootPath)
+    const files = flattenWorkspaceTree(tree).slice(0, 200)
+    for (const filePath of files) {
+      if (conflictPaths.has(filePath)) continue
+      const content = await readWorkspaceFile(rootPath, filePath).catch(() => "")
+      if (content.includes("<<<<<<<") && content.includes("=======") && content.includes(">>>>>>>")) {
+        conflictPaths.add(filePath)
+      }
+    }
+  } catch {
+    // Ignore workspace tree error
+  }
+
+  const conflicts: Array<{ path: string; content: string }> = []
+  for (const filePath of Array.from(conflictPaths).slice(0, 15)) {
+    const content = await readWorkspaceFile(rootPath, filePath).catch(() => "")
+    conflicts.push({ path: filePath, content: content.slice(0, 4000) })
+  }
+  return conflicts
+}
+
+function stripConflictMarkers(content: string, strategy: "ours" | "theirs"): string {
+  const lines = content.split(/\r?\n/)
+  const out: string[] = []
+  let state: "normal" | "ours" | "theirs" = "normal"
+
+  for (const line of lines) {
+    if (line.startsWith("<<<<<<<")) {
+      state = "ours"
+      continue
+    }
+    if (line.startsWith("=======") && state === "ours") {
+      state = "theirs"
+      continue
+    }
+    if (line.startsWith(">>>>>>>") && (state === "ours" || state === "theirs")) {
+      state = "normal"
+      continue
+    }
+    if (state === "normal" || state === strategy) {
+      out.push(line)
+    }
+  }
+  return out.join("\n")
+}
+
+export async function resolveGitConflict(
+  rootPath: string,
+  filePath: string,
+  strategy: "ours" | "theirs" | "manual",
+  manualContent?: string
+): Promise<void> {
+  if (!isSafeRelativePath(filePath)) {
+    throw new Error("Invalid file path")
+  }
+  if (strategy === "manual") {
+    if (typeof manualContent !== "string") {
+      throw new Error("Resolved content is required for manual conflict resolution")
+    }
+    await writeWorkspaceFile(rootPath, filePath, manualContent)
+  } else {
+    try {
+      await git(rootPath, ["checkout", `--${strategy}`, "--", filePath])
+    } catch {
+      // File may contain conflict markers directly in working tree
+    }
+    const current = await readWorkspaceFile(rootPath, filePath).catch(() => "")
+    if (current.includes("<<<<<<<") && current.includes("=======") && current.includes(">>>>>>>")) {
+      const cleaned = stripConflictMarkers(current, strategy)
+      await writeWorkspaceFile(rootPath, filePath, cleaned)
+    }
+  }
+  await git(rootPath, ["add", "--", filePath]).catch(() => {})
 }
 
 export async function getLatestCommitDiff(rootPath: string): Promise<string> {

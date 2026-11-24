@@ -66,10 +66,12 @@ function ChartTooltip({
   active,
   payload,
   label,
+  currency = "INR",
 }: {
   active?: boolean
   payload?: TooltipEntry[]
   label?: string
+  currency?: string
 }) {
   if (!active || !payload?.length) return null
 
@@ -94,7 +96,7 @@ function ChartTooltip({
               {entry.name}
             </span>
             <span className="tabular-nums text-ink">
-              {formatCurrency(Number(entry.value ?? 0), "INR")}
+              {formatCurrency(Number(entry.value ?? 0), currency)}
             </span>
           </div>
         ))}
@@ -103,14 +105,15 @@ function ChartTooltip({
   )
 }
 
-function compactCurrency(value: number) {
-  if (value >= 1000) return `₹${Math.round(value / 1000)}k`
-  return `₹${Math.round(value)}`
+function compactCurrency(value: number, currency = "INR") {
+  const sym = currency === "USD" ? "$" : currency === "EUR" ? "€" : currency === "GBP" ? "£" : "₹"
+  if (value >= 1000) return `${sym}${Math.round(value / 1000)}k`
+  return `${sym}${Math.round(value)}`
 }
 
 /* ─── Monthly spending trend ─── */
 
-function MonthlySpendingChart({ data }: { data: SpendingDataPoint[] }) {
+function MonthlySpendingChart({ data, currency = "INR" }: { data: SpendingDataPoint[]; currency?: string }) {
   const isMobile = useMediaQuery("(max-width: 639px)")
 
   return (
@@ -149,11 +152,11 @@ function MonthlySpendingChart({ data }: { data: SpendingDataPoint[] }) {
                   tick={{ fill: AXIS_COLOR, fontSize: 10.5 }}
                   axisLine={false}
                   tickLine={false}
-                  tickFormatter={compactCurrency}
+                  tickFormatter={(v) => compactCurrency(Number(v), currency)}
                   width={isMobile ? 40 : 48}
                   tickCount={isMobile ? 4 : 5}
                 />
-                <Tooltip content={<ChartTooltip />} cursor={{ stroke: CURSOR_COLOR, strokeDasharray: "4 4" }} />
+                <Tooltip content={<ChartTooltip currency={currency} />} cursor={{ stroke: CURSOR_COLOR, strokeDasharray: "4 4" }} />
                 <Line type="monotone" dataKey="subscriptions" name="Subscriptions" stroke={CHART_ACCENT} strokeWidth={1.75} dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
                 <Line type="monotone" dataKey="api" name="API" stroke={CHART_TEAL} strokeWidth={1.75} dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
               </LineChart>
@@ -168,9 +171,9 @@ function MonthlySpendingChart({ data }: { data: SpendingDataPoint[] }) {
               {data.map((row) => (
                 <div key={row.month} className="grid grid-cols-[3.5rem_1fr_1fr_1fr] items-center gap-2 py-2 tabular-nums">
                   <span className="text-ink-3">{row.month}</span>
-                  <span className="text-right text-ink-2">{compactCurrency(row.subscriptions)}</span>
-                  <span className="text-right text-ink-2">{compactCurrency(row.api)}</span>
-                  <span className="text-right font-medium text-ink">{compactCurrency(row.total)}</span>
+                  <span className="text-right text-ink-2">{compactCurrency(row.subscriptions, currency)}</span>
+                  <span className="text-right text-ink-2">{compactCurrency(row.api, currency)}</span>
+                  <span className="text-right font-medium text-ink">{compactCurrency(row.total, currency)}</span>
                 </div>
               ))}
             </div>
@@ -183,14 +186,14 @@ function MonthlySpendingChart({ data }: { data: SpendingDataPoint[] }) {
 
 /* ─── Provider-wise spending ─── */
 
-function ProviderSpendingChart({ data }: { data: ProviderSpendingData[] }) {
+function ProviderSpendingChart({ data, currency = "INR" }: { data: ProviderSpendingData[]; currency?: string }) {
   const sorted = [...data].sort((a, b) => b.amount - a.amount).slice(0, 6)
   const max = Math.max(...sorted.map((d) => d.amount), 1)
   const total = sorted.reduce((sum, d) => sum + d.amount, 0)
 
   return (
     <section className="border-t border-line pt-5">
-      <SectionHead title="Provider distribution" meta={`${sorted.length} providers · ${formatCurrency(total, "INR")} recorded`} />
+      <SectionHead title="Provider distribution" meta={`${sorted.length} providers · ${formatCurrency(total, currency)} recorded`} />
 
       {sorted.length === 0 ? (
         <p className="border-t border-line py-8 text-[13px] leading-relaxed text-ink-3">No provider spend recorded yet.</p>
@@ -203,7 +206,7 @@ function ProviderSpendingChart({ data }: { data: ProviderSpendingData[] }) {
                 <div className="flex items-center gap-2.5">
                   <ProviderIcon slug={entry.providerSlug} size="sm" />
                   <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">{entry.provider}</span>
-                  <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-ink">{formatCurrency(entry.amount, "INR")}</span>
+                  <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-ink">{formatCurrency(entry.amount, currency)}</span>
                 </div>
                 <div className="mt-2 h-px w-full bg-surface-3">
                   <div className="h-px bg-accent" style={{ width: `${Math.max((entry.amount / max) * 100, 2)}%` }} />
@@ -219,7 +222,7 @@ function ProviderSpendingChart({ data }: { data: ProviderSpendingData[] }) {
 
 /* ─── API vs subscription split ─── */
 
-function ApiVsSubscriptionSplit({ spending }: { spending: SpendingDataPoint[] }) {
+function ApiVsSubscriptionSplit({ spending, currency = "INR" }: { spending: SpendingDataPoint[]; currency?: string }) {
   const totalSubs = spending.reduce((sum, d) => sum + d.subscriptions, 0)
   const totalApi = spending.reduce((sum, d) => sum + d.api, 0)
   const total = totalSubs + totalApi || 1
@@ -248,7 +251,7 @@ function ApiVsSubscriptionSplit({ spending }: { spending: SpendingDataPoint[] })
                 {row.name}
               </span>
               <span className="font-mono text-[11.5px] tabular-nums text-ink">
-                {formatCurrency(row.value, "INR")}
+                {formatCurrency(row.value, currency)}
                 <span className="ml-2 text-ink-3">{row.percent}%</span>
               </span>
             </div>
@@ -264,18 +267,20 @@ function ApiVsSubscriptionSplit({ spending }: { spending: SpendingDataPoint[] })
 interface SpendingChartsProps {
   monthlySpending: SpendingDataPoint[]
   providerSpending: ProviderSpendingData[]
+  currency?: string
 }
 
 export function SpendingCharts({
   monthlySpending,
   providerSpending,
+  currency = "INR",
 }: SpendingChartsProps) {
   return (
     <div className="space-y-7">
-      <MonthlySpendingChart data={monthlySpending} />
+      <MonthlySpendingChart data={monthlySpending} currency={currency} />
       <div className="grid gap-x-10 gap-y-7 md:grid-cols-2">
-        <ProviderSpendingChart data={providerSpending} />
-        <ApiVsSubscriptionSplit spending={monthlySpending} />
+        <ProviderSpendingChart data={providerSpending} currency={currency} />
+        <ApiVsSubscriptionSplit spending={monthlySpending} currency={currency} />
       </div>
     </div>
   )

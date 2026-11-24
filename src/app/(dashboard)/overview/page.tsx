@@ -30,6 +30,7 @@ interface DashboardApiData {
   totalAnnualSpend: number
   totalApiBalance: number
   upcomingRenewals: number
+  currency?: DashboardSummary["currency"]
   spendingByMonth?: Record<string, number>
   spendingByMonthDetailed?: SpendingDataPoint[]
   providerSpending?: Record<string, number>
@@ -116,7 +117,7 @@ export default function OverviewPage() {
             totalAnnualSpend: d.totalAnnualSpend,
             totalApiBalance: d.totalApiBalance,
             upcomingRenewals: d.upcomingRenewals,
-            currency: "INR",
+            currency: d.currency || "INR",
           })
 
           if (Array.isArray(d.spendingByMonthDetailed) && d.spendingByMonthDetailed.length > 0) {
@@ -431,6 +432,7 @@ export default function OverviewPage() {
               <SpendingCharts
                 monthlySpending={spendingHistory}
                 providerSpending={providerSpending}
+                currency={summary?.currency || "INR"}
               />
             )}
           </section>

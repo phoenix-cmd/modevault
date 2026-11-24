@@ -99,7 +99,42 @@ export default function StudioPage() {
     hooksUsed?: string[]
     complexityScore?: number
     complexityRating?: string
+    parserEngine?: string
   } | null>(null)
+
+  // Receive live console & network events from the sandboxed preview iframe bridge
+  useEffect(() => {
+    const handlePreviewMessage = (event: MessageEvent) => {
+      if (typeof window !== "undefined" && event.origin !== window.location.origin) return
+      const payload = event.data
+      if (!payload || typeof payload !== "object" || payload.source !== "modelvault-preview") return
+
+      if (payload.kind === "console" && typeof payload.text === "string") {
+        setLogs((prev) => [
+          ...prev.slice(-99),
+          {
+            id: Date.now() + Math.floor(Math.random() * 1000),
+            time: new Date().toLocaleTimeString(),
+            type: typeof payload.level === "string" ? payload.level : "info",
+            text: payload.text,
+          },
+        ])
+      } else if (payload.kind === "network" && typeof payload.path === "string") {
+        setNetworkRequests((prev) => [
+          {
+            id: Date.now() + Math.floor(Math.random() * 1000),
+            method: typeof payload.method === "string" ? payload.method : "GET",
+            path: `[preview] ${payload.path}`,
+            status: typeof payload.status === "number" ? payload.status : 200,
+            duration: typeof payload.duration === "string" ? payload.duration : "1ms",
+          },
+          ...prev.slice(0, 29),
+        ])
+      }
+    }
+    window.addEventListener("message", handlePreviewMessage)
+    return () => window.removeEventListener("message", handlePreviewMessage)
+  }, [])
 
   // Load projects
   useEffect(() => {
@@ -321,13 +356,10 @@ export default function StudioPage() {
       if (!res.ok || !json.data?.port) {
         throw new Error(json.error || "Failed to start preview")
       }
-      const isSim = json.data.status === "simulated"
-      setPreviewSimulated(isSim)
-      setPreviewUrl(json.data.url || `http://localhost:${json.data.port}`)
-      setPreviewRunning(!isSim)
-      if (isSim) {
-        setPreviewError("Live dev server spawn is disabled on Vercel serverless; workspace preview requires a local runner.")
-      }
+      const isRenderer = json.data.mode === "workspace_renderer"
+      setPreviewSimulated(isRenderer)
+      setPreviewUrl(json.data.url || `/api/projects/${projectId}/preview/proxy`)
+      setPreviewRunning(true)
       setPreviewFrameKey((key) => key + 1)
     } catch (err) {
       setPreviewRunning(false)
@@ -414,8 +446,8 @@ export default function StudioPage() {
           { label: "Workspace files", value: filesLoading ? "—" : String(fileList.length), meta: selectedFile || "No file selected" },
           {
             label: "Preview",
-            value: previewRunning ? "Live" : previewSimulated ? "Simulated" : "Stopped",
-            meta: previewSimulated ? "Local spawn disabled on serverless" : previewUrl || "Sanitized local process",
+            value: previewRunning ? (previewSimulated ? "Live Renderer" : "Live Process") : "Stopped",
+            meta: previewRunning ? previewUrl || "Active preview session" : "Click Start preview to launch",
             accent: previewRunning,
           },
           { label: "DevTools", value: showDevTools ? "Open" : "Hidden", meta: "Live file & network telemetry" },
@@ -763,7 +795,7 @@ export default function StudioPage() {
                               key={previewFrameKey}
                               src={previewUrl}
                               title="Live project preview"
-                              sandbox="allow-scripts allow-forms"
+                              sandbox="allow-scripts allow-forms allow-same-origin"
                               referrerPolicy="no-referrer"
                               className="h-full w-full border-0"
                               allow="fullscreen"
@@ -861,7 +893,10 @@ export default function StudioPage() {
                 {devToolsTab === "ast" && (
                   <div className="space-y-2">
                     <p className="text-[9px] uppercase tracking-[0.12em] text-[#77736c]">
-                      Live lexical analysis · derived from selected file ({code.split(/\r?\n/).length} lines)
+                      {astSummary?.parserEngine === "python-ast"
+                        ? "Python AST analysis"
+                        : "TypeScript Compiler AST analysis"}{" "}
+                      · derived from selected file ({astSummary?.lineCount ?? code.split(/\r?\n/).length} lines)
                     </p>
                     <p className="text-[#77736c]">
                       File <span className="text-[#f4f2ec]">{selectedFile || "—"}</span>
@@ -871,12 +906,7 @@ export default function StudioPage() {
                       <span className="text-accent">
                         {astSummary?.exportedSymbols?.length
                           ? astSummary.exportedSymbols.join(", ")
-                          : Array.from(
-                              code.matchAll(
-                                /export\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var|interface|type)\s+([A-Za-z0-9_]+)/g
-                              ),
-                              (m) => m[1]
-                            ).join(", ") || "None detected"}
+                          : "None detected"}
                       </span>
                     </p>
                     <p className="text-[#77736c]">
@@ -884,15 +914,19 @@ export default function StudioPage() {
                       <span className="text-success">
                         {astSummary?.importedModules?.length
                           ? astSummary.importedModules.join(", ")
-                          : Array.from(code.matchAll(/from\s+["']([^"']+)["']/g), (m) => m[1]).join(", ") || "None"}
+                          : "None"}
+                      </span>
+                    </p>
+                    <p className="text-[#77736c]">
+                      Hooks used{" "}
+                      <span className="text-[#f4f2ec]">
+                        {astSummary?.hooksUsed?.length ? astSummary.hooksUsed.join(", ") : "None"}
                       </span>
                     </p>
                     <p className="text-[#77736c]">
                       Cyclomatic complexity{" "}
                       <span className="text-warning">
-                        {astSummary?.complexityScore ??
-                          1 + (code.match(/\b(if|else\s+if|for|while|case|catch)\b|&&|\|\||\?/g)?.length || 0)}{" "}
-                        · {astSummary?.complexityRating || "safe"}
+                        {astSummary?.complexityScore ?? 1} · {astSummary?.complexityRating || "safe"}
                       </span>
                     </p>
                   </div>

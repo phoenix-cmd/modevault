@@ -1,10 +1,14 @@
 import { spawn, type ChildProcess } from "node:child_process"
+import fs from "node:fs"
+import path from "node:path"
 import { prisma } from "@/lib/db"
+import { ensureProjectSourceWorkspace } from "@/lib/project-source"
 
 interface PreviewState {
-  process: ChildProcess
+  process: ChildProcess | null
   projectId: string
   port: number
+  mode: "process" | "workspace_renderer"
   startedAt: number
 }
 
@@ -50,7 +54,9 @@ function buildSanitizedPreviewEnv(port: number): NodeJS.ProcessEnv {
   }
 }
 
-export async function startPreview(projectId: string): Promise<{ port: number; status: string }> {
+export async function startPreview(
+  projectId: string
+): Promise<{ port: number; status: string; mode: string; url: string }> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     include: { environments: true, sources: true },
@@ -60,40 +66,61 @@ export async function startPreview(projectId: string): Promise<{ port: number; s
   const environment = project.environments[0]
   if (!environment) throw new Error("No runtime environment configured")
 
+  const url = `/api/projects/${projectId}/preview/proxy`
   const existing = previews.get(projectId)
-  if (existing && !existing.process.killed) {
-    return { port: existing.port, status: "running" }
+  if (existing && (!existing.process || !existing.process.killed)) {
+    return { port: existing.port, status: "running", mode: existing.mode, url }
   }
 
-  const source = project.sources?.find((item: { sourcePath?: string | null }) => item.sourcePath)
-  if (!source?.sourcePath) {
-    throw new Error("No extracted workspace for preview")
-  }
-  const cwd = source.sourcePath
+  const cwd = await ensureProjectSourceWorkspace(project)
   const port = environment.runPort || 3000
   const parsedCommand = parseSafePreviewCommand(environment.startCommand)
 
-  if (process.env.VERCEL || process.env.DISABLE_HOST_PREVIEW === "1") {
-    return { port, status: "simulated" }
+  const canSpawnHostProcess =
+    !process.env.VERCEL &&
+    process.env.DISABLE_HOST_PREVIEW !== "1" &&
+    (parsedCommand.file === "python" ||
+      parsedCommand.file === "python3" ||
+      parsedCommand.file === "node" ||
+      fs.existsSync(path.join(cwd, "node_modules")))
+
+  let child: ChildProcess | null = null
+  let mode: "process" | "workspace_renderer" = "workspace_renderer"
+
+  if (canSpawnHostProcess) {
+    try {
+      const executable =
+        process.platform === "win32" && (parsedCommand.file === "npm" || parsedCommand.file === "npx")
+          ? `${parsedCommand.file}.cmd`
+          : parsedCommand.file
+
+      child = spawn(/* turbopackIgnore: true */ executable, parsedCommand.args, {
+        cwd,
+        shell: false,
+        env: buildSanitizedPreviewEnv(port),
+        stdio: "ignore",
+        detached: false,
+      })
+      mode = "process"
+      child.on("exit", () => {
+        const current = previews.get(projectId)
+        if (current && current.process === child) {
+          // Keep session active via built-in workspace renderer if child process exits before stopPreview
+          current.process = null
+          current.mode = "workspace_renderer"
+        }
+      })
+    } catch {
+      child = null
+      mode = "workspace_renderer"
+    }
   }
-
-  const executable =
-    process.platform === "win32" && (parsedCommand.file === "npm" || parsedCommand.file === "npx")
-      ? `${parsedCommand.file}.cmd`
-      : parsedCommand.file
-
-  const child = spawn(/* turbopackIgnore: true */ executable, parsedCommand.args, {
-    cwd,
-    shell: false,
-    env: buildSanitizedPreviewEnv(port),
-    stdio: "ignore",
-    detached: false,
-  })
 
   previews.set(projectId, {
     process: child,
     projectId,
     port,
+    mode,
     startedAt: Date.now(),
   })
 
@@ -102,20 +129,17 @@ export async function startPreview(projectId: string): Promise<{ port: number; s
     data: { status: "running" },
   })
 
-  child.on("exit", async () => {
-    previews.delete(projectId)
-    await prisma.projectEnvironment
-      .update({ where: { id: environment.id }, data: { status: "stopped" } })
-      .catch(() => {})
-  })
-
-  return { port, status: "running" }
+  return { port, status: "running", mode, url }
 }
 
 export async function stopPreview(projectId: string): Promise<{ status: string }> {
   const state = previews.get(projectId)
   if (state) {
-    state.process.kill()
+    try {
+      state.process?.kill()
+    } catch {
+      // Ignore child kill error
+    }
     previews.delete(projectId)
   }
 
@@ -134,12 +158,36 @@ export async function stopPreview(projectId: string): Promise<{ status: string }
   return { status: "stopped" }
 }
 
-export function getPreview(projectId: string): { running: boolean; port?: number; url?: string } {
+export function getPreview(projectId: string): {
+  running: boolean
+  port?: number
+  mode?: string
+  url?: string
+} {
   const state = previews.get(projectId)
-  if (!state || state.process.killed) return { running: false }
+  if (!state) return { running: false }
   return {
     running: true,
     port: state.port,
+    mode: state.mode,
     url: `/api/projects/${projectId}/preview/proxy`,
   }
+}
+
+export async function getPreviewWithDbSync(projectId: string): Promise<{
+  running: boolean
+  port?: number
+  mode?: string
+  url?: string
+}> {
+  const live = getPreview(projectId)
+  if (!live.running) {
+    await prisma.projectEnvironment
+      .updateMany({
+        where: { projectId, status: "running" },
+        data: { status: "stopped" },
+      })
+      .catch(() => {})
+  }
+  return live
 }

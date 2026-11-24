@@ -18,11 +18,14 @@ import {
   gitFetch,
   gitPull,
   gitPush,
+  mergeBranch,
+  resolveGitConflict,
   revertCommit,
   stageFiles,
   unstageFiles,
   verifyCommitExists,
 } from "@/lib/project-workspace"
+import { ensureProjectSourceWorkspace } from "@/lib/project-source"
 import { gitActionSchema, parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
@@ -63,12 +66,19 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
     })
 
-    const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find(
-      (item) => item.sourcePath
-    )
-
-    const hasGithubToken = Boolean(await resolveUserGithubToken(user.id))
+    const ghToken = await resolveUserGithubToken(user.id)
+    const hasGithubToken = Boolean(ghToken)
     const ghRepo = parseGithubOwnerRepo(project.repositoryUrl)
+
+    let sourcePath: string | null = null
+    try {
+      sourcePath = await ensureProjectSourceWorkspace(project, ghToken)
+    } catch {
+      const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find(
+        (item) => item.sourcePath
+      )
+      sourcePath = source?.sourcePath || null
+    }
 
     let currentBranch = project.defaultBranch || "main"
     let branches: Array<{ name: string; isDefault: boolean; protected: boolean; lastCommit: string }> = []
@@ -95,11 +105,11 @@ export async function GET(req: NextRequest) {
     } | null = null
     let conflicts: Array<{ path: string; content: string }> = []
 
-    if (source?.sourcePath) {
+    if (sourcePath) {
       try {
-        const realBranches = await getGitBranches(source.sourcePath)
-        currentBranch = await getCurrentGitBranch(source.sourcePath)
-        const realCommits = await getGitCommits(source.sourcePath)
+        const realBranches = await getGitBranches(sourcePath)
+        currentBranch = await getCurrentGitBranch(sourcePath)
+        const realCommits = await getGitCommits(sourcePath)
         branches = realBranches.map((name) => ({
           name,
           isDefault: name === "main" || name === "master",
@@ -112,22 +122,22 @@ export async function GET(req: NextRequest) {
           author: commit.author,
           branch: currentBranch,
           timestamp: new Date(commit.date).toISOString(),
-          filesChanged: 0,
-          additions: 0,
-          deletions: 0,
+          filesChanged: commit.filesChanged,
+          additions: commit.additions,
+          deletions: commit.deletions,
           status: "verified",
         }))
-        diff = await getGitDiff(source.sourcePath).catch(() => "")
-        changes = await getGitStatusFiles(source.sourcePath).catch(() => [])
-        sync = await getGitSyncStatus(source.sourcePath).catch(() => null)
-        conflicts = await getGitConflicts(source.sourcePath).catch(() => [])
+        diff = await getGitDiff(sourcePath).catch(() => "")
+        changes = await getGitStatusFiles(sourcePath).catch(() => [])
+        sync = await getGitSyncStatus(sourcePath).catch(() => null)
+        conflicts = await getGitConflicts(sourcePath).catch(() => [])
       } catch {
         // Leave empty arrays when git binary is unavailable in serverless
       }
     }
 
     const pullRequests = operations
-      .filter((op) => op.status === "pr_created" || op.pullRequestNum !== null)
+      .filter((op) => op.status === "pr_created" || op.status === "merged" || op.pullRequestNum !== null)
       .map((op) => ({
         id: op.id,
         number: op.pullRequestNum ?? 0,
@@ -137,7 +147,7 @@ export async function GET(req: NextRequest) {
         author: user.name || user.email,
         status: op.status,
         url: op.prUrl,
-        isRemote: Boolean(op.prUrl && ghRepo && hasGithubToken && op.prUrl.includes(ghRepo.owner)),
+        isRemote: Boolean(op.prUrl && op.prUrl.startsWith("https://github.com/")),
         createdAt: op.createdAt.toISOString(),
       }))
 
@@ -153,10 +163,10 @@ export async function GET(req: NextRequest) {
         conflicts,
         hasGithubToken,
         hasGithubRemote: Boolean(ghRepo),
-        isLocalWorkspace: Boolean(source?.sourcePath),
+        isLocalWorkspace: Boolean(sourcePath),
         sync: sync || {
-          hasRemote: Boolean(project.repositoryUrl),
-          remoteUrl: project.repositoryUrl || null,
+          hasRemote: false,
+          remoteUrl: null,
           upstream: null,
           branch: currentBranch,
           ahead: 0,
@@ -195,9 +205,17 @@ export async function POST(req: NextRequest) {
     }
 
     await requireProjectAccess(project.id, user.id, "member")
-    const source = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find(
-      (item) => item.sourcePath
-    )
+    const ghTokenForWorkspace = await resolveUserGithubToken(user.id)
+    let ensuredSourcePath: string | null = null
+    try {
+      ensuredSourcePath = await ensureProjectSourceWorkspace(project, ghTokenForWorkspace)
+    } catch {
+      const existing = (project as { sources?: Array<{ sourcePath?: string }> }).sources?.find(
+        (item) => item.sourcePath
+      )
+      ensuredSourcePath = existing?.sourcePath || null
+    }
+    const source = ensuredSourcePath ? { sourcePath: ensuredSourcePath } : undefined
 
     if (action === "commit") {
       if (!source?.sourcePath) {
@@ -310,10 +328,7 @@ export async function POST(req: NextRequest) {
           where: { projectId: project.id, pullRequestNum: { not: null } },
         })
         prNumber = existingPrCount + 1
-        const repoBase = ghRepo
-          ? `https://github.com/${ghRepo.owner}/${ghRepo.repo}`
-          : `local://workspace/${project.slug}`
-        prUrl = `${repoBase}/pull/${prNumber}`
+        prUrl = `local://workspace/${project.slug}/pull/${prNumber}`
       }
 
       const op = await prisma.gitOperation.create({
@@ -381,6 +396,72 @@ export async function POST(req: NextRequest) {
       if (source?.sourcePath) await checkoutBranch(source.sourcePath, branchName)
       await prisma.project.update({ where: { id: project.id }, data: { defaultBranch: branchName } })
       return NextResponse.json({ data: { message: "Checked out branch", branchName } })
+    }
+
+    if (action === "resolve_conflict") {
+      if (!source?.sourcePath) {
+        return NextResponse.json({ error: "No local Git workspace available" }, { status: 400 })
+      }
+      if (!body.file) {
+        return NextResponse.json({ error: "file is required to resolve conflict" }, { status: 400 })
+      }
+      await resolveGitConflict(
+        source.sourcePath,
+        body.file,
+        body.strategy || "ours",
+        body.content
+      )
+      const conflicts = await getGitConflicts(source.sourcePath).catch(() => [])
+      const changes = await getGitStatusFiles(source.sourcePath).catch(() => [])
+      return NextResponse.json({
+        data: {
+          message: `Resolved conflict in ${body.file} (${body.strategy || "ours"})`,
+          file: body.file,
+          conflicts,
+          changes,
+        },
+      })
+    }
+
+    if (action === "merge") {
+      if (!source?.sourcePath) {
+        return NextResponse.json({ error: "No local Git workspace available to merge branches" }, { status: 400 })
+      }
+      if (!branchName) {
+        return NextResponse.json({ error: "branchName is required to merge" }, { status: 400 })
+      }
+      const target = body.targetBranch || "main"
+      try {
+        const result = await mergeBranch(source.sourcePath, branchName, target)
+        if (body.operationId) {
+          await prisma.gitOperation
+            .update({
+              where: { id: body.operationId },
+              data: { status: "merged", commitSha: result.commitSha || undefined },
+            })
+            .catch(() => {})
+        } else {
+          await prisma.gitOperation.create({
+            data: {
+              projectId: project.id,
+              branchName,
+              baseBranch: target,
+              commitSha: result.commitSha || null,
+              commitMessage: `Merge branch '${branchName}' into ${target}`,
+              status: "merged",
+            },
+          })
+        }
+        return NextResponse.json({
+          data: {
+            message: `Merged ${branchName} into ${target}`,
+            ...result,
+          },
+        })
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Branch merge failed"
+        return NextResponse.json({ error: message }, { status: 409 })
+      }
     }
 
     if (action === "push" || action === "pull" || action === "fetch") {

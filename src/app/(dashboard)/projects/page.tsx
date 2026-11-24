@@ -103,13 +103,25 @@ async function readEntryFiles(
   return []
 }
 
-function parseSourceFileCount(source: { manifestJson?: string | null } | undefined): number | null {
-  if (!source?.manifestJson) return null
+function parseSourceMeta(source: { manifestJson?: string | null; type?: string } | undefined): {
+  fileCount: number | null
+  cloned: boolean | null
+  provisionMode: string | null
+} {
+  if (!source?.manifestJson) return { fileCount: null, cloned: null, provisionMode: null }
   try {
-    const parsed = JSON.parse(source.manifestJson) as { fileCount?: unknown }
-    return typeof parsed.fileCount === "number" ? parsed.fileCount : null
+    const parsed = JSON.parse(source.manifestJson) as {
+      fileCount?: unknown
+      cloned?: unknown
+      provisionMode?: unknown
+    }
+    return {
+      fileCount: typeof parsed.fileCount === "number" ? parsed.fileCount : null,
+      cloned: typeof parsed.cloned === "boolean" ? parsed.cloned : null,
+      provisionMode: typeof parsed.provisionMode === "string" ? parsed.provisionMode : null,
+    }
   } catch {
-    return null
+    return { fileCount: null, cloned: null, provisionMode: null }
   }
 }
 
@@ -457,6 +469,12 @@ export default function ProjectsPage() {
     (sum, project) => sum + (project.executions?.length || 0),
     0
   )
+  const provisionedSandboxCount = projects.filter((project) =>
+    project.sources?.some((s: { sourcePath?: string | null }) => Boolean(s.sourcePath))
+  ).length
+  const runningPreviewCount = projects.filter((project) =>
+    project.environments?.some((e: { status?: string }) => e.status === "running")
+  ).length
   const zipCount = projects.filter(
     (project) => project.sources?.[0]?.type === "zip_upload"
   ).length
@@ -490,7 +508,14 @@ export default function ProjectsPage() {
           columns={4}
           items={[
             { label: "Projects", value: String(projects.length), meta: "Attached to this workspace" },
-            { label: "Sandboxes", value: String(projects.length), meta: "Provisioned runtimes" },
+            {
+              label: "Sandboxes",
+              value: String(provisionedSandboxCount),
+              meta:
+                runningPreviewCount > 0
+                  ? `${runningPreviewCount} live preview · ${provisionedSandboxCount} ready`
+                  : `${provisionedSandboxCount} provisioned workspaces`,
+            },
             { label: "Executions", value: String(executionCount), meta: "Recorded agent runs" },
             { label: "Archive / Git", value: `${zipCount} / ${gitCount}`, meta: "Import source mix" },
           ]}
@@ -583,7 +608,13 @@ export default function ProjectsPage() {
               {filtered.map((proj, index) => {
                 const env = proj.environments?.[0]
                 const source = proj.sources?.[0]
-                const sourceFileCount = parseSourceFileCount(source)
+                const sourceMeta = parseSourceMeta(source)
+                const sourceLabel =
+                  source?.type === "zip_upload"
+                    ? "Archive"
+                    : sourceMeta.cloned === false
+                      ? "Git · Scaffold"
+                      : "Git"
                 return (
                   <div
                     key={proj.id}
@@ -612,10 +643,10 @@ export default function ProjectsPage() {
                     </span>
 
                     <span className="hidden font-mono text-[10px] uppercase tracking-[0.06em] text-ink-2 lg:block">
-                      {source?.type === "zip_upload" ? "Archive" : "Git"}
-                      {sourceFileCount !== null && (
+                      {sourceLabel}
+                      {sourceMeta.fileCount !== null && (
                         <span className="mt-0.5 block normal-case tracking-normal text-ink-3">
-                          {sourceFileCount} files
+                          {sourceMeta.fileCount} files
                         </span>
                       )}
                     </span>
@@ -666,7 +697,7 @@ export default function ProjectsPage() {
               {filtered.map((proj, index) => {
                 const env = proj.environments?.[0]
                 const source = proj.sources?.[0]
-                const sourceFileCount = parseSourceFileCount(source)
+                const sourceMeta = parseSourceMeta(source)
                 return (
                   <div key={proj.id} className="py-3.5">
                     <div className="flex items-start justify-between gap-3">
@@ -680,7 +711,7 @@ export default function ProjectsPage() {
                         </div>
                         <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-3">
                           {proj.framework?.toUpperCase() || "—"} · {proj.language || "—"}
-                          {sourceFileCount !== null ? ` · ${sourceFileCount} files` : ""} ·{" "}
+                          {sourceMeta.fileCount !== null ? ` · ${sourceMeta.fileCount} files` : ""} ·{" "}
                           <span className="tabular-nums text-ink-2">{proj.executions?.length || 0} runs</span>
                         </p>
                       </Link>
@@ -936,14 +967,27 @@ export default function ProjectsPage() {
               )}
 
               {inspectionResult && (
-                <div className="border border-success/25 bg-success-soft px-3 py-2.5 text-success">
+                <div
+                  className={cn(
+                    "border px-3 py-2.5",
+                    inspectionResult.provisionMode === "starter_fallback"
+                      ? "border-warning/30 bg-warning-soft/30 text-warning"
+                      : "border-success/25 bg-success-soft text-success"
+                  )}
+                >
                   <div className="flex items-center gap-1.5 text-[12px] font-medium">
-                    <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} />
-                    Project inspected and verified
+                    {inspectionResult.provisionMode === "starter_fallback" ? (
+                      <AlertTriangle className="h-3.5 w-3.5" strokeWidth={2} />
+                    ) : (
+                      <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} />
+                    )}
+                    {inspectionResult.provisionMode === "starter_fallback"
+                      ? "Remote repository unreachable — provisioned starter scaffold with origin linked"
+                      : "Project inspected and verified"}
                   </div>
                   <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-2">
-                    Framework {inspectionResult.framework} ·{" "}
-                    {inspectionResult.fileCount} files
+                    Framework {inspectionResult.framework} · {inspectionResult.fileCount} files
+                    {inspectionResult.cloneError ? ` · ${inspectionResult.cloneError}` : ""}
                   </p>
                 </div>
               )}

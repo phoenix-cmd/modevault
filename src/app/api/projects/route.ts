@@ -13,7 +13,8 @@ import {
   cloneOrScaffoldGitWorkspace,
   removeProjectWorkspace,
 } from "@/lib/project-workspace"
-import { stopPreview } from "@/lib/preview-manager"
+import { ensureProjectSourceWorkspace } from "@/lib/project-source"
+import { getPreview, stopPreview } from "@/lib/preview-manager"
 import { gitBranchNameSchema, parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
@@ -128,6 +129,29 @@ export async function GET(req: NextRequest) {
       orderBy: { updatedAt: "desc" },
     })
 
+    // Ensure every project has a usable local workspace source record and reconcile stale preview statuses
+    await Promise.all(
+      projects.map(async (proj) => {
+        try {
+          await ensureProjectSourceWorkspace(proj)
+        } catch {
+          // Ignore workspace hydration warnings during list
+        }
+        const livePreview = getPreview(proj.id)
+        for (const env of proj.environments) {
+          const expectedStatus = livePreview.running ? "running" : "stopped"
+          if (env.status === "running" && !livePreview.running) {
+            env.status = "stopped"
+            await prisma.projectEnvironment
+              .update({ where: { id: env.id }, data: { status: "stopped" } })
+              .catch(() => {})
+          } else if (!livePreview.running && env.status !== expectedStatus) {
+            env.status = "stopped"
+          }
+        }
+      })
+    )
+
     return NextResponse.json({ data: projects })
   } catch (err: unknown) {
     logger.error("Projects GET failed", errorContext(err))
@@ -215,10 +239,21 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    let inspection = {
+    let inspection: {
+      fileName: string
+      fileCount: number
+      cloned: boolean
+      cloneError: string | null
+      provisionMode: "remote_cloned" | "starter_fallback" | "starter_template"
+      framework: string
+      language: string
+      dependencies: string[]
+    } = {
       fileName: normalizedRepoUrl || name,
       fileCount: 4,
       cloned: false,
+      cloneError: null,
+      provisionMode: normalizedRepoUrl ? "starter_fallback" : "starter_template",
       framework: project.framework || "nextjs",
       language: project.language || "typescript",
       dependencies: ["react", "next", "typescript"],
@@ -233,7 +268,14 @@ export async function POST(req: NextRequest) {
           githubToken,
           framework: framework || "nextjs",
           language: language || "typescript",
+          allowScaffoldFallback: true,
         })
+
+        const provisionMode = provisioned.cloned
+          ? "remote_cloned"
+          : normalizedRepoUrl
+            ? "starter_fallback"
+            : "starter_template"
 
         await prisma.project.update({
           where: { id: project.id },
@@ -250,6 +292,8 @@ export async function POST(req: NextRequest) {
             manifestJson: JSON.stringify({
               repositoryUrl: normalizedRepoUrl,
               cloned: provisioned.cloned,
+              cloneError: provisioned.cloneError,
+              provisionMode,
               fileCount: provisioned.fileList.length,
               files: provisioned.fileList.slice(0, 500),
               detectedFramework: provisioned.detectedFramework,
@@ -266,6 +310,8 @@ export async function POST(req: NextRequest) {
           fileName: normalizedRepoUrl || name,
           fileCount: provisioned.fileList.length,
           cloned: provisioned.cloned,
+          cloneError: provisioned.cloneError,
+          provisionMode,
           framework: provisioned.detectedFramework,
           language: provisioned.detectedLanguage,
           dependencies: provisioned.detectedDependencies.slice(0, 15),

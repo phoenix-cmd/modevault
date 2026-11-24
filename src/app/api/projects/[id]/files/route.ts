@@ -5,13 +5,13 @@ import { resolveUserGithubToken } from "@/lib/github-auth"
 import { requireProjectAccess } from "@/lib/permissions"
 import {
   analyzeSourceCodeAst,
-  cloneOrScaffoldGitWorkspace,
   deleteWorkspaceFile,
   flattenWorkspaceTree,
   listWorkspaceTree,
   readWorkspaceFile,
   writeWorkspaceFile,
 } from "@/lib/project-workspace"
+import { ensureProjectSourceWorkspace } from "@/lib/project-source"
 
 function inferLanguage(filePath: string): string {
   const extension = filePath.split(".").pop()?.toLowerCase()
@@ -46,41 +46,22 @@ export async function GET(
 
     await requireProjectAccess(project.id, user.id, "viewer")
 
-    const source = project.sources?.find(
-      (item: unknown) => (item as { sourcePath?: string }).sourcePath
-    ) as { id?: string; sourcePath?: string; branch?: string | null } | undefined
+    let resolvedSourcePath = (
+      project.sources?.find((item: unknown) => (item as { sourcePath?: string }).sourcePath) as
+        | { sourcePath?: string }
+        | undefined
+    )?.sourcePath
 
-    let resolvedSourcePath = source?.sourcePath
+    try {
+      const githubToken = await resolveUserGithubToken(user.id)
+      resolvedSourcePath = await ensureProjectSourceWorkspace(project, githubToken)
+    } catch {
+      // Fall back to existing sourcePath if present
+    }
 
-    // Re-hydrate git repository automatically if ephemeral serverless storage (/tmp) was cleared
-    let initialTree = resolvedSourcePath
+    const initialTree = resolvedSourcePath
       ? await listWorkspaceTree(resolvedSourcePath).catch(() => [])
       : []
-
-    if (initialTree.length === 0 && project.repositoryUrl) {
-      try {
-        const githubToken = await resolveUserGithubToken(user.id)
-        const rehydrated = await cloneOrScaffoldGitWorkspace(project.id, {
-          name: project.name,
-          repositoryUrl: project.repositoryUrl,
-          branch: source?.branch || project.defaultBranch,
-          githubToken,
-          framework: project.framework,
-          language: project.language,
-        })
-        resolvedSourcePath = rehydrated.workspacePath
-        const targetSourceId = source?.id || project.sources?.[0]?.id
-        if (targetSourceId) {
-          await prisma.projectSource.update({
-            where: { id: targetSourceId },
-            data: { sourcePath: resolvedSourcePath },
-          }).catch(() => {})
-        }
-        initialTree = await listWorkspaceTree(resolvedSourcePath).catch(() => [])
-      } catch {
-        // Ignore re-hydration errors and fall back to existing behavior
-      }
-    }
 
     if (resolvedSourcePath) {
       if (filePath) {
@@ -159,14 +140,8 @@ export async function PUT(
 
     await requireProjectAccess(project.id, user.id, "member")
 
-    const source = project.sources?.find(
-      (item: unknown) => (item as { sourcePath?: string }).sourcePath
-    ) as { sourcePath?: string } | undefined
-    if (!source?.sourcePath) {
-      return NextResponse.json({ error: "No extracted workspace for this project" }, { status: 400 })
-    }
-
-    await writeWorkspaceFile(source.sourcePath, file, content)
+    const sourcePath = await ensureProjectSourceWorkspace(project)
+    await writeWorkspaceFile(sourcePath, file, content)
     const astSummary = analyzeSourceCodeAst(file, content)
     return NextResponse.json({ data: { saved: true, file, astSummary } })
   } catch (err: unknown) {
@@ -199,15 +174,9 @@ export async function POST(
 
     await requireProjectAccess(project.id, user.id, "member")
 
-    const source = project.sources?.find(
-      (item: unknown) => (item as { sourcePath?: string }).sourcePath
-    ) as { sourcePath?: string } | undefined
-    if (!source?.sourcePath) {
-      return NextResponse.json({ error: "No extracted workspace for this project" }, { status: 400 })
-    }
-
-    await writeWorkspaceFile(source.sourcePath, file, content)
-    const tree = await listWorkspaceTree(source.sourcePath).catch(() => [])
+    const sourcePath = await ensureProjectSourceWorkspace(project)
+    await writeWorkspaceFile(sourcePath, file, content)
+    const tree = await listWorkspaceTree(sourcePath).catch(() => [])
     return NextResponse.json(
       { data: { created: true, file, allFiles: flattenWorkspaceTree(tree) } },
       { status: 201 }
@@ -240,15 +209,9 @@ export async function DELETE(
 
     await requireProjectAccess(project.id, user.id, "member")
 
-    const source = project.sources?.find(
-      (item: unknown) => (item as { sourcePath?: string }).sourcePath
-    ) as { sourcePath?: string } | undefined
-    if (!source?.sourcePath) {
-      return NextResponse.json({ error: "No extracted workspace for this project" }, { status: 400 })
-    }
-
-    await deleteWorkspaceFile(source.sourcePath, filePath)
-    const tree = await listWorkspaceTree(source.sourcePath).catch(() => [])
+    const sourcePath = await ensureProjectSourceWorkspace(project)
+    await deleteWorkspaceFile(sourcePath, filePath)
+    const tree = await listWorkspaceTree(sourcePath).catch(() => [])
     return NextResponse.json({
       data: { deleted: true, file: filePath, allFiles: flattenWorkspaceTree(tree) },
     })
