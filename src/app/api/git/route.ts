@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
-import { decryptSecret } from "@/lib/crypto"
+import { resolveUserGithubToken } from "@/lib/github-auth"
 import { getUserAccessibleWorkspaceIds, requireProjectAccess } from "@/lib/permissions"
 import {
   checkoutBranch,
@@ -25,25 +25,6 @@ import {
 } from "@/lib/project-workspace"
 import { gitActionSchema, parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
-
-async function resolveGithubToken(userId: string): Promise<string | null> {
-  const cred = await prisma.integrationCredential.findUnique({
-    where: { userId_providerSlug: { userId, providerSlug: "github" } },
-  })
-  if (cred?.encryptedKey && cred.status !== "not_connected") {
-    try {
-      const token = decryptSecret(cred.encryptedKey).trim()
-      if (token) return token
-    } catch {
-      // Ignore
-    }
-  }
-  const oauthAccount = await prisma.account.findFirst({
-    where: { userId, provider: "github", access_token: { not: null } },
-    select: { access_token: true },
-  })
-  return oauthAccount?.access_token?.trim() || null
-}
 
 function parseGithubOwnerRepo(repoUrl: string | null | undefined): { owner: string; repo: string } | null {
   if (!repoUrl) return null
@@ -86,7 +67,7 @@ export async function GET(req: NextRequest) {
       (item) => item.sourcePath
     )
 
-    const hasGithubToken = Boolean(await resolveGithubToken(user.id))
+    const hasGithubToken = Boolean(await resolveUserGithubToken(user.id))
     const ghRepo = parseGithubOwnerRepo(project.repositoryUrl)
 
     let currentBranch = project.defaultBranch || "main"
@@ -277,7 +258,7 @@ export async function POST(req: NextRequest) {
       const headBranch = branchName || project.defaultBranch || "main"
       const baseBranch = "main"
       const title = prTitle || `PR: ${headBranch}`
-      const ghToken = await resolveGithubToken(user.id)
+      const ghToken = await resolveUserGithubToken(user.id)
       const ghRepo = parseGithubOwnerRepo(project.repositoryUrl)
 
       let prNumber = 0

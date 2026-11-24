@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { resolveUserGithubToken } from "@/lib/github-auth"
 import {
   getUserAccessibleWorkspaceIds,
   requireProjectAccess,
@@ -13,39 +14,77 @@ import {
   removeProjectWorkspace,
 } from "@/lib/project-workspace"
 import { stopPreview } from "@/lib/preview-manager"
-import { parseJson } from "@/lib/validation"
+import { gitBranchNameSchema, parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
-export function normalizeRepositoryUrl(raw: string | null | undefined): string | null {
+export function parseRepositoryInput(
+  raw: string | null | undefined
+): { url: string; branch: string | null } | null {
   if (!raw) return null
   const trimmed = raw.trim()
   if (!trimmed) return null
 
-  // Support "owner/repo" shorthand -> https://github.com/owner/repo
-  if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(trimmed)) {
-    return `https://github.com/${trimmed.replace(/\.git$/i, "")}`
+  const cleanCandidate = (candidateUrl: string): { url: string; branch: string | null } | null => {
+    try {
+      const parsed = new URL(candidateUrl)
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+        return null
+      }
+      parsed.search = ""
+      parsed.hash = ""
+
+      let pathname = parsed.pathname.replace(/\/+$/, "")
+      let branch: string | null = null
+
+      // Strip GitHub /tree/<branch> or /blob/<branch>/... and GitLab /-/tree/<branch>
+      const treeMatch = pathname.match(
+        /^(\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:\/-)?\/(?:tree|blob)\/([^/]+)(?:\/.*)?$/
+      )
+      if (treeMatch) {
+        pathname = treeMatch[1]!
+        const candidateBranch = decodeURIComponent(treeMatch[2] || "")
+        if (gitBranchNameSchema.safeParse(candidateBranch).success) {
+          branch = candidateBranch
+        }
+      }
+
+      parsed.pathname = pathname
+      return {
+        url: parsed.toString().replace(/\/+$/, ""),
+        branch,
+      }
+    } catch {
+      return null
+    }
   }
 
-  // Support "github.com/owner/repo" or "gitlab.com/owner/repo" without protocol
+  // Support "owner/repo" shorthand -> https://github.com/owner/repo
+  if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(trimmed)) {
+    return {
+      url: `https://github.com/${trimmed.replace(/\.git$/i, "")}`,
+      branch: null,
+    }
+  }
+
+  // Support "github.com/owner/repo..." or "gitlab.com/owner/repo..." without protocol
   if (/^(github\.com|gitlab\.com|bitbucket\.org)\/[A-Za-z0-9_./-]+$/i.test(trimmed)) {
-    return `https://${trimmed.replace(/\.git$/i, "")}`
+    return cleanCandidate(`https://${trimmed}`)
   }
 
   // Support git@github.com:owner/repo.git SSH format
   const sshMatch = trimmed.match(/^git@([A-Za-z0-9.-]+):([A-Za-z0-9_./-]+)$/i)
   if (sshMatch) {
-    return `https://${sshMatch[1]}/${sshMatch[2].replace(/\.git$/i, "")}`
+    return {
+      url: `https://${sshMatch[1]}/${sshMatch[2].replace(/\.git$/i, "")}`,
+      branch: null,
+    }
   }
 
-  try {
-    const parsed = new URL(trimmed)
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      return null
-    }
-    return parsed.toString().replace(/\/$/, "")
-  } catch {
-    return null
-  }
+  return cleanCandidate(trimmed)
+}
+
+export function normalizeRepositoryUrl(raw: string | null | undefined): string | null {
+  return parseRepositoryInput(raw)?.url ?? null
 }
 
 const projectCreateSchema = z.object({
@@ -103,7 +142,9 @@ export async function POST(req: NextRequest) {
     if ("response" in parsed) return parsed.response
     const { name: rawName, description, framework, language, repositoryUrl: rawRepoUrl, workspaceId } = parsed.data
 
-    const normalizedRepoUrl = normalizeRepositoryUrl(rawRepoUrl)
+    const parsedRepo = parseRepositoryInput(rawRepoUrl)
+    const normalizedRepoUrl = parsedRepo?.url ?? null
+    const repoBranch = parsedRepo?.branch || "main"
     if (rawRepoUrl && rawRepoUrl.trim() && !normalizedRepoUrl) {
       return NextResponse.json(
         { error: "Invalid repository URL. Enter an https:// Git URL or owner/repo shorthand." },
@@ -130,6 +171,7 @@ export async function POST(req: NextRequest) {
       : await resolveUserDefaultWorkspace(user.id, "member")
 
     const slug = name.toLowerCase().replace(/[^a-z0-9-]/g, "-") || "project"
+    const githubToken = normalizedRepoUrl ? await resolveUserGithubToken(user.id) : null
 
     const project = await prisma.project.create({
       data: {
@@ -142,6 +184,7 @@ export async function POST(req: NextRequest) {
         framework: framework || "nextjs",
         language: language || "typescript",
         repositoryUrl: normalizedRepoUrl,
+        defaultBranch: repoBranch,
         status: "ready",
         environments: {
           create: {
@@ -156,7 +199,7 @@ export async function POST(req: NextRequest) {
         sources: {
           create: {
             type: normalizedRepoUrl ? "git_clone" : "zip_upload",
-            branch: "main",
+            branch: repoBranch,
             manifestJson: JSON.stringify({
               framework: framework || "Next.js 16",
               language: language || "TypeScript",
@@ -175,6 +218,7 @@ export async function POST(req: NextRequest) {
     let inspection = {
       fileName: normalizedRepoUrl || name,
       fileCount: 4,
+      cloned: false,
       framework: project.framework || "nextjs",
       language: project.language || "typescript",
       dependencies: ["react", "next", "typescript"],
@@ -185,6 +229,8 @@ export async function POST(req: NextRequest) {
         const provisioned = await cloneOrScaffoldGitWorkspace(project.id, {
           name,
           repositoryUrl: normalizedRepoUrl,
+          branch: parsedRepo?.branch ?? null,
+          githubToken,
           framework: framework || "nextjs",
           language: language || "typescript",
         })
@@ -205,7 +251,7 @@ export async function POST(req: NextRequest) {
               repositoryUrl: normalizedRepoUrl,
               cloned: provisioned.cloned,
               fileCount: provisioned.fileList.length,
-              files: provisioned.fileList.slice(0, 100),
+              files: provisioned.fileList.slice(0, 500),
               detectedFramework: provisioned.detectedFramework,
               detectedLanguage: provisioned.detectedLanguage,
               dependencies: provisioned.detectedDependencies,
@@ -219,6 +265,7 @@ export async function POST(req: NextRequest) {
         inspection = {
           fileName: normalizedRepoUrl || name,
           fileCount: provisioned.fileList.length,
+          cloned: provisioned.cloned,
           framework: provisioned.detectedFramework,
           language: provisioned.detectedLanguage,
           dependencies: provisioned.detectedDependencies.slice(0, 15),

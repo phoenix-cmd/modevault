@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { resolveUserGithubToken } from "@/lib/github-auth"
 import { requireProjectAccess } from "@/lib/permissions"
 import {
   analyzeSourceCodeAst,
+  cloneOrScaffoldGitWorkspace,
   deleteWorkspaceFile,
   flattenWorkspaceTree,
   listWorkspaceTree,
@@ -46,12 +48,44 @@ export async function GET(
 
     const source = project.sources?.find(
       (item: unknown) => (item as { sourcePath?: string }).sourcePath
-    ) as { sourcePath?: string } | undefined
+    ) as { id?: string; sourcePath?: string; branch?: string | null } | undefined
 
-    if (source?.sourcePath) {
+    let resolvedSourcePath = source?.sourcePath
+
+    // Re-hydrate git repository automatically if ephemeral serverless storage (/tmp) was cleared
+    let initialTree = resolvedSourcePath
+      ? await listWorkspaceTree(resolvedSourcePath).catch(() => [])
+      : []
+
+    if (initialTree.length === 0 && project.repositoryUrl) {
+      try {
+        const githubToken = await resolveUserGithubToken(user.id)
+        const rehydrated = await cloneOrScaffoldGitWorkspace(project.id, {
+          name: project.name,
+          repositoryUrl: project.repositoryUrl,
+          branch: source?.branch || project.defaultBranch,
+          githubToken,
+          framework: project.framework,
+          language: project.language,
+        })
+        resolvedSourcePath = rehydrated.workspacePath
+        const targetSourceId = source?.id || project.sources?.[0]?.id
+        if (targetSourceId) {
+          await prisma.projectSource.update({
+            where: { id: targetSourceId },
+            data: { sourcePath: resolvedSourcePath },
+          }).catch(() => {})
+        }
+        initialTree = await listWorkspaceTree(resolvedSourcePath).catch(() => [])
+      } catch {
+        // Ignore re-hydration errors and fall back to existing behavior
+      }
+    }
+
+    if (resolvedSourcePath) {
       if (filePath) {
         try {
-          const content = await readWorkspaceFile(source.sourcePath, filePath)
+          const content = await readWorkspaceFile(resolvedSourcePath, filePath)
           const language = inferLanguage(filePath)
           const astSummary = analyzeSourceCodeAst(filePath, content)
           return NextResponse.json({
@@ -68,14 +102,13 @@ export async function GET(
         }
       }
 
-      const tree = await listWorkspaceTree(source.sourcePath).catch(() => [])
-      const allFiles = flattenWorkspaceTree(tree)
+      const allFiles = flattenWorkspaceTree(initialTree)
       return NextResponse.json({
         data: {
           projectId: project.id,
           projectName: project.name,
           branch: project.defaultBranch,
-          tree,
+          tree: initialTree,
           allFiles,
           hasWorkspace: true,
         },

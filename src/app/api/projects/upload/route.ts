@@ -6,7 +6,9 @@ import { requireWorkspaceAccess, resolveUserDefaultWorkspace } from "@/lib/permi
 import {
   ensureProjectWorkspace,
   initializeGitRepository,
+  isIgnoredWorkspaceEntry,
   isSafeRelativePath,
+  stripCommonRootDirectory,
   writeWorkspaceFile,
 } from "@/lib/project-workspace"
 import { logger, errorContext } from "@/lib/logger"
@@ -14,8 +16,8 @@ import { logger, errorContext } from "@/lib/logger"
 const MAX_COMPRESSED_BYTES = 25 * 1024 * 1024 // 25 MB
 const MAX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024 // 100 MB
 const MAX_SINGLE_FILE_BYTES = 10 * 1024 * 1024 // 10 MB per file
-const MAX_ARCHIVE_FILES = 500
-const MAX_COMPRESSION_RATIO = 80
+const MAX_ARCHIVE_FILES = 2500
+const MAX_COMPRESSION_RATIO = 100
 
 function isSymlinkZipEntry(zipEntry: JSZip.JSZipObject): boolean {
   const unixPerms = typeof zipEntry.unixPermissions === "number" ? zipEntry.unixPermissions : 0
@@ -59,8 +61,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Malformed or unsupported ZIP archive" }, { status: 422 })
     }
 
-    const fileList: string[] = []
-    const safeEntries: string[] = []
+    const preFilteredRawPaths: string[] = []
     let detectedFramework = "custom"
     let detectedLanguage = "javascript"
     let packageJsonContent: {
@@ -75,15 +76,9 @@ export async function POST(req: NextRequest) {
         return
       }
       if (!zipEntry.dir) {
-        fileList.push(relativePath)
         const normalized = relativePath.replace(/\\/g, "/")
-        if (
-          normalized.length <= 512 &&
-          isSafeRelativePath(normalized) &&
-          !normalized.startsWith(".git/") &&
-          normalized !== ".git"
-        ) {
-          safeEntries.push(relativePath)
+        if (normalized.length <= 512 && isSafeRelativePath(normalized)) {
+          preFilteredRawPaths.push(relativePath)
         }
       }
     })
@@ -95,9 +90,31 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    if (fileList.length > MAX_ARCHIVE_FILES) {
+    const { strip } = stripCommonRootDirectory(preFilteredRawPaths)
+    const safeEntries: Array<{ rawPath: string; cleanPath: string }> = []
+    for (const rawPath of preFilteredRawPaths) {
+      const cleanPath = strip(rawPath)
+      if (
+        !cleanPath ||
+        cleanPath.length > 512 ||
+        !isSafeRelativePath(cleanPath) ||
+        isIgnoredWorkspaceEntry(cleanPath)
+      ) {
+        continue
+      }
+      safeEntries.push({ rawPath, cleanPath })
+    }
+
+    if (safeEntries.length === 0) {
       return NextResponse.json(
-        { error: `ZIP archive contains too many files (${fileList.length} > ${MAX_ARCHIVE_FILES})` },
+        { error: "ZIP archive did not contain any supported source files" },
+        { status: 422 }
+      )
+    }
+
+    if (safeEntries.length > MAX_ARCHIVE_FILES) {
+      return NextResponse.json(
+        { error: `ZIP archive contains too many files (${safeEntries.length} > ${MAX_ARCHIVE_FILES})` },
         { status: 422 }
       )
     }
@@ -106,13 +123,13 @@ export async function POST(req: NextRequest) {
     const extractedBuffers: Array<{ relativePath: string; buffer: Buffer }> = []
     let totalUncompressedBytes = 0
 
-    for (const relativePath of safeEntries) {
-      const zipEntry = zip.file(relativePath)
+    for (const { rawPath, cleanPath } of safeEntries) {
+      const zipEntry = zip.file(rawPath)
       if (!zipEntry || zipEntry.dir) continue
       const buffer = await zipEntry.async("nodebuffer")
       if (buffer.byteLength > MAX_SINGLE_FILE_BYTES) {
         return NextResponse.json(
-          { error: `File "${relativePath}" exceeds maximum single-file size (10 MB)` },
+          { error: `File "${cleanPath}" exceeds maximum single-file size (10 MB)` },
           { status: 413 }
         )
       }
@@ -123,18 +140,24 @@ export async function POST(req: NextRequest) {
           { status: 413 }
         )
       }
-      if (file.size > 0 && totalUncompressedBytes / Math.max(file.size, 64) > MAX_COMPRESSION_RATIO) {
+      if (
+        totalUncompressedBytes > 5 * 1024 * 1024 &&
+        file.size > 0 &&
+        totalUncompressedBytes / Math.max(file.size, 64) > MAX_COMPRESSION_RATIO
+      ) {
         return NextResponse.json(
           { error: "ZIP archive rejected due to excessive compression ratio" },
           { status: 422 }
         )
       }
-      extractedBuffers.push({ relativePath: relativePath.replace(/\\/g, "/"), buffer })
+      extractedBuffers.push({ relativePath: cleanPath, buffer })
     }
 
     const pkgEntry =
       extractedBuffers.find((e) => e.relativePath === "package.json") ||
       extractedBuffers.find((e) => e.relativePath.endsWith("/package.json"))
+
+    const extractedPaths = extractedBuffers.map((e) => e.relativePath)
 
     if (pkgEntry) {
       try {
@@ -147,15 +170,17 @@ export async function POST(req: NextRequest) {
         else if (deps["vue"]) detectedFramework = "vue"
         else detectedFramework = "node"
 
-        if (deps["typescript"] || safeEntries.some((f) => f.endsWith(".ts") || f.endsWith(".tsx"))) {
+        if (deps["typescript"] || extractedPaths.some((f) => f.endsWith(".ts") || f.endsWith(".tsx"))) {
           detectedLanguage = "typescript"
         }
       } catch {
         // Ignore malformed package.json during framework detection
       }
-    } else if (safeEntries.some((f) => f.endsWith(".py") || f.endsWith("requirements.txt"))) {
+    } else if (extractedPaths.some((f) => f.endsWith(".py") || f.endsWith("requirements.txt"))) {
       detectedFramework = "python"
       detectedLanguage = "python"
+    } else if (extractedPaths.some((f) => f.endsWith(".ts") || f.endsWith(".tsx"))) {
+      detectedLanguage = "typescript"
     }
 
     const detectedDependencies = packageJsonContent
@@ -192,7 +217,7 @@ export async function POST(req: NextRequest) {
               fileName: file.name,
               fileSize: file.size,
               fileCount: extractedBuffers.length,
-              files: extractedBuffers.map((e) => e.relativePath).slice(0, 100),
+              files: extractedBuffers.map((e) => e.relativePath).slice(0, 500),
               detectedFramework,
               detectedLanguage,
               dependencies: detectedDependencies.slice(0, 20),
@@ -207,8 +232,12 @@ export async function POST(req: NextRequest) {
     })
 
     const workspacePath = await ensureProjectWorkspace(project.id)
-    for (const item of extractedBuffers) {
-      await writeWorkspaceFile(workspacePath, item.relativePath, item.buffer)
+    const BATCH_SIZE = 20
+    for (let i = 0; i < extractedBuffers.length; i += BATCH_SIZE) {
+      const batch = extractedBuffers.slice(i, i + BATCH_SIZE)
+      await Promise.all(
+        batch.map((item) => writeWorkspaceFile(workspacePath, item.relativePath, item.buffer))
+      )
     }
     await initializeGitRepository(workspacePath)
 

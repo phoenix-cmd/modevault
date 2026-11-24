@@ -2,9 +2,64 @@ import { execFile } from "node:child_process"
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { promisify } from "node:util"
+import JSZip from "jszip"
 import { gitBranchNameSchema } from "@/lib/validation"
 
 const execFileAsync = promisify(execFile)
+
+const IGNORED_WORKSPACE_SEGMENTS = new Set([
+  ".git",
+  "node_modules",
+  ".next",
+  ".turbo",
+  "__pycache__",
+  ".venv",
+  "venv",
+  "__MACOSX",
+  ".DS_Store",
+  "Thumbs.db",
+])
+
+export function isIgnoredWorkspaceEntry(relativePath: string): boolean {
+  const normalized = relativePath.replace(/\\/g, "/")
+  const segments = normalized.split("/").filter(Boolean)
+  if (segments.length === 0) return true
+  return segments.some((segment) => IGNORED_WORKSPACE_SEGMENTS.has(segment))
+}
+
+/**
+ * Strips a single shared top-level directory (e.g. `repo-main/` from a GitHub zipball
+ * or `my-app/` from a zipped project folder) only when EVERY entry resides inside it.
+ * Archives that already have root-level files (e.g. `README.md`, `icon.png`) keep paths intact.
+ */
+export function stripCommonRootDirectory(entries: string[]): {
+  prefix: string
+  strip: (relativePath: string) => string
+} {
+  const normalized = entries.map((e) => e.replace(/\\/g, "/")).filter(Boolean)
+  if (normalized.length === 0) {
+    return { prefix: "", strip: (p) => p.replace(/\\/g, "/") }
+  }
+  const firstSlash = normalized[0]!.indexOf("/")
+  if (firstSlash <= 0) {
+    return { prefix: "", strip: (p) => p.replace(/\\/g, "/") }
+  }
+  const firstSegment = normalized[0]!.slice(0, firstSlash)
+  const expectedPrefix = `${firstSegment}/`
+  const allSharePrefix = normalized.every(
+    (entry) => entry.startsWith(expectedPrefix) && entry.length > expectedPrefix.length
+  )
+  if (!allSharePrefix) {
+    return { prefix: "", strip: (p) => p.replace(/\\/g, "/") }
+  }
+  return {
+    prefix: expectedPrefix,
+    strip: (p) => {
+      const norm = p.replace(/\\/g, "/")
+      return norm.startsWith(expectedPrefix) ? norm.slice(expectedPrefix.length) : norm
+    },
+  }
+}
 
 export const PROJECT_WORKSPACE_ROOT = process.env.VERCEL
   ? path.join("/tmp", "modevault-projects")
@@ -200,20 +255,28 @@ export async function listWorkspaceTree(
     const entryAbsolutePath = path.join(/* turbopackIgnore: true */ rootPath, entryRelativePath)
 
     if (entry.isDirectory()) {
-      nodes.push({
-        name: entry.name,
-        type: "directory",
-        path: entryRelativePath.replace(/\\/g, "/"),
-        children: await listWorkspaceTree(rootPath, entryRelativePath),
-      })
+      try {
+        nodes.push({
+          name: entry.name,
+          type: "directory",
+          path: entryRelativePath.replace(/\\/g, "/"),
+          children: await listWorkspaceTree(rootPath, entryRelativePath),
+        })
+      } catch {
+        // Skip unreadable directories without breaking the rest of the workspace tree
+      }
     } else if (entry.isFile()) {
-      const fileStat = await stat(/* turbopackIgnore: true */ entryAbsolutePath)
-      nodes.push({
-        name: entry.name,
-        type: "file",
-        path: entryRelativePath.replace(/\\/g, "/"),
-        size: fileStat.size,
-      })
+      try {
+        const fileStat = await stat(/* turbopackIgnore: true */ entryAbsolutePath)
+        nodes.push({
+          name: entry.name,
+          type: "file",
+          path: entryRelativePath.replace(/\\/g, "/"),
+          size: fileStat.size,
+        })
+      } catch {
+        // Skip unreadable files without breaking the rest of the workspace tree
+      }
     }
   }
 
@@ -356,11 +419,24 @@ export async function initializeGitRepository(rootPath: string): Promise<void> {
   }
 }
 
+function isSafeHttpsGitUrl(rawUrl: string): boolean {
+  const trimmed = rawUrl.trim()
+  if (!trimmed || trimmed.startsWith("-") || /[\s\r\n\0]/.test(trimmed)) return false
+  try {
+    const parsed = new URL(trimmed)
+    return parsed.protocol === "https:" && Boolean(parsed.hostname)
+  } catch {
+    return false
+  }
+}
+
 export async function cloneOrScaffoldGitWorkspace(
   projectId: string,
   opts: {
     name: string
     repositoryUrl?: string | null
+    branch?: string | null
+    githubToken?: string | null
     framework?: string | null
     language?: string | null
   }
@@ -375,75 +451,123 @@ export async function cloneOrScaffoldGitWorkspace(
   const workspacePath = await ensureProjectWorkspace(projectId)
   let cloned = false
 
-  if (opts.repositoryUrl && /^https:\/\/[A-Za-z0-9._/-]+$/i.test(opts.repositoryUrl.trim())) {
+  if (opts.repositoryUrl && isSafeHttpsGitUrl(opts.repositoryUrl)) {
     const cleanUrl = opts.repositoryUrl.trim()
+    const branchResult = opts.branch ? gitBranchNameSchema.safeParse(opts.branch.trim()) : null
+    const safeBranch = branchResult?.success ? branchResult.data : null
+    const parsedUrl = new URL(cleanUrl)
+    const isGithubHost = parsedUrl.hostname.toLowerCase() === "github.com"
+
     try {
       await rm(workspacePath, { recursive: true, force: true })
       await mkdir(path.dirname(workspacePath), { recursive: true })
-      await execFileAsync(
-        "git",
-        [
-          "-c",
-          "core.hooksPath=",
-          "-c",
-          "core.symlinks=false",
-          "-c",
-          "protocol.file.allow=never",
-          "clone",
-          "--depth",
-          "1",
-          "--no-tags",
-          "--",
-          cleanUrl,
-          workspacePath,
-        ],
-        {
-          env: buildGitEnv(),
-          timeout: 15_000,
-          maxBuffer: 10 * 1024 * 1024,
-        }
-      )
-      cloned = true
+      const cloneArgs: string[] = [
+        "-c",
+        "core.hooksPath=",
+        "-c",
+        "core.symlinks=false",
+        "-c",
+        "protocol.file.allow=never",
+        "-c",
+        "protocol.ext.allow=never",
+      ]
+      if (opts.githubToken && isGithubHost) {
+        const basicAuth = Buffer.from(`x-access-token:${opts.githubToken}`).toString("base64")
+        cloneArgs.push("-c", `http.https://github.com/.extraheader=AUTHORIZATION: basic ${basicAuth}`)
+      }
+      cloneArgs.push("clone", "--depth", "1", "--no-tags")
+      if (safeBranch) {
+        cloneArgs.push("--branch", safeBranch, "--single-branch")
+      }
+      cloneArgs.push("--", cleanUrl, workspacePath)
+
+      await execFileAsync("git", cloneArgs, {
+        env: buildGitEnv(),
+        timeout: 30_000,
+        maxBuffer: 10 * 1024 * 1024,
+      })
+
+      const clonedTree = await listWorkspaceTree(workspacePath).catch(() => [])
+      if (flattenWorkspaceTree(clonedTree).length > 0) {
+        cloned = true
+      }
     } catch {
       await mkdir(workspacePath, { recursive: true })
     }
 
-    // If git clone binary was unavailable (e.g., on Vercel serverless) and URL is a public GitHub repo,
-    // fetch repository metadata / README / package.json via GitHub REST API so the workspace has real repo files.
-    if (!cloned) {
+    // Fallback (e.g. Vercel serverless where git binary is missing or shallow clone timed out):
+    // download the full GitHub Zipball archive in one request and extract all nested files.
+    if (!cloned && isGithubHost) {
       const ghMatch = cleanUrl
         .replace(/\.git$/i, "")
-        .match(/^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)/i)
+        .replace(/\/+$/, "")
+        .match(/^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/i)
       if (ghMatch) {
         const [, owner, repo] = ghMatch
         try {
-          const treeRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents`, {
-            headers: { Accept: "application/vnd.github.v3+json", "User-Agent": "MODELVAULT" },
-            signal: AbortSignal.timeout(6000),
+          const zipballUrl = safeBranch
+            ? `https://api.github.com/repos/${owner}/${repo}/zipball/${encodeURIComponent(safeBranch)}`
+            : `https://api.github.com/repos/${owner}/${repo}/zipball`
+          const headers: Record<string, string> = {
+            Accept: "application/vnd.github+json",
+            "User-Agent": "MODELVAULT",
+          }
+          if (opts.githubToken) {
+            headers["Authorization"] = `Bearer ${opts.githubToken}`
+          }
+          const zipRes = await fetch(zipballUrl, {
+            headers,
+            signal: AbortSignal.timeout(25_000),
           })
-          if (treeRes.ok) {
-            const items = (await treeRes.json()) as Array<{
-              name?: string
-              path?: string
-              type?: string
-              download_url?: string | null
-              size?: number
-            }>
-            if (Array.isArray(items)) {
-              const downloadable = items
-                .filter((it) => it.type === "file" && it.download_url && (it.size ?? 0) < 250_000)
-                .slice(0, 12)
-              for (const fileItem of downloadable) {
-                if (!fileItem.path || !fileItem.download_url || !isSafeRelativePath(fileItem.path)) continue
-                const fileRes = await fetch(fileItem.download_url, {
-                  signal: AbortSignal.timeout(4000),
-                }).catch(() => null)
-                if (fileRes && fileRes.ok) {
-                  const buf = Buffer.from(await fileRes.arrayBuffer())
-                  await writeWorkspaceFile(workspacePath, fileItem.path, buf)
-                  cloned = true
-                }
+          if (zipRes.ok) {
+            const arrayBuffer = await zipRes.arrayBuffer()
+            const zip = await JSZip.loadAsync(arrayBuffer)
+            const rawEntries: string[] = []
+            zip.forEach((relativePath, entry) => {
+              const unixPerms = typeof entry.unixPermissions === "number" ? entry.unixPermissions : 0
+              const isSymlink = (unixPerms & 0o170000) === 0o120000
+              if (!entry.dir && !isSymlink) {
+                rawEntries.push(relativePath)
               }
+            })
+
+            const { strip } = stripCommonRootDirectory(rawEntries)
+            const candidateEntries = rawEntries
+              .map((rawPath) => ({ rawPath, cleanPath: strip(rawPath) }))
+              .filter(
+                ({ cleanPath }) =>
+                  cleanPath.length > 0 &&
+                  cleanPath.length <= 512 &&
+                  isSafeRelativePath(cleanPath) &&
+                  !isIgnoredWorkspaceEntry(cleanPath)
+              )
+              .slice(0, 2500)
+
+            const MAX_TOTAL_BYTES = 100 * 1024 * 1024
+            const MAX_FILE_BYTES = 10 * 1024 * 1024
+            let totalBytes = 0
+            let extractedCount = 0
+
+            const BATCH_SIZE = 20
+            for (let i = 0; i < candidateEntries.length; i += BATCH_SIZE) {
+              const batch = candidateEntries.slice(i, i + BATCH_SIZE)
+              await Promise.all(
+                batch.map(async ({ rawPath, cleanPath }) => {
+                  const zipEntry = zip.file(rawPath)
+                  if (!zipEntry || zipEntry.dir) return
+                  const buf = await zipEntry.async("nodebuffer")
+                  if (buf.byteLength > MAX_FILE_BYTES) return
+                  if (totalBytes + buf.byteLength > MAX_TOTAL_BYTES) return
+                  totalBytes += buf.byteLength
+                  await writeWorkspaceFile(workspacePath, cleanPath, buf)
+                  extractedCount += 1
+                })
+              )
+              if (totalBytes >= MAX_TOTAL_BYTES) break
+            }
+
+            if (extractedCount > 0) {
+              cloned = true
             }
           }
         } catch {

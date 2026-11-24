@@ -50,6 +50,7 @@ export default function StudioPage() {
   const [previewFrameKey, setPreviewFrameKey] = useState(0)
 
   const [newFileName, setNewFileName] = useState("")
+  const [fileFilter, setFileFilter] = useState("")
   const [creatingFile, setCreatingFile] = useState(false)
   const [agentModalOpen, setAgentModalOpen] = useState(false)
   const [agentPrompt, setAgentPrompt] = useState("")
@@ -103,13 +104,22 @@ export default function StudioPage() {
   // Load projects
   useEffect(() => {
     let active = true
+    const urlProjectId =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("projectId")
+        : null
     fetch("/api/projects")
       .then((res) => res.json())
       .then((json) => {
         if (!active) return
         const list = json?.data || []
         setProjects(list)
-        if (list.length > 0) setProjectId((current) => current || list[0].id)
+        if (list.length > 0) {
+          const matched = urlProjectId
+            ? list.find((item: { id: string }) => item.id === urlProjectId)
+            : null
+          setProjectId((current) => current || matched?.id || list[0].id)
+        }
       })
       .catch(() => {})
     return () => {
@@ -176,7 +186,7 @@ export default function StudioPage() {
         ...prev.slice(0, 19),
       ])
       const json = await res.json()
-      if (json.data && json.data.content) {
+      if (json.data && typeof json.data.content === "string") {
         setCode(json.data.content)
         setAstSummary(json.data.astSummary || null)
       } else {
@@ -335,6 +345,10 @@ export default function StudioPage() {
       setPreviewUrl(null)
     }
   }
+
+  const filteredFileList = fileFilter.trim()
+    ? fileList.filter((f) => f.toLowerCase().includes(fileFilter.trim().toLowerCase()))
+    : fileList
 
   const activeProject = projects.find((project) => project.id === projectId)
   const editorLanguage = selectedFile.endsWith(".json")
@@ -511,7 +525,11 @@ export default function StudioPage() {
               >
                 <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
                   <span className="font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">Explorer</span>
-                  <span className="font-mono text-[10px] tabular-nums text-ink-3">{String(fileList.length).padStart(2, "0")}</span>
+                  <span className="font-mono text-[10px] tabular-nums text-ink-3">
+                    {fileFilter.trim()
+                      ? `${filteredFileList.length}/${fileList.length}`
+                      : String(fileList.length).padStart(2, "0")}
+                  </span>
                 </div>
                 <form onSubmit={handleCreateFile} className="flex gap-1 border-b border-line px-2 py-2">
                   <input
@@ -533,6 +551,17 @@ export default function StudioPage() {
                     <Plus className="h-3.5 w-3.5" />
                   </button>
                 </form>
+                <div className="border-b border-line px-2 py-1.5">
+                  <input
+                    type="text"
+                    value={fileFilter}
+                    onChange={(e) => setFileFilter(e.target.value)}
+                    placeholder="Filter files…"
+                    aria-label="Filter workspace files"
+                    className="field field-sm w-full font-mono text-[10.5px]"
+                    disabled={!projectId || fileList.length === 0}
+                  />
+                </div>
                 <div className="flex-1 overflow-y-auto py-1">
                   {filesLoading && (
                     <div className="space-y-2 px-3 py-3">
@@ -547,7 +576,12 @@ export default function StudioPage() {
                       <p className="mt-1 text-[11.5px] leading-relaxed text-ink-3">Select a project with an extracted workspace to browse files.</p>
                     </div>
                   )}
-                  {fileList.map((file) => {
+                  {!filesLoading && fileList.length > 0 && filteredFileList.length === 0 && (
+                    <div className="px-3 py-6">
+                      <p className="text-[12px] text-ink-3">No files match “{fileFilter}”</p>
+                    </div>
+                  )}
+                  {filteredFileList.map((file) => {
                     const isSelected = selectedFile === file
                     const parts = file.split("/")
                     const name = parts.pop()
