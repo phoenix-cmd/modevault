@@ -28,7 +28,15 @@ export default function LoginPage() {
         setError(json?.error || "Login failed")
         return
       }
-      router.push("/overview")
+      const nextParam = new URLSearchParams(window.location.search).get("next") || ""
+      const safeNext =
+        nextParam.startsWith("/") &&
+        !nextParam.startsWith("//") &&
+        !nextParam.startsWith("/login") &&
+        !nextParam.startsWith("/register")
+          ? nextParam
+          : "/overview"
+      router.push(safeNext)
       router.refresh()
     } catch {
       setError("Login failed")

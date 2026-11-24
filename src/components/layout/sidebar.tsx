@@ -101,31 +101,99 @@ function Brand({ collapsed }: { collapsed?: boolean }) {
   )
 }
 
+function computeInitials(name?: string | null, email?: string | null): string {
+  const source = (name || email || "MV").trim()
+  const parts = source.split(/[\s@._-]+/).filter(Boolean)
+  if (parts.length >= 2) {
+    return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase()
+  }
+  return source.slice(0, 2).toUpperCase() || "MV"
+}
+
+interface SidebarOrg {
+  id: string
+  name: string
+  workspaces: Array<{ id: string; name: string }>
+}
+
 function useWorkspaceIdentity() {
-  const [orgName, setOrgName] = useState("Organization")
-  const [workspaceName, setWorkspaceName] = useState("Workspace")
+  const [orgs, setOrgs] = useState<SidebarOrg[]>([])
+  const [selectedOrgId, setSelectedOrgId] = useState("")
+  const [selectedWsId, setSelectedWsId] = useState("")
+  const [userProfile, setUserProfile] = useState<{ name?: string | null; email?: string | null } | null>(null)
 
   useEffect(() => {
     let active = true
-    fetch("/api/organizations")
-      .then((res) => res.json())
-      .then((json) => {
-        if (!active) return
-        const org = json?.data?.[0]
-        if (org?.name) setOrgName(org.name)
-        if (org?.workspaces?.[0]?.name) setWorkspaceName(org.workspaces[0].name)
-      })
-      .catch(() => {})
+    Promise.all([
+      fetch("/api/organizations").then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetch("/api/auth/me").then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    ]).then(([orgJson, meJson]) => {
+      if (!active) return
+      if (meJson?.data) setUserProfile(meJson.data)
+      const list = Array.isArray(orgJson?.data) ? (orgJson.data as SidebarOrg[]) : []
+      setOrgs(list)
+      if (list.length > 0) {
+        let savedOrg = ""
+        let savedWs = ""
+        try {
+          savedOrg = localStorage.getItem("mv-active-org") || ""
+          savedWs = localStorage.getItem("mv-active-workspace") || ""
+        } catch {}
+        const org = list.find((o) => o.id === savedOrg) || list[0]
+        setSelectedOrgId(org.id)
+        const ws = org.workspaces?.find((w) => w.id === savedWs) || org.workspaces?.[0]
+        if (ws) setSelectedWsId(ws.id)
+      }
+    })
     return () => {
       active = false
     }
   }, [])
 
-  return { orgName, workspaceName }
+  const activeOrg = orgs.find((o) => o.id === selectedOrgId) || orgs[0]
+  const workspaces = activeOrg?.workspaces || []
+  const activeWs = workspaces.find((w) => w.id === selectedWsId) || workspaces[0]
+
+  const selectOrg = (orgId: string) => {
+    setSelectedOrgId(orgId)
+    const org = orgs.find((o) => o.id === orgId)
+    const firstWs = org?.workspaces?.[0]?.id || ""
+    setSelectedWsId(firstWs)
+    try {
+      localStorage.setItem("mv-active-org", orgId)
+      if (firstWs) localStorage.setItem("mv-active-workspace", firstWs)
+    } catch {}
+  }
+
+  const selectWorkspace = (wsId: string) => {
+    setSelectedWsId(wsId)
+    try {
+      localStorage.setItem("mv-active-workspace", wsId)
+    } catch {}
+  }
+
+  return {
+    orgs,
+    activeOrg,
+    workspaces,
+    activeWs,
+    selectOrg,
+    selectWorkspace,
+    userProfile,
+    initials: computeInitials(userProfile?.name, userProfile?.email),
+  }
 }
 
-function WorkspaceControls({ collapsed }: { collapsed?: boolean }) {
-  const { orgName, workspaceName } = useWorkspaceIdentity()
+function WorkspaceControls({
+  collapsed,
+  identity,
+}: {
+  collapsed?: boolean
+  identity: ReturnType<typeof useWorkspaceIdentity>
+}) {
+  const { orgs, activeOrg, workspaces, activeWs, selectOrg, selectWorkspace } = identity
+  const orgName = activeOrg?.name || "Organization"
+  const workspaceName = activeWs?.name || "Workspace"
 
   if (collapsed) {
     return (
@@ -143,27 +211,53 @@ function WorkspaceControls({ collapsed }: { collapsed?: boolean }) {
   return (
     <div className="space-y-2 border-b border-line px-3 py-3">
       <div>
-        <p className="px-1 pb-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
+        <label htmlFor="sidebar-org-select" className="block px-1 pb-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
           Organisation
-        </p>
-        <div
-          className="flex h-8 w-full items-center justify-between gap-2 rounded-[2px] border border-line bg-surface px-2.5 text-left"
-          title="Active organisation"
-        >
-          <span className="min-w-0 truncate text-[12px] font-medium text-ink">{orgName}</span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-ink-3" strokeWidth={1.8} />
+        </label>
+        <div className="relative">
+          <select
+            id="sidebar-org-select"
+            value={activeOrg?.id || ""}
+            onChange={(e) => selectOrg(e.target.value)}
+            disabled={orgs.length === 0}
+            className="h-8 w-full appearance-none rounded-[2px] border border-line bg-surface pl-2.5 pr-7 text-[12px] font-medium text-ink outline-none focus:border-accent"
+          >
+            {orgs.length === 0 ? (
+              <option value="">{orgName}</option>
+            ) : (
+              orgs.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))
+            )}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3" strokeWidth={1.8} />
         </div>
       </div>
       <div>
-        <p className="px-1 pb-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
+        <label htmlFor="sidebar-ws-select" className="block px-1 pb-1 font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">
           Workspace
-        </p>
-        <div
-          className="flex h-8 w-full items-center justify-between gap-2 rounded-[2px] border border-line bg-surface px-2.5 text-left"
-          title="Active workspace"
-        >
-          <span className="min-w-0 truncate font-mono text-[11px] text-ink-2">{workspaceName}</span>
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-ink-3" strokeWidth={1.8} />
+        </label>
+        <div className="relative">
+          <select
+            id="sidebar-ws-select"
+            value={activeWs?.id || ""}
+            onChange={(e) => selectWorkspace(e.target.value)}
+            disabled={workspaces.length === 0}
+            className="h-8 w-full appearance-none rounded-[2px] border border-line bg-surface pl-2.5 pr-7 font-mono text-[11px] text-ink-2 outline-none focus:border-accent"
+          >
+            {workspaces.length === 0 ? (
+              <option value="">{workspaceName}</option>
+            ) : (
+              workspaces.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))
+            )}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3" strokeWidth={1.8} />
         </div>
       </div>
     </div>
@@ -180,6 +274,7 @@ function NavContent({
   onNavigate?: () => void
 }) {
   const pathname = usePathname()
+  const identity = useWorkspaceIdentity()
 
   async function handleSignOut() {
     onNavigate?.()
@@ -198,7 +293,7 @@ function NavContent({
         <Brand collapsed={collapsed} />
       </div>
 
-      <WorkspaceControls collapsed={collapsed} />
+      <WorkspaceControls collapsed={collapsed} identity={identity} />
 
       <nav className={cn("flex-1 overflow-y-auto pb-4", collapsed ? "px-1.5 pt-2" : "px-2")}>
         {navSections.map((section) => (
@@ -280,12 +375,16 @@ function NavContent({
           )}
         >
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[2px] border border-line bg-surface font-mono text-[9px] font-medium text-ink-2">
-            MV
+            {identity.initials}
           </span>
           {!collapsed && (
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[12px] font-medium text-ink">Profile</span>
-              <span className="block truncate font-mono text-[10px] text-ink-3">Account &amp; defaults</span>
+              <span className="block truncate text-[12px] font-medium text-ink">
+                {identity.userProfile?.name || "Profile"}
+              </span>
+              <span className="block truncate font-mono text-[10px] text-ink-3">
+                {identity.userProfile?.email || "Account & defaults"}
+              </span>
             </span>
           )}
         </Link>

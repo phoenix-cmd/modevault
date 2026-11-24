@@ -8,7 +8,7 @@ import {
   resolveUserProviderKey,
   type LlmProviderName,
 } from "@/lib/llm-provider"
-import { parseJson } from "@/lib/validation"
+import { checkRateLimit, parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
 const benchmarkSchema = z.object({
@@ -19,6 +19,13 @@ const benchmarkSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuthenticatedUser()
+    const limit = checkRateLimit(`benchmark:user:${user.id}`, 15, 60_000)
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { error: "Benchmark rate limit exceeded. Please wait before running another benchmark." },
+        { status: 429, headers: { "Retry-After": String(limit.retryAfterSec) } }
+      )
+    }
     const parsed = await parseJson(req, benchmarkSchema)
     if ("response" in parsed) return parsed.response
     const { modelSlug, prompt } = parsed.data

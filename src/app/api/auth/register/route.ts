@@ -18,10 +18,45 @@ export async function POST(req: NextRequest) {
 
     const parsed = await parseJson(req, registerSchema)
     if ("response" in parsed) return parsed.response
-    const { name, email, password } = parsed.data
+    const { name, email, password, inviteToken } = parsed.data
 
     const existing = await prisma.user.findUnique({ where: { email } })
     if (existing) {
+      if (inviteToken && !existing.passwordHash) {
+        const verification = await prisma.verificationToken.findUnique({
+          where: { token: inviteToken },
+        })
+        if (
+          verification &&
+          verification.expires.getTime() > Date.now() &&
+          verification.identifier.toLowerCase().endsWith(`:${email.toLowerCase()}`)
+        ) {
+          const passwordHash = await bcrypt.hash(password, 10)
+          const activated = await prisma.user.update({
+            where: { id: existing.id },
+            data: { name, passwordHash, emailVerified: new Date() },
+            select: { id: true, email: true, name: true },
+          })
+          await prisma.verificationToken
+            .delete({ where: { token: inviteToken } })
+            .catch(() => {})
+
+          const token = await signSession(activated.id)
+          const response = NextResponse.json(
+            { data: activated, invited: true },
+            { status: 201 }
+          )
+          response.cookies.set(COOKIE_NAME, token, {
+            httpOnly: true,
+            sameSite: "lax",
+            secure: process.env.NODE_ENV === "production",
+            path: "/",
+            maxAge: 60 * 60 * 24 * 7,
+          })
+          return response
+        }
+      }
+
       // Avoid explicit account enumeration oracle
       return NextResponse.json(
         { error: "Unable to complete registration with the provided details." },

@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowRight } from "lucide-react"
 import { BrandMark } from "@/components/landing/Navbar"
@@ -11,8 +11,17 @@ export default function RegisterPage() {
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [inviteToken, setInviteToken] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const invitedEmail = params.get("email")
+    const token = params.get("invite")
+    if (invitedEmail) setEmail(invitedEmail)
+    if (token) setInviteToken(token)
+  }, [])
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -22,7 +31,12 @@ export default function RegisterPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+          ...(inviteToken ? { inviteToken } : {}),
+        }),
       })
       const json = await res.json()
       if (!res.ok) {
@@ -80,6 +94,11 @@ export default function RegisterPage() {
             <h2 className="mt-2.5 rig-display text-[24px] font-semibold tracking-[-0.025em] text-[var(--rig-paper)]">
               Create your account
             </h2>
+            {inviteToken && (
+              <div className="mt-4 border border-[var(--rig-blue)]/40 bg-[#1c2f2d] px-3 py-2 text-[12px] text-[var(--rig-paper)]">
+                Organization invitation detected — set your name and password to activate membership.
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="mt-6 space-y-4">
               <label className="block">

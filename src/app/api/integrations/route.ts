@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
 import { decryptSecret, encryptSecret, keyPreview } from "@/lib/crypto"
 import { verifyAndSyncProvider } from "@/lib/provider-sync"
-import { parseJson } from "@/lib/validation"
+import { checkRateLimit, parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
 const integrationSchema = z.object({
@@ -98,6 +98,13 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireAuthenticatedUser()
+    const limit = checkRateLimit(`integrations:user:${user.id}`, 20, 60_000)
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { error: "Too many integration sync requests. Please wait a moment." },
+        { status: 429, headers: { "Retry-After": String(limit.retryAfterSec) } }
+      )
+    }
     const parsed = await parseJson(req, integrationSchema)
     if ("response" in parsed) return parsed.response
     const { providerSlug, action, apiKey, status, notes, features } = parsed.data

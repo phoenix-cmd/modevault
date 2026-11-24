@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
+import { unstable_rethrow } from "next/navigation"
 import { prisma } from "@/lib/db"
 
 export async function GET(request: NextRequest) {
   try {
-    const refresh = new URL(request.url).searchParams.get("refresh") === "1"
+    const refresh = request.nextUrl.searchParams.get("refresh") === "1"
 
     if (refresh) {
       try {
@@ -46,6 +47,7 @@ export async function GET(request: NextRequest) {
       source: rates[0]?.source || "Database exchange rates",
     })
   } catch (error) {
+    unstable_rethrow(error)
     console.error("Exchange rates error:", error)
     return NextResponse.json(
       { data: null, error: "Failed to fetch exchange rates" },

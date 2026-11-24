@@ -21,10 +21,57 @@ const chivoMono = Chivo_Mono({
   variable: "--font-mono",
 })
 
+function getSiteUrl(): URL {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim()
+  if (configured) return new URL(configured)
+  if (process.env.VERCEL_URL) return new URL(`https://${process.env.VERCEL_URL}`)
+  return new URL("https://modelvault.dev")
+}
+
 export const metadata: Metadata = {
-  title: "MODELVAULT — Software development. Orchestrated.",
+  metadataBase: getSiteUrl(),
+  title: {
+    default: "MODELVAULT — Software development. Orchestrated.",
+    template: "%s | MODELVAULT",
+  },
   description:
     "One environment to coordinate coding agents, automate engineering workflows, verify generated code, and govern AI resources.",
+  applicationName: "MODELVAULT",
+  keywords: [
+    "AI coding agents",
+    "multi-agent orchestration",
+    "AI workflow builder",
+    "code verification",
+    "LLM cost tracking",
+    "AI subscription manager",
+    "Claude Code",
+    "Codex",
+    "Gemini CLI",
+  ],
+  authors: [{ name: "MODELVAULT" }],
+  creator: "MODELVAULT",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: "/",
+    siteName: "MODELVAULT",
+    title: "MODELVAULT — Software development. Orchestrated.",
+    description:
+      "Coordinate coding agents, verify diffs before merge, build DAG pipelines, and track AI spend in one environment.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "MODELVAULT — Software development. Orchestrated.",
+    description:
+      "Coordinate coding agents, automate workflows, verify diffs, and track AI spend in one workspace.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 }
 
 export const viewport: Viewport = {

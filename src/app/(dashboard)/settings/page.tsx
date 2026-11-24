@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
+import { useModalA11y } from "@/lib/use-modal-a11y"
 
 const CURRENCIES = [
   { value: "INR", label: "INR — Indian Rupee (₹)", hint: "Default" },
@@ -61,6 +62,12 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [accountEmail, setAccountEmail] = useState("")
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [confirmText, setConfirmText] = useState("")
+  const [deletingAccount, setDeletingAccount] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const deleteDialogRef = useModalA11y(deleteOpen, () => setDeleteOpen(false))
 
   const notify = (message: string) => {
     setToast(message)
@@ -72,6 +79,7 @@ export default function SettingsPage() {
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
         if (json?.data) {
+          if (json.data.email) setAccountEmail(json.data.email)
           if (json.data.currency) setCurrency(json.data.currency)
           if (typeof json.data.quotaAlerts === "boolean") setQuotaAlerts(json.data.quotaAlerts)
           if (typeof json.data.renewalAlerts === "boolean") setRenewalAlerts(json.data.renewalAlerts)
@@ -287,7 +295,11 @@ export default function SettingsPage() {
               </p>
             </div>
             <button
-              onClick={() => notify("Account deletion requires confirmation via support")}
+              onClick={() => {
+                setDeleteError(null)
+                setConfirmText("")
+                setDeleteOpen(true)
+              }}
               className="btn-danger btn-sm shrink-0 self-start sm:self-auto"
             >
               Delete account
@@ -295,6 +307,77 @@ export default function SettingsPage() {
           </div>
         </div>
       </section>
+
+      {deleteOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 backdrop-blur-[1px] animate-fade-in sm:p-4">
+          <div
+            ref={deleteDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-account-title"
+            className="panel max-h-[90dvh] w-full max-w-md overflow-y-auto shadow-float"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-danger">Permanent action</p>
+                <h2 id="delete-account-title" className="mt-1 font-display text-[16px] font-medium tracking-[-0.02em] text-ink">
+                  Delete account
+                </h2>
+              </div>
+              <button onClick={() => setDeleteOpen(false)} className="icon-btn -mr-1 -mt-1" aria-label="Close">
+                <X className="h-4 w-4" strokeWidth={2} />
+              </button>
+            </div>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault()
+                setDeletingAccount(true)
+                setDeleteError(null)
+                try {
+                  const res = await fetch("/api/settings", {
+                    method: "DELETE",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ confirmText }),
+                  })
+                  const json = await res.json()
+                  if (!res.ok) throw new Error(json.error || "Failed to delete account")
+                  window.location.href = "/login"
+                } catch (err) {
+                  setDeleteError(err instanceof Error ? err.message : "Failed to delete account")
+                } finally {
+                  setDeletingAccount(false)
+                }
+              }}
+              className="space-y-4 p-5"
+            >
+              <p className="text-[12.5px] leading-relaxed text-ink-2">
+                This permanently deletes your profile, sessions, encrypted integrations, subscriptions, and billing history. Type <span className="font-mono font-semibold text-ink">DELETE</span>{accountEmail ? ` or ${accountEmail}` : ""} to confirm.
+              </p>
+              {deleteError && (
+                <div className="border border-danger/25 bg-danger-soft px-3 py-2 text-[12px] text-danger">
+                  {deleteError}
+                </div>
+              )}
+              <input
+                type="text"
+                required
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder="Type DELETE to confirm"
+                className="field font-mono"
+              />
+              <div className="flex items-center justify-end gap-2 border-t border-line pt-3">
+                <button type="button" onClick={() => setDeleteOpen(false)} className="btn-ghost">
+                  Cancel
+                </button>
+                <button type="submit" disabled={deletingAccount || !confirmText.trim()} className="btn-danger">
+                  {deletingAccount ? "Deleting…" : "Confirm delete"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <p className="font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">
         MODELVAULT · account &amp; notification preferences persisted to database

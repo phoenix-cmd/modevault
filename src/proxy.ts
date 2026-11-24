@@ -2,8 +2,19 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { verifySessionSignatureOnly } from "@/lib/auth"
 
-const PUBLIC_EXACT_PATHS = new Set(["/", "/login", "/register", "/favicon.ico", "/api/health"])
-const PUBLIC_PREFIX_PATHS = ["/api/auth/", "/_next/"]
+const PUBLIC_EXACT_PATHS = new Set([
+  "/",
+  "/login",
+  "/register",
+  "/favicon.ico",
+  "/robots.txt",
+  "/sitemap.xml",
+  "/manifest.webmanifest",
+  "/opengraph-image",
+  "/twitter-image",
+  "/api/health",
+])
+const PUBLIC_PREFIX_PATHS = ["/api/auth/", "/_next/", "/opengraph-image", "/twitter-image"]
 const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"])
 
 function isPublicPath(pathname: string): boolean {

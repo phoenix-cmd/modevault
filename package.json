@@ -53,6 +53,8 @@
     "typescript": "^5"
   },
   "overrides": {
-    "dompurify": "^3.4.17"
+    "dompurify": "^3.4.17",
+    "deepmerge-ts": "^8.0.0",
+    "effect": "^3.22.1"
   }
 }

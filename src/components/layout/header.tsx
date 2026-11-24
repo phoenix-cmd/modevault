@@ -126,6 +126,8 @@ export function Header({
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
+  const [userInitials, setUserInitials] = useState("MV")
+  const [userLabel, setUserLabel] = useState("User profile")
 
   const searchInputRef = useRef<HTMLInputElement>(null)
 
@@ -135,17 +137,32 @@ export function Header({
   }, [])
 
   useEffect(() => {
+    document.title = `${meta.title} | MODELVAULT`
+  }, [meta.title])
+
+  useEffect(() => {
     let cancelled = false
-    fetch("/api/notifications")
-      .then((res) => res.json())
-      .then((json) => {
-        if (cancelled) return
-        if (json?.data?.notifications) {
-          setNotifications(json.data.notifications)
-          setUnreadCount(json.data.unreadCount ?? 0)
-        }
-      })
-      .catch(() => {})
+    Promise.all([
+      fetch("/api/notifications").then((res) => res.json()).catch(() => null),
+      fetch("/api/auth/me").then((res) => (res.ok ? res.json() : null)).catch(() => null),
+    ]).then(([notifJson, meJson]) => {
+      if (cancelled) return
+      if (notifJson?.data?.notifications) {
+        setNotifications(notifJson.data.notifications)
+        setUnreadCount(notifJson.data.unreadCount ?? 0)
+      }
+      if (meJson?.data) {
+        const name = (meJson.data.name as string | undefined) || ""
+        const email = (meJson.data.email as string | undefined) || ""
+        const parts = (name || email).trim().split(/[\s@._-]+/).filter(Boolean)
+        const initials =
+          parts.length >= 2
+            ? `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase()
+            : (name || email).slice(0, 2).toUpperCase() || "MV"
+        setUserInitials(initials)
+        setUserLabel(name || email || "User profile")
+      }
+    })
     return () => {
       cancelled = true
     }
@@ -562,10 +579,10 @@ export function Header({
         <Link
           href="/settings"
           className="hidden h-8 w-8 items-center justify-center rounded-[2px] border border-line bg-surface font-mono text-[10px] font-medium text-ink-2 transition-colors hover:border-line-strong hover:text-ink sm:flex"
-          aria-label="User profile"
-          title="User profile"
+          aria-label={userLabel}
+          title={userLabel}
         >
-          MV
+          {userInitials}
         </Link>
         <button
           type="button"

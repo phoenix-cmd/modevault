@@ -1,7 +1,13 @@
+import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/db"
-import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import {
+  COOKIE_NAME,
+  requireAuthenticatedUser,
+  authErrorResponse,
+  revokeSessionToken,
+} from "@/lib/auth"
 import { parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
@@ -72,6 +78,7 @@ export async function GET() {
 
     return NextResponse.json({
       data: {
+        email: user?.email || authUser.email,
         currency: user?.currency || "INR",
         timezone: user?.timezone || "Asia/Kolkata",
         ...prefs,
@@ -157,5 +164,41 @@ export async function PATCH(req: NextRequest) {
   } catch (err: unknown) {
     logger.error("Settings PATCH failed", errorContext(err))
     return authErrorResponse(err, "Failed to save settings")
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const authUser = await requireAuthenticatedUser()
+    const body = (await req.json().catch(() => ({}))) as { confirmText?: string }
+    const confirmation = (body?.confirmText || "").trim()
+    if (
+      confirmation.toUpperCase() !== "DELETE" &&
+      confirmation.toLowerCase() !== authUser.email.toLowerCase()
+    ) {
+      return NextResponse.json(
+        { error: "Type DELETE or your account email to confirm permanent deletion." },
+        { status: 400 }
+      )
+    }
+
+    const cookieStore = await cookies()
+    const token = cookieStore.get(COOKIE_NAME)?.value
+    await revokeSessionToken(token)
+
+    await prisma.user.delete({ where: { id: authUser.id } })
+
+    const response = NextResponse.json({ data: { deleted: true } })
+    response.cookies.set(COOKIE_NAME, "", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 0,
+    })
+    return response
+  } catch (err: unknown) {
+    logger.error("Account DELETE failed", errorContext(err))
+    return authErrorResponse(err, "Failed to delete account")
   }
 }

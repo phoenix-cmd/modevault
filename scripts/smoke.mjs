@@ -224,6 +224,95 @@ async function main() {
     }
   }
 
+  // Delete the temporary Git project created earlier in smoke.mjs
+  if (gitProjectRes.json?.data?.id) {
+    const delProj = await request(`/api/projects?id=${encodeURIComponent(gitProjectRes.json.data.id)}`, { method: "DELETE" }, jar)
+    if (delProj.status !== 200) failures.push(`project delete ${delProj.status}`)
+  }
+
+  // Invited member -> invite token redemption -> account self-deletion
+  const invitedEmail = `invited-smoke-${Date.now().toString(36)}@example.com`
+  const inviteRes = await request(
+    "/api/members",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Smoke Invitee", email: invitedEmail, role: "Developer" }),
+    },
+    jar
+  )
+  const inviteUrl = inviteRes.json?.data?.inviteUrl || ""
+  const tokenMatch = inviteUrl.match(/invite=([^&]+)/)
+  if (inviteRes.status !== 201 || !tokenMatch?.[1]) {
+    failures.push(`member invite ${inviteRes.status}`)
+  } else {
+    const inviteJar = cookieJar()
+    const acceptRes = await request(
+      "/api/auth/register",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Smoke Invitee",
+          email: invitedEmail,
+          password: "SmokeStrongPassword99!",
+          inviteToken: decodeURIComponent(tokenMatch[1]),
+        }),
+      },
+      inviteJar
+    )
+    if (acceptRes.status !== 201 || !acceptRes.json?.invited) {
+      failures.push(`invite redeem ${acceptRes.status} ${acceptRes.json?.error || ""}`)
+    } else {
+      const delSelf = await request(
+        "/api/settings",
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confirmText: "DELETE" }),
+        },
+        inviteJar
+      )
+      if (delSelf.status !== 200) failures.push(`account self-delete ${delSelf.status}`)
+    }
+  }
+
+  // Public SEO verification (must return 200 without redirecting to /login)
+  const [robotsRes, sitemapRes, manifestRes, ogRes, homeRes] = await Promise.all([
+    fetch(`${BASE}/robots.txt`, { redirect: "manual" }),
+    fetch(`${BASE}/sitemap.xml`, { redirect: "manual" }),
+    fetch(`${BASE}/manifest.webmanifest`, { redirect: "manual" }),
+    fetch(`${BASE}/opengraph-image`, { redirect: "manual" }),
+    fetch(`${BASE}/`, { redirect: "manual" }),
+  ])
+  if (robotsRes.status !== 200) failures.push(`robots.txt ${robotsRes.status}`)
+  else {
+    const txt = await robotsRes.text()
+    if (!txt.includes("Sitemap:")) failures.push("robots.txt missing Sitemap")
+  }
+  if (sitemapRes.status !== 200) failures.push(`sitemap.xml ${sitemapRes.status}`)
+  else {
+    const xml = await sitemapRes.text()
+    if (!xml.includes("<urlset")) failures.push("sitemap.xml missing urlset")
+  }
+  if (manifestRes.status !== 200) failures.push(`manifest.webmanifest ${manifestRes.status}`)
+  if (ogRes.status !== 200 || !(ogRes.headers.get("content-type") || "").includes("image/png")) {
+    failures.push(`opengraph-image ${ogRes.status}`)
+  }
+  if (homeRes.status !== 200) failures.push(`landing html ${homeRes.status}`)
+  else {
+    const html = await homeRes.text()
+    if (!html.includes("application/ld+json") || !html.includes("FAQPage") || !html.includes("SoftwareApplication")) {
+      failures.push("landing missing JSON-LD structured data")
+    }
+    if (!html.includes("og:title") || !html.includes("twitter:card")) {
+      failures.push("landing missing OpenGraph/Twitter meta tags")
+    }
+    if (!html.includes("hidden=\"\"") && !html.includes("hidden")) {
+      failures.push("landing FAQ answers not rendered in SSR DOM")
+    }
+  }
+
   if (failures.length) {
     console.error("Smoke test failed:", failures.join(", "))
     process.exitCode = 1

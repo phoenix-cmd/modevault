@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   FolderGit2,
   Plus,
+  Trash2,
   Upload,
   CheckCircle2,
   FileCode,
@@ -44,7 +45,22 @@ export default function ProjectsPage() {
   const [uploading, setUploading] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [inspectionResult, setInspectionResult] = useState<any | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const handleDeleteProject = async (projId: string) => {
+    try {
+      const res = await fetch(`/api/projects?id=${encodeURIComponent(projId)}`, {
+        method: "DELETE",
+      })
+      if (res.ok) {
+        setConfirmDeleteId(null)
+        await fetchProjects()
+      }
+    } catch (err) {
+      console.error("Failed to delete project:", err)
+    }
+  }
 
   const fetchProjects = async () => {
     try {
@@ -310,22 +326,21 @@ export default function ProjectsPage() {
                 const env = proj.environments?.[0]
                 const source = proj.sources?.[0]
                 return (
-                  <Link
+                  <div
                     key={proj.id}
-                    href={`/agents?projectId=${proj.id}`}
-                    className="group grid grid-cols-[2.5rem_minmax(0,1.5fr)_7.5rem_4.5rem_4.5rem] items-center gap-4 border-b border-line px-3 py-4 transition-colors duration-150 hover:bg-surface-2/40 lg:grid-cols-[2.5rem_minmax(0,1.4fr)_7.5rem_8.5rem_6.5rem_5.5rem_4.5rem]"
+                    className="group grid grid-cols-[2.5rem_minmax(0,1.5fr)_7.5rem_4.5rem_5.5rem] items-center gap-4 border-b border-line px-3 py-4 transition-colors duration-150 hover:bg-surface-2/40 lg:grid-cols-[2.5rem_minmax(0,1.4fr)_7.5rem_8.5rem_6.5rem_5.5rem_5.5rem]"
                   >
                     <span className="font-mono text-[10px] tabular-nums text-ink-3">{String(index + 1).padStart(2, "0")}</span>
 
-                    <div className="min-w-0">
+                    <Link href={`/agents?projectId=${proj.id}`} className="min-w-0">
                       <div className="flex items-center gap-2">
                         <FileCode className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.7} />
-                        <h3 className="truncate text-[13.5px] font-medium tracking-[-0.01em] text-ink">{proj.name}</h3>
+                        <h3 className="truncate text-[13.5px] font-medium tracking-[-0.01em] text-ink group-hover:text-accent">{proj.name}</h3>
                       </div>
                       <p className="mt-1 line-clamp-1 text-[12px] text-ink-3">
                         {proj.description || "Repository attached to this workspace. Open to view agent execution context."}
                       </p>
-                    </div>
+                    </Link>
 
                     <span className="truncate font-mono text-[10px] uppercase tracking-[0.06em] text-ink-2">
                       {proj.framework?.toUpperCase() || "—"}
@@ -345,10 +360,34 @@ export default function ProjectsPage() {
                       {proj.executions?.length || 0}
                     </span>
 
-                    <span className="text-right font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3 transition-colors group-hover:text-accent">
-                      Open
-                    </span>
-                  </Link>
+                    <div className="flex items-center justify-end gap-2">
+                      <Link
+                        href={`/agents?projectId=${proj.id}`}
+                        className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-3 transition-colors hover:text-accent"
+                      >
+                        Open
+                      </Link>
+                      {confirmDeleteId === proj.id ? (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteProject(proj.id)}
+                          className="font-mono text-[9.5px] uppercase tracking-[0.06em] text-danger hover:underline"
+                        >
+                          Confirm
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(proj.id)}
+                          className="icon-btn h-7 w-7 hover:text-danger"
+                          title={`Delete ${proj.name}`}
+                          aria-label={`Delete ${proj.name}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.7} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 )
               })}
             </div>

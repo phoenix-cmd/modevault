@@ -4,10 +4,15 @@ import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
 import {
   getUserAccessibleWorkspaceIds,
+  requireProjectAccess,
   requireWorkspaceAccess,
   resolveUserDefaultWorkspace,
 } from "@/lib/permissions"
-import { cloneOrScaffoldGitWorkspace } from "@/lib/project-workspace"
+import {
+  cloneOrScaffoldGitWorkspace,
+  removeProjectWorkspace,
+} from "@/lib/project-workspace"
+import { stopPreview } from "@/lib/preview-manager"
 import { parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
@@ -227,5 +232,25 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     logger.error("Projects POST failed", errorContext(err))
     return authErrorResponse(err, "Failed to create project")
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const user = await requireAuthenticatedUser()
+    const projectId = new URL(req.url).searchParams.get("id")?.trim()
+    if (!projectId) {
+      return NextResponse.json({ error: "Project id is required" }, { status: 400 })
+    }
+
+    await requireProjectAccess(projectId, user.id, "admin")
+    await stopPreview(projectId).catch(() => {})
+    await removeProjectWorkspace(projectId).catch(() => {})
+    await prisma.project.delete({ where: { id: projectId } })
+
+    return NextResponse.json({ data: { deleted: true, id: projectId } })
+  } catch (err: unknown) {
+    logger.error("Projects DELETE failed", errorContext(err))
+    return authErrorResponse(err, "Failed to delete project")
   }
 }

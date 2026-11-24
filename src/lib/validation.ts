@@ -192,4 +192,5 @@ export const registerSchema = z.object({
   name: z.string().trim().min(1).max(120),
   email: emailSchema,
   password: passwordSchema,
+  inviteToken: z.string().trim().min(1).max(128).optional(),
 })

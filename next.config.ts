@@ -34,6 +34,7 @@ const securityHeaders = [
       "frame-src 'self'",
       "frame-ancestors 'self'",
       "base-uri 'self'",
+      "object-src 'none'",
       "form-action 'self' https://github.com",
     ].join("; "),
   },
