@@ -31,7 +31,8 @@ export async function GET(_request: NextRequest) {
       }),
     ])
 
-    const targetCurrency = dbUser?.currency || "INR"
+    const targetCurrency =
+      dbUser?.currency || subscriptions[0]?.currency || apiAccounts[0]?.currency || "USD"
 
     let totalMonthlySpend = 0
     let totalAnnualSpend = 0
@@ -49,6 +50,10 @@ export async function GET(_request: NextRequest) {
 
     const totalApiBalance = apiAccounts.reduce(
       (sum, acc) => sum + convertCurrency(acc.prepaidBalance ?? 0, acc.currency, "USD", rates),
+      0
+    )
+    const totalApiBalanceInTarget = apiAccounts.reduce(
+      (sum, acc) => sum + convertCurrency(acc.prepaidBalance ?? 0, acc.currency, targetCurrency, rates),
       0
     )
 
@@ -167,6 +172,7 @@ export async function GET(_request: NextRequest) {
         totalMonthlySpend: parseFloat(totalMonthlySpend.toFixed(2)),
         totalAnnualSpend: parseFloat(totalAnnualSpend.toFixed(2)),
         totalApiBalance: parseFloat(totalApiBalance.toFixed(2)),
+        totalApiBalanceInTarget: parseFloat(totalApiBalanceInTarget.toFixed(2)),
         upcomingRenewals,
         currency: targetCurrency,
         recentActivity,

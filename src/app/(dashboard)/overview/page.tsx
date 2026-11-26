@@ -29,6 +29,7 @@ interface DashboardApiData {
   totalMonthlySpend: number
   totalAnnualSpend: number
   totalApiBalance: number
+  totalApiBalanceInTarget?: number
   upcomingRenewals: number
   currency?: DashboardSummary["currency"]
   spendingByMonth?: Record<string, number>
@@ -117,7 +118,7 @@ export default function OverviewPage() {
             totalAnnualSpend: d.totalAnnualSpend,
             totalApiBalance: d.totalApiBalance,
             upcomingRenewals: d.upcomingRenewals,
-            currency: d.currency || "INR",
+            currency: d.currency || subJson?.data?.[0]?.currency || "USD",
           })
 
           if (Array.isArray(d.spendingByMonthDetailed) && d.spendingByMonthDetailed.length > 0) {
@@ -182,7 +183,7 @@ export default function OverviewPage() {
             status: s.status || "active",
             billingCycle: s.billingCycle || "monthly",
             price: s.price,
-            currency: s.currency || "INR",
+            currency: s.currency || dashJson?.data?.currency || "USD",
             startDate: s.startDate,
             renewalDate: s.renewalDate,
             expiryDate: s.expiryDate,

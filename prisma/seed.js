@@ -399,6 +399,7 @@ async function main() {
     { slug: "perplexity", name: "Perplexity", brandColor: "#20b2aa", website: "https://perplexity.ai", hasApi: true, hasConsumer: true },
     { slug: "openrouter", name: "OpenRouter", brandColor: "#6366f1", website: "https://openrouter.ai", hasApi: true, hasConsumer: false },
     { slug: "windsurf", name: "Windsurf", brandColor: "#059669", website: "https://windsurf.com", hasApi: false, hasConsumer: true },
+    { slug: "antigravity", name: "Antigravity", brandColor: "#3b82f6", website: "https://antigravity.google", hasApi: false, hasConsumer: true },
     { slug: "huggingface", name: "Hugging Face", brandColor: "#ff9d00", website: "https://huggingface.co", hasApi: true, hasConsumer: false },
   ]
 
@@ -410,6 +411,29 @@ async function main() {
     })
   }
   console.log("✓ Providers seeded")
+
+  // Provider capability matrix
+  const capabilitySeeds = [
+    { providerSlug: "openrouter", displayName: "OpenRouter", canSyncUsage: true, canSyncCredits: true, canReplenish: false, canCode: true, authMode: "api_key", syncCadence: "15m", termsStatus: "official", billingUrl: "https://openrouter.ai/settings/credits", capabilitiesNote: "Live credits & usage via /api/v1/credits and /api/v1/auth/key; OpenAI-compatible coding backend." },
+    { providerSlug: "openai", displayName: "OpenAI", canSyncUsage: true, canSyncCredits: false, canReplenish: false, canCode: true, authMode: "api_key", syncCadence: "15m", termsStatus: "limited", billingUrl: "https://platform.openai.com/settings/organization/billing/overview", capabilitiesNote: "Admin key required for historical org usage; standard key supports direct Studio coding." },
+    { providerSlug: "anthropic", displayName: "Anthropic", canSyncUsage: true, canSyncCredits: false, canReplenish: false, canCode: true, authMode: "api_key", syncCadence: "15m", termsStatus: "limited", billingUrl: "https://console.anthropic.com/settings/billing", capabilitiesNote: "Admin key required for org usage report; standard key supports direct Messages coding." },
+    { providerSlug: "google", displayName: "Google Gemini", canSyncUsage: false, canSyncCredits: false, canReplenish: false, canCode: true, authMode: "api_key", syncCadence: "1h", termsStatus: "limited", billingUrl: "https://aistudio.google.com/app/plan_information", capabilitiesNote: "Gemini REST API powers Studio coding; usage/credits tracked manually." },
+    { providerSlug: "huggingface", displayName: "Hugging Face", canSyncUsage: false, canSyncCredits: false, canReplenish: false, canCode: true, authMode: "api_key", syncCadence: "manual", termsStatus: "limited", billingUrl: "https://huggingface.co/settings/billing", capabilitiesNote: "Token check and Inference Router coding supported." },
+    { providerSlug: "perplexity", displayName: "Perplexity", canSyncUsage: false, canSyncCredits: false, canReplenish: false, canCode: false, authMode: "api_key", syncCadence: "manual", termsStatus: "limited", billingUrl: "https://www.perplexity.ai/settings/api", capabilitiesNote: "API key verification supported; usage tracked manually." },
+    { providerSlug: "github-copilot", displayName: "GitHub Copilot", canSyncUsage: false, canSyncCredits: false, canReplenish: false, canCode: false, authMode: "manual", syncCadence: "manual", termsStatus: "manual_only", billingUrl: "https://github.com/settings/copilot", capabilitiesNote: "Consumer IDE seat tracked manually." },
+    { providerSlug: "cursor", displayName: "Cursor", canSyncUsage: false, canSyncCredits: false, canReplenish: false, canCode: false, authMode: "manual", syncCadence: "manual", termsStatus: "manual_only", billingUrl: "https://cursor.com/settings", capabilitiesNote: "Consumer IDE seat; manual import or authorized local CLI bridge only." },
+    { providerSlug: "antigravity", displayName: "Antigravity", canSyncUsage: false, canSyncCredits: false, canReplenish: false, canCode: false, authMode: "manual", syncCadence: "manual", termsStatus: "manual_only", billingUrl: "https://antigravity.google", capabilitiesNote: "Consumer IDE plan; manual import or authorized local CLI bridge only." },
+    { providerSlug: "windsurf", displayName: "Windsurf", canSyncUsage: false, canSyncCredits: false, canReplenish: false, canCode: false, authMode: "manual", syncCadence: "manual", termsStatus: "manual_only", billingUrl: "https://windsurf.com/profile", capabilitiesNote: "Consumer IDE plan tracked manually." },
+  ]
+  for (const cap of capabilitySeeds) {
+    const prov = await prisma.provider.findUnique({ where: { slug: cap.providerSlug }, select: { id: true } })
+    await prisma.providerCapability.upsert({
+      where: { providerSlug: cap.providerSlug },
+      update: { ...cap, providerId: prov?.id ?? null },
+      create: { ...cap, providerId: prov?.id ?? null },
+    })
+  }
+  console.log("✓ Provider capabilities seeded")
 
   // AI model catalog
   const models = [
@@ -945,6 +969,67 @@ async function main() {
     },
   })
   console.log("✓ Review comments seeded")
+
+  // Seed default Replenishment Rule, Usage Snapshot (manual), and Coding Bindings
+  await prisma.replenishmentRule.upsert({
+    where: { id: "rep_rule_openai_001" },
+    update: {},
+    create: {
+      id: "rep_rule_openai_001",
+      userId: user.id,
+      providerSlug: "openai",
+      apiAccountId: "api_001",
+      enabled: true,
+      thresholdAmount: 15,
+      topUpAmount: 25,
+      currency: "USD",
+      maxMonthlySpend: 100,
+      cooldownMinutes: 60,
+      autoPayAuthorized: false,
+      notifyOnLow: true,
+      notifyOnSuccess: true,
+      notifyOnFailure: true,
+    },
+  })
+
+  await prisma.usageSnapshot.upsert({
+    where: { id: "snap_seed_openai_001" },
+    update: {},
+    create: {
+      id: "snap_seed_openai_001",
+      userId: user.id,
+      providerSlug: "openai",
+      apiAccountId: "api_001",
+      periodStart: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+      periodEnd: new Date(),
+      inputTokens: 980000,
+      outputTokens: 260000,
+      cachedTokens: 210000,
+      requests: 1420,
+      cost: 18.45,
+      currency: "USD",
+      creditsRemaining: 42.5,
+      creditsUsed: 157.5,
+      dataSource: "manual",
+      syncStatus: "ok",
+    },
+  })
+
+  await prisma.codingCredentialBinding.upsert({
+    where: { id: "bind_demo_cursor" },
+    update: {},
+    create: {
+      id: "bind_demo_cursor",
+      userId: user.id,
+      label: "Cursor Pro (Manual / Unsupported Direct Backend)",
+      providerSlug: "cursor",
+      backendType: "manual_unsupported",
+      subscriptionId: "sub_005",
+      defaultModel: "cursor-manual",
+      isEnabled: true,
+    },
+  })
+  console.log("✓ Phase 0–3 seed baselines initialized")
 
   console.log("\n✅ MODELVAULT multi-agent platform database seeded successfully!")
 }

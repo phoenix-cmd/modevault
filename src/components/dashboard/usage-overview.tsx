@@ -2,6 +2,7 @@
 
 import { Database, Zap, MessageCircle, Coins } from "lucide-react"
 import { ProviderIcon } from "@/components/ui/provider-icon"
+import { TrustBadge } from "@/components/ui/trust-badge"
 import {
   cn,
   formatNumber,
@@ -9,7 +10,7 @@ import {
   getUsageBarColor,
   getUsageColor,
 } from "@/lib/utils"
-import type { SubscriptionData, DataSource, UsageUnit } from "@/lib/types"
+import type { SubscriptionData, UsageUnit } from "@/lib/types"
 
 interface UsageMetric {
   label: string
@@ -57,21 +58,6 @@ function extractUsageMetrics(sub: SubscriptionData): UsageMetric[] {
   return metrics
 }
 
-const DATA_SOURCE_STYLE: Record<DataSource, { label: string; className: string }> = {
-  api_sync: {
-    label: "Synced",
-    className: "bg-success-soft text-success",
-  },
-  manual: {
-    label: "Manual",
-    className: "bg-info-soft text-info",
-  },
-  estimated: {
-    label: "Estimated",
-    className: "bg-warning-soft text-warning",
-  },
-}
-
 const UNIT_ICON: Record<UsageUnit, React.ElementType> = {
   messages: MessageCircle,
   tokens: Database,
@@ -110,7 +96,6 @@ export function UsageOverview({ subscriptions }: UsageOverviewProps) {
       <ul>
         {subsWithUsage.map((sub) => {
           const metrics = extractUsageMetrics(sub)
-          const source = DATA_SOURCE_STYLE[sub.dataSource]
 
           return (
             <li
@@ -123,7 +108,7 @@ export function UsageOverview({ subscriptions }: UsageOverviewProps) {
                   <p className="truncate text-[13px] font-medium text-ink">{sub.providerName}</p>
                   <p className="truncate text-[11.5px] text-ink-3">{sub.planName}</p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                    <span className={cn("badge", source.className)}>{source.label}</span>
+                    <TrustBadge source={sub.dataSource} syncedAt={sub.updatedAt} showFreshness={sub.dataSource === "live_api_sync" || sub.dataSource === "api_sync"} />
                     <span className="font-mono text-[9.5px] uppercase tracking-[0.08em] text-ink-3">
                       {metrics.length} metric{metrics.length === 1 ? "" : "s"}
                     </span>

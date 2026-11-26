@@ -1,25 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { decryptSecret } from "@/lib/crypto"
 import { getUserAccessibleWorkspaceIds, requireProjectAccess } from "@/lib/permissions"
-import {
-  analyzeSourceCodeAst,
-  commitWorkspace,
-  createBranch,
-  flattenWorkspaceTree,
-  getLatestCommitDiff,
-  isSafeRelativePath,
-  listWorkspaceTree,
-  readWorkspaceFile,
-  writeWorkspaceFile,
-} from "@/lib/project-workspace"
 import { ensureProjectSourceWorkspace } from "@/lib/project-source"
-import {
-  estimateTokenCost,
-  invokeLlmCompletion,
-  resolveUserProviderKey,
-  type LlmProviderName,
-} from "@/lib/llm-provider"
+import { syncAndListCodingBindings, type EnrichedCodingBinding } from "@/lib/coding-bindings"
+import { runCodingAgentLoop } from "@/lib/agent-loop"
+import { evaluateReplenishmentForAccount } from "@/lib/replenishment"
+import { resolveUserProviderKey, type LlmProviderName } from "@/lib/llm-provider"
 import { publishExecutionComplete, publishExecutionEvent } from "@/lib/event-bus"
 import { scanExecutionDiffServerSide } from "@/app/api/executions/[id]/verify/route"
 import { executionCreateSchema, parseJson } from "@/lib/validation"
@@ -47,26 +35,72 @@ function mapAgentPreferences(agentId?: string): {
   }
 }
 
-function selectRelevantFiles(files: string[], prompt: string): string[] {
-  const words = prompt
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((w) => w.length >= 3)
-
-  return files
-    .map((file) => {
-      const lower = file.toLowerCase()
-      let score = 0
-      for (const word of words) {
-        if (lower.includes(word)) score += 5
-      }
-      if (/\.(ts|tsx|js|jsx|py)$/.test(lower)) score += 2
-      if (lower.startsWith("src/")) score += 2
-      return { file, score }
+async function resolveBindingKey(
+  userId: string,
+  binding: EnrichedCodingBinding | undefined
+): Promise<{
+  providerSlug: string
+  apiKey: string | null
+  bridgeEndpoint: string | null
+  backendType: "direct_api" | "local_bridge" | "deterministic_fallback"
+  model: string
+}> {
+  if (!binding) {
+    return {
+      providerSlug: "none",
+      apiKey: null,
+      bridgeEndpoint: null,
+      backendType: "deterministic_fallback",
+      model: "deterministic-fallback",
+    }
+  }
+  if (binding.backendType === "local_bridge" && binding.bridgeEndpoint) {
+    return {
+      providerSlug: binding.providerSlug,
+      apiKey: null,
+      bridgeEndpoint: binding.bridgeEndpoint,
+      backendType: "local_bridge",
+      model: binding.defaultModel || "local-bridge",
+    }
+  }
+  if (binding.backendType === "direct_api") {
+    const cred = await prisma.integrationCredential.findUnique({
+      where: {
+        userId_providerSlug: { userId, providerSlug: binding.providerSlug },
+      },
     })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 3)
-    .map((x) => x.file)
+    let key: string | null = null
+    if (cred?.encryptedKey && cred.status !== "not_connected") {
+      try {
+        key = decryptSecret(cred.encryptedKey).trim() || null
+      } catch {
+        key = null
+      }
+    }
+    if (!key) {
+      const envFallback = await resolveUserProviderKey(userId, [
+        binding.providerSlug as LlmProviderName,
+      ]).catch(() => null)
+      if (envFallback && envFallback.provider === binding.providerSlug) {
+        key = envFallback.apiKey
+      }
+    }
+    return {
+      providerSlug: binding.providerSlug,
+      apiKey: key,
+      bridgeEndpoint: null,
+      backendType: key ? "direct_api" : "deterministic_fallback",
+      model: binding.defaultModel || binding.models[0]?.slug || "gpt-4o-mini",
+    }
+  }
+
+  return {
+    providerSlug: binding.providerSlug,
+    apiKey: null,
+    bridgeEndpoint: null,
+    backendType: "deterministic_fallback",
+    model: "deterministic-fallback",
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -90,6 +124,12 @@ export async function GET(req: NextRequest) {
         project: true,
         tasks: true,
         artifacts: true,
+        usageAttribution: {
+          include: {
+            apiAccount: { select: { id: true, accountName: true, currency: true, prepaidBalance: true } },
+            subscription: { select: { id: true, customPlanName: true } },
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
     })
@@ -107,7 +147,18 @@ export async function POST(req: NextRequest) {
     const user = await requireAuthenticatedUser()
     const parsed = await parseJson(req, executionCreateSchema)
     if ("response" in parsed) return parsed.response
-    const { projectId, prompt, targetBranch, agentId, agentSlug } = parsed.data
+    const {
+      projectId,
+      prompt,
+      targetBranch,
+      agentId,
+      agentSlug,
+      bindingId,
+      subscriptionId,
+      apiAccountId,
+      model: requestedModel,
+      allowDeterministicFallback,
+    } = parsed.data
 
     const project = await prisma.project.findUnique({
       where: { id: projectId },
@@ -119,10 +170,81 @@ export async function POST(req: NextRequest) {
 
     await requireProjectAccess(project.id, user.id, "member")
 
+    const allBindings = await syncAndListCodingBindings(user.id)
+    let selectedBinding: EnrichedCodingBinding | undefined
+    if (bindingId) {
+      selectedBinding = allBindings.find((b) => b.id === bindingId)
+      if (!selectedBinding) {
+        return NextResponse.json({ error: "Coding credential binding not found" }, { status: 404 })
+      }
+    } else if (apiAccountId) {
+      selectedBinding = allBindings.find((b) => b.apiAccountId === apiAccountId)
+    } else if (subscriptionId) {
+      selectedBinding = allBindings.find((b) => b.subscriptionId === subscriptionId)
+    } else {
+      selectedBinding = allBindings.find((b) => b.canExecuteLive)
+    }
+
+    // Never pretend a manual/unsupported subscription (Cursor, Antigravity, etc.) ran live
+    if (selectedBinding?.backendType === "manual_unsupported" && !allowDeterministicFallback) {
+      return NextResponse.json(
+        {
+          error: `${selectedBinding.providerName} is marked manual/unsupported for automated Studio execution. Select a direct API key binding, attach a local CLI bridge, or explicitly choose deterministic fallback.`,
+          code: "UNSUPPORTED_CODING_BACKEND",
+          binding: selectedBinding,
+        },
+        { status: 422 }
+      )
+    }
+
+    if (selectedBinding?.guardrailBlocked && selectedBinding.backendType !== "manual_unsupported" && !allowDeterministicFallback) {
+      return NextResponse.json(
+        {
+          error: selectedBinding.guardrailReason || "Account balance is below configured execution guardrail.",
+          code: "BALANCE_GUARDRAIL_BLOCKED",
+          binding: selectedBinding,
+        },
+        { status: 422 }
+      )
+    }
+
     const branch = targetBranch || `feature/ai-${Date.now().toString(36)}`
     const title = prompt.length > 70 ? `${prompt.slice(0, 67)}...` : prompt
     const agentConfig = mapAgentPreferences(agentId || agentSlug)
-    const providerKey = await resolveUserProviderKey(user.id, agentConfig.preferredProviders)
+
+    let resolved = await resolveBindingKey(user.id, selectedBinding)
+    if (!selectedBinding && !resolved.apiKey) {
+      const legacyKey = await resolveUserProviderKey(user.id, agentConfig.preferredProviders).catch(() => null)
+      if (legacyKey) {
+        resolved = {
+          providerSlug: legacyKey.provider,
+          apiKey: legacyKey.apiKey,
+          bridgeEndpoint: null,
+          backendType: "direct_api",
+          model: requestedModel || legacyKey.model,
+        }
+        selectedBinding = allBindings.find(
+          (b) => b.providerSlug === legacyKey.provider && b.backendType === "direct_api"
+        )
+      }
+    }
+
+    const chosenModel = requestedModel?.trim() || resolved.model
+
+    // Pre-run maxCostPerRun check against catalog estimate
+    const modelOption = selectedBinding?.models.find((m) => m.slug === chosenModel)
+    if (
+      selectedBinding?.maxCostPerRun &&
+      modelOption &&
+      modelOption.estimatedRunCostUsd > selectedBinding.maxCostPerRun
+    ) {
+      return NextResponse.json(
+        {
+          error: `Estimated cost ($${modelOption.estimatedRunCostUsd.toFixed(4)}) exceeds binding guardrail max ($${selectedBinding.maxCostPerRun.toFixed(2)}).`,
+        },
+        { status: 422 }
+      )
+    }
 
     let ensuredPath: string | null = null
     try {
@@ -133,14 +255,6 @@ export async function POST(req: NextRequest) {
       ) as { sourcePath?: string } | undefined
       ensuredPath = existing?.sourcePath || null
     }
-    const source = ensuredPath ? { sourcePath: ensuredPath } : undefined
-
-    let executionMode: "live_llm" | "local_deterministic" = "local_deterministic"
-    let llmMeta: { provider: string; model: string; inputTokens: number; outputTokens: number; totalTokens: number; estimatedCost: number } | null = null
-    let workspaceFiles: string[] = []
-    let targetFilePath = "MODELVAULT_EXECUTION.md"
-    let realDiff = ""
-    let realCommitSha = ""
 
     const execution = await prisma.execution.create({
       data: {
@@ -153,31 +267,34 @@ export async function POST(req: NextRequest) {
         targetBranch: branch,
         planJson: JSON.stringify({
           goal: prompt,
-          agent: agentConfig.displayName,
-          executionMode: providerKey ? "live_llm" : "local_deterministic",
+          agent: selectedBinding?.label || agentConfig.displayName,
+          executionMode: resolved.backendType === "deterministic_fallback" ? "local_deterministic" : "live_llm",
+          provider: resolved.providerSlug,
+          model: chosenModel,
           stages: [
             { name: "Repository & AST Inspection", agent: agentConfig.displayName, status: "running" },
-            { name: "Workspace Mutation & Git Commit", agent: agentConfig.displayName, status: "pending" },
-            { name: "Security Scan & Diff Verification", agent: "Verification Scanner", status: "pending" },
+            { name: "Multi-Step Tool Loop & Verification", agent: selectedBinding?.label || agentConfig.displayName, status: "pending" },
+            { name: "Security Scan & Diff Approval Gate", agent: "Verification Scanner", status: "pending" },
           ],
         }),
         tasks: {
           create: [
             {
-              title: "Inspect workspace tree and AST symbols",
-              description: "Index workspace files and compute target symbol boundaries",
+              title: "Inspect workspace tree and relevant source files",
+              description: "Locate target modules and inspect AST symbols",
               agentRole: "Lead Architect",
               agentName: agentConfig.displayName,
               status: "completed",
               orderIndex: 0,
             },
             {
-              title: "Synthesize workspace change and commit diff",
-              description: providerKey
-                ? `Run live ${providerKey.provider} completion (${providerKey.model}) against workspace`
-                : "Generate deterministic execution artifact in Git feature branch",
+              title: "Execute bounded coding tool loop and syntax checks",
+              description:
+                resolved.backendType === "deterministic_fallback"
+                  ? "Deterministic fallback scaffold (low confidence — no live key)"
+                  : `Run ${resolved.providerSlug} (${chosenModel}) via ${resolved.backendType}`,
               agentRole: "Engineer",
-              agentName: agentConfig.displayName,
+              agentName: selectedBinding?.label || agentConfig.displayName,
               status: "running",
               orderIndex: 1,
             },
@@ -195,18 +312,20 @@ export async function POST(req: NextRequest) {
       include: { tasks: true },
     })
 
+    let seqCounter = 0
     const appendEvent = async (
-      seq: number,
       eventType: string,
       level: string,
-      taskId: string | undefined,
+      taskIndex: number,
       payload: Record<string, unknown>
     ) => {
+      seqCounter += 1
+      const taskId = execution.tasks[taskIndex]?.id
       const created = await prisma.agentEvent.create({
         data: {
           executionId: execution.id,
           taskId,
-          seq,
+          seq: seqCounter,
           eventType,
           level,
           payloadJson: JSON.stringify(payload),
@@ -224,153 +343,41 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    if (source?.sourcePath) {
-      const tree = await listWorkspaceTree(source.sourcePath).catch(() => [])
-      workspaceFiles = flattenWorkspaceTree(tree)
-    }
-
-    const relevantFiles = selectRelevantFiles(workspaceFiles, prompt)
-    await appendEvent(1, "tool_call", "info", execution.tasks[0]?.id, {
-      tool: "list_workspace_tree",
-      fileCount: workspaceFiles.length,
-      selectedTargets: relevantFiles,
-    })
-
-    let editedSummary = `Applied workspace code change for: ${prompt}`
-    let updatedFileContent = `# MODELVAULT Execution\n\nPrompt: ${prompt}\nAgent: ${agentConfig.displayName}\nBranch: ${branch}\nTimestamp: ${new Date().toISOString()}\n`
-
-    // Check if the prompt explicitly names a target file (e.g. from Studio "Target file <path>: <prompt>")
-    const explicitTargetMatch = prompt.match(/^Target file\s+([^\s:]+)\s*:\s*([\s\S]*)$/i)
-    const explicitTarget =
-      explicitTargetMatch?.[1] && isSafeRelativePath(explicitTargetMatch[1])
-        ? explicitTargetMatch[1]
-        : null
-    const cleanTaskPrompt = explicitTargetMatch?.[2]?.trim() || prompt.trim()
-
-    const primaryCandidateFile =
-      (explicitTarget && workspaceFiles.includes(explicitTarget) ? explicitTarget : null) ||
-      relevantFiles.find((f) => /\.(ts|tsx|js|jsx|py|md)$/.test(f)) ||
-      relevantFiles[0] ||
-      null
-
-    if (source?.sourcePath && primaryCandidateFile) {
-      const candidateContent = await readWorkspaceFile(source.sourcePath, primaryCandidateFile).catch(() => "")
-      if (candidateContent) {
-        targetFilePath = primaryCandidateFile
-        const ast = analyzeSourceCodeAst(primaryCandidateFile, candidateContent)
-        const lowerTarget = primaryCandidateFile.toLowerCase()
-        const safeCommentGoal = cleanTaskPrompt.replace(/\r?\n/g, " ").slice(0, 120)
-
-        if (lowerTarget.endsWith(".ts") || lowerTarget.endsWith(".tsx") || lowerTarget.endsWith(".js") || lowerTarget.endsWith(".jsx")) {
-          const helperId = `verifyAgentRevision_${Date.now().toString(36).slice(-4)}`
-          updatedFileContent = `${candidateContent.trimEnd()}\n\n/**\n * Agent patch (${agentConfig.displayName}): ${safeCommentGoal}\n * AST complexity baseline: ${ast.complexityScore} (${ast.complexityRating})\n */\nexport function ${helperId}(input?: Record<string, unknown>): { verified: boolean; target: string } {\n  if (input && Object.keys(input).length === 0) {\n    return { verified: true, target: "${primaryCandidateFile}" }\n  }\n  return { verified: true, target: "${primaryCandidateFile}" }\n}\n`
-        } else if (lowerTarget.endsWith(".py")) {
-          const helperId = `verify_agent_revision_${Date.now().toString(36).slice(-4)}`
-          updatedFileContent = `${candidateContent.trimEnd()}\n\n\ndef ${helperId}(payload: dict | None = None) -> dict:\n    \"\"\"Agent patch (${agentConfig.displayName}): ${safeCommentGoal}\"\"\"\n    return {"verified": True, "target": "${primaryCandidateFile}", "has_payload": bool(payload)}\n`
-        } else {
-          updatedFileContent = `${candidateContent.trimEnd()}\n\n## Agent Revision (${agentConfig.displayName})\n- Task: ${safeCommentGoal}\n- Branch: \`${branch}\`\n`
-        }
-      }
-    }
-
-    if (providerKey) {
-      try {
-        const snippets: string[] = []
-        if (source?.sourcePath) {
-          for (const rel of relevantFiles.slice(0, 2)) {
-            const content = await readWorkspaceFile(source.sourcePath, rel).catch(() => "")
-            if (content) {
-              snippets.push(`### ${rel}\n\`\`\`\n${content.slice(0, 2500)}\n\`\`\``)
-            }
-          }
-        }
-
-        const llm = await invokeLlmCompletion({
-          provider: providerKey.provider,
-          apiKey: providerKey.apiKey,
-          model: providerKey.model,
-          maxTokens: 1600,
-          timeoutMs: 25000,
-          systemPrompt:
-            "You are a coding agent. Respond ONLY with valid JSON: { \"targetFile\": \"relative/path\", \"summary\": \"short description\", \"content\": \"full updated file content\" }. Pick an existing file from the provided workspace files when safe, or write a detailed implementation guide to MODELVAULT_EXECUTION.md.",
-          userPrompt: `Task: ${prompt}\nProject: ${project.name} (${project.framework || "web"})\nWorkspace files: ${workspaceFiles.slice(0, 25).join(", ") || "none"}\n\n${snippets.join("\n\n")}`,
-        })
-
-        const cost = await estimateTokenCost(
-          providerKey.provider,
-          llm.model,
-          llm.inputTokens,
-          llm.outputTokens
-        )
-        executionMode = "live_llm"
-        llmMeta = {
-          provider: providerKey.provider,
-          model: llm.model,
-          inputTokens: llm.inputTokens,
-          outputTokens: llm.outputTokens,
-          totalTokens: llm.totalTokens,
-          estimatedCost: cost,
-        }
-
-        const match = llm.content.match(/\{[\s\S]*\}/)
-        if (match) {
-          const obj = JSON.parse(match[0]) as {
-            targetFile?: string
-            summary?: string
-            content?: string
-          }
-          if (obj.content && typeof obj.content === "string") {
-            updatedFileContent = obj.content
-            if (obj.targetFile && typeof obj.targetFile === "string" && !obj.targetFile.includes("..")) {
-              targetFilePath = obj.targetFile.replace(/^\/+/, "")
-            }
-            if (obj.summary) editedSummary = obj.summary
-          }
-        } else if (llm.content.trim()) {
-          updatedFileContent = llm.content
-        }
-      } catch (err) {
-        logger.warn("Live LLM execution failed; falling back to local deterministic workspace mutation", errorContext(err))
-      }
-    }
-
-    if (source?.sourcePath) {
-      try {
-        await createBranch(source.sourcePath, branch)
-        await writeWorkspaceFile(source.sourcePath, targetFilePath, updatedFileContent)
-        realCommitSha = await commitWorkspace(source.sourcePath, `feat(agent): ${title}`)
-        realDiff = await getLatestCommitDiff(source.sourcePath)
-      } catch (err) {
-        logger.warn("Workspace git commit failed", errorContext(err))
-      }
-    }
-
-    if (!realDiff) {
-      const addedLines = updatedFileContent.split(/\r?\n/).map((line) => `+${line}`).join("\n")
-      realDiff = `--- /dev/null\n+++ b/${targetFilePath}\n@@ -0,0 +1,${updatedFileContent.split(/\r?\n/).length} @@\n${addedLines}`
-    }
-
-    const lineCount = updatedFileContent.split(/\r?\n/).length
-    await appendEvent(2, "file_change", "action", execution.tasks[1]?.id, {
-      path: targetFilePath,
-      action: "write",
-      linesAdded: lineCount,
-      linesRemoved: 0,
-      mode: executionMode,
-    })
-
-    const scan = scanExecutionDiffServerSide(realDiff, targetFilePath)
-    await appendEvent(3, "security_scan", scan.findings.length > 0 ? "warning" : "info", execution.tasks[2]?.id, {
-      scanner: "modelvault-verify-engine/2.0.0",
-      findingsCount: scan.findings.length,
-      diffSha256: scan.diffSha256,
-    })
-
-    await appendEvent(4, "diff_ready", "action", execution.tasks[2]?.id, {
-      summary: editedSummary,
+    const loopResult = await runCodingAgentLoop({
+      projectName: project.name,
+      framework: project.framework,
+      prompt,
       branch,
-      commitSha: realCommitSha || null,
-      mode: executionMode,
+      sourcePath: ensuredPath,
+      backendType: resolved.backendType,
+      providerSlug: resolved.providerSlug,
+      model: chosenModel,
+      apiKey: resolved.apiKey,
+      bridgeEndpoint: resolved.bridgeEndpoint,
+      allowDeterministicFallback: allowDeterministicFallback ?? true,
+      appendEvent,
+    })
+
+    const scan = scanExecutionDiffServerSide(loopResult.diffContent, loopResult.targetFilePath)
+    await appendEvent(
+      "security_scan",
+      scan.findings.length > 0 ? "warning" : "info",
+      2,
+      {
+        scanner: "modelvault-verify-engine/2.0.0",
+        findingsCount: scan.findings.length,
+        diffSha256: scan.diffSha256,
+      }
+    )
+
+    await appendEvent("diff_ready", "action", 2, {
+      summary: loopResult.editedSummary,
+      branch,
+      commitSha: loopResult.commitSha,
+      mode: loopResult.executionMode,
+      fallbackUsed: loopResult.fallbackUsed,
+      confidenceLevel: loopResult.confidenceLevel,
+      model: loopResult.model,
     })
 
     const durationMs = Math.max(1, Date.now() - startedAt)
@@ -388,19 +395,24 @@ export async function POST(req: NextRequest) {
       where: { id: execution.id },
       data: {
         status: "awaiting_approval",
-        inputTokens: llmMeta?.inputTokens ?? 0,
-        outputTokens: llmMeta?.outputTokens ?? 0,
-        totalTokens: llmMeta?.totalTokens ?? 0,
-        estimatedCost: llmMeta?.estimatedCost ?? 0,
+        inputTokens: loopResult.inputTokens,
+        outputTokens: loopResult.outputTokens,
+        totalTokens: loopResult.totalTokens,
+        estimatedCost: loopResult.estimatedCost,
         durationMs,
         planJson: JSON.stringify({
           goal: prompt,
-          agent: agentConfig.displayName,
-          executionMode,
-          provider: llmMeta?.provider || null,
-          model: llmMeta?.model || null,
-          targetFiles: [targetFilePath, ...relevantFiles].slice(0, 5),
-          hasWorkspace: Boolean(source?.sourcePath),
+          agent: selectedBinding?.label || agentConfig.displayName,
+          executionMode: loopResult.executionMode,
+          backendType: loopResult.backendType,
+          provider: loopResult.provider,
+          model: loopResult.model,
+          fallbackUsed: loopResult.fallbackUsed,
+          fallbackReason: loopResult.fallbackReason,
+          confidenceLevel: loopResult.confidenceLevel,
+          toolCallsCount: loopResult.toolCallsCount,
+          targetFiles: loopResult.modifiedFiles,
+          hasWorkspace: Boolean(ensuredPath),
         }),
       },
     })
@@ -409,9 +421,9 @@ export async function POST(req: NextRequest) {
       data: {
         executionId: execution.id,
         type: "git_diff",
-        path: targetFilePath,
-        summary: editedSummary,
-        content: realDiff,
+        path: loopResult.targetFilePath,
+        summary: loopResult.editedSummary,
+        content: loopResult.diffContent,
       },
     })
 
@@ -421,32 +433,130 @@ export async function POST(req: NextRequest) {
         executionId: execution.id,
         branchName: branch,
         commitMessage: `feat(agent): ${title}`,
-        commitSha: realCommitSha || null,
-        status: realCommitSha ? "committed" : "staged",
+        commitSha: loopResult.commitSha,
+        status: loopResult.commitSha ? "committed" : "staged",
       },
     })
 
-    if (llmMeta && llmMeta.totalTokens > 0) {
-      const apiAccount = await prisma.apiAccount.findFirst({
-        where: { userId: user.id, provider: { slug: llmMeta.provider } },
-      })
-      if (apiAccount) {
-        await prisma.apiUsageRecord.create({
-          data: {
-            apiAccountId: apiAccount.id,
-            date: new Date(),
-            model: llmMeta.model,
-            inputTokens: llmMeta.inputTokens,
-            outputTokens: llmMeta.outputTokens,
-            totalTokens: llmMeta.totalTokens,
-            cost: llmMeta.estimatedCost,
-            currency: "USD",
-            requestCount: 1,
-            dataSource: "agent_execution",
-          },
-        })
+    // Attribute usage & deduct balance from selected managed account/subscription
+    const targetAccountId =
+      selectedBinding?.apiAccountId ||
+      (loopResult.executionMode === "live_llm"
+        ? (
+            await prisma.apiAccount.findFirst({
+              where: { userId: user.id, provider: { slug: loopResult.provider } },
+              select: { id: true },
+            })
+          )?.id || null
+        : null)
+
+    let balanceBefore: number | null = null
+    let balanceAfter: number | null = null
+    let usageRecordId: string | null = null
+    let snapshotId: string | null = null
+    let accountCurrency = "USD"
+
+    if (targetAccountId) {
+      const accountRow = await prisma.apiAccount.findUnique({ where: { id: targetAccountId } })
+      if (accountRow) {
+        accountCurrency = accountRow.currency || "USD"
+        balanceBefore = accountRow.prepaidBalance ?? 0
+        if (loopResult.estimatedCost > 0) {
+          const nextSpent = Number(((accountRow.totalSpent ?? 0) + loopResult.estimatedCost).toFixed(6))
+          const nextBalance =
+            balanceBefore > 0
+              ? Number(Math.max(0, balanceBefore - loopResult.estimatedCost).toFixed(6))
+              : balanceBefore
+          balanceAfter = nextBalance
+
+          await prisma.apiAccount.update({
+            where: { id: accountRow.id },
+            data: {
+              prepaidBalance: nextBalance,
+              totalSpent: nextSpent,
+            },
+          })
+
+          const usageRec = await prisma.apiUsageRecord.create({
+            data: {
+              apiAccountId: accountRow.id,
+              date: new Date(),
+              model: loopResult.model,
+              inputTokens: loopResult.inputTokens,
+              outputTokens: loopResult.outputTokens,
+              cachedTokens: loopResult.cachedTokens,
+              totalTokens: loopResult.totalTokens,
+              cost: loopResult.estimatedCost,
+              currency: accountCurrency,
+              requestCount: Math.max(1, loopResult.toolCallsCount),
+              dataSource: loopResult.fallbackUsed ? "estimated" : "agent_execution",
+            },
+          })
+          usageRecordId = usageRec.id
+
+          const snap = await prisma.usageSnapshot.create({
+            data: {
+              userId: user.id,
+              providerSlug: loopResult.provider,
+              apiAccountId: accountRow.id,
+              periodStart: new Date(Date.now() - 24 * 60 * 60 * 1000),
+              periodEnd: new Date(),
+              inputTokens: loopResult.inputTokens,
+              outputTokens: loopResult.outputTokens,
+              cachedTokens: loopResult.cachedTokens,
+              requests: Math.max(1, loopResult.toolCallsCount),
+              cost: loopResult.estimatedCost,
+              currency: accountCurrency,
+              creditsRemaining: nextBalance,
+              creditsUsed: nextSpent,
+              dataSource: loopResult.fallbackUsed ? "estimated" : "live_api_sync",
+              syncStatus: "ok",
+            },
+          })
+          snapshotId = snap.id
+
+          await evaluateReplenishmentForAccount(accountRow.id, "execution_guardrail").catch(() => {})
+        } else {
+          balanceAfter = balanceBefore
+        }
       }
+    } else if (selectedBinding?.subscriptionId && loopResult.totalTokens > 0) {
+      await prisma.subscription.update({
+        where: { id: selectedBinding.subscriptionId },
+        data: {
+          usedTokens: { increment: loopResult.totalTokens },
+          usedRequests: { increment: 1 },
+        },
+      }).catch(() => {})
     }
+
+    await prisma.executionUsageAttribution.create({
+      data: {
+        executionId: execution.id,
+        userId: user.id,
+        bindingId: selectedBinding?.id ?? null,
+        subscriptionId: selectedBinding?.subscriptionId ?? null,
+        apiAccountId: targetAccountId,
+        usageRecordId,
+        snapshotId,
+        providerSlug: loopResult.provider,
+        backendType: loopResult.backendType,
+        model: loopResult.model,
+        inputTokens: loopResult.inputTokens,
+        outputTokens: loopResult.outputTokens,
+        cachedTokens: loopResult.cachedTokens,
+        totalTokens: loopResult.totalTokens,
+        cost: loopResult.estimatedCost,
+        currency: accountCurrency,
+        balanceBefore,
+        balanceAfter,
+        fallbackUsed: loopResult.fallbackUsed,
+        fallbackReason: loopResult.fallbackReason,
+        confidenceLevel: loopResult.confidenceLevel,
+        dataSource: loopResult.dataSource,
+        toolCallsCount: loopResult.toolCallsCount,
+      },
+    })
 
     publishExecutionComplete(execution.id, "awaiting_approval")
 
@@ -458,6 +568,12 @@ export async function POST(req: NextRequest) {
         events: true,
         artifacts: true,
         gitOperations: true,
+        usageAttribution: {
+          include: {
+            apiAccount: { select: { id: true, accountName: true, currency: true, prepaidBalance: true } },
+            subscription: { select: { id: true, customPlanName: true } },
+          },
+        },
       },
     })
 

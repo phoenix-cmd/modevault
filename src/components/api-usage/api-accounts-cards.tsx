@@ -3,6 +3,7 @@
 import { Key, Trash2, Plus } from "lucide-react"
 import { ProviderIcon } from "@/components/ui/provider-icon"
 import { StatusBadge } from "@/components/ui/status-badge"
+import { TrustBadge } from "@/components/ui/trust-badge"
 import { formatCurrency } from "@/lib/utils"
 import type { ApiAccountData } from "@/lib/types"
 
@@ -84,7 +85,16 @@ export function ApiAccountsCards({
                     </div>
                   </div>
                 </td>
-                <td><StatusBadge status={acc.integrationStatus} /></td>
+                <td>
+                  <div className="flex flex-col gap-1">
+                    <StatusBadge status={acc.integrationStatus} />
+                    <TrustBadge
+                      source={acc.dataSource || (acc.lastSyncStatus === "success" ? "live_api_sync" : "manual")}
+                      syncedAt={acc.lastSyncAt}
+                      showFreshness
+                    />
+                  </div>
+                </td>
                 <td className="text-right">
                   <div className="flex items-center justify-end gap-1.5">
                     <span className="font-mono text-[12px] font-medium text-ink tabular-nums">

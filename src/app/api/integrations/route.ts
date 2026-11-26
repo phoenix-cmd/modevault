@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
 import { decryptSecret, encryptSecret, keyPreview } from "@/lib/crypto"
 import { verifyAndSyncProvider } from "@/lib/provider-sync"
+import { getProviderCapability } from "@/lib/providers/capabilities"
 import { checkRateLimit, parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
@@ -86,6 +87,7 @@ export async function GET() {
     return NextResponse.json({
       data: records.map((rec) => ({
         ...serialize(rec),
+        capability: getProviderCapability(rec.providerSlug),
         lastSyncLog: latestLogByProvider.get(rec.providerSlug) || null,
       })),
     })

@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
 import { StatBand, StatBandSkeleton } from "@/components/ui/stat-band"
+import { TrustBadge } from "@/components/ui/trust-badge"
 import { parseUnifiedDiff } from "@/lib/diff-parser"
 import { cn, formatNumber } from "@/lib/utils"
 
@@ -368,7 +369,14 @@ export default function AgentCenterPage() {
   const hasRealDiff = Boolean(diffArtifact?.content)
   const diffPath = parsedDiff.filePath
 
-  let selectedPlanMeta: { executionMode?: string; provider?: string | null; model?: string | null } = {}
+  let selectedPlanMeta: {
+    executionMode?: string
+    provider?: string | null
+    model?: string | null
+    fallbackUsed?: boolean
+    fallbackReason?: string | null
+    confidenceLevel?: string | null
+  } = {}
   if (selectedExecution?.planJson) {
     try {
       selectedPlanMeta = JSON.parse(selectedExecution.planJson)
@@ -377,6 +385,7 @@ export default function AgentCenterPage() {
     }
   }
   const selectedExecutionMode = selectedPlanMeta.executionMode || "simulated"
+  const attribution = selectedExecution?.usageAttribution || null
 
   const completedCount = executions.filter(
     (execution) => execution.status === "completed"
@@ -759,15 +768,45 @@ export default function AgentCenterPage() {
                   <span className={cn("badge", executionStatusClass(selectedExecution.status))}>
                     {String(selectedExecution.status || "unknown").replaceAll("_", " ")}
                   </span>
-                  <span className={cn("badge", selectedExecutionMode === "live_llm" ? "bg-success-soft text-success" : "bg-surface-2 text-ink-3")}>
-                    {selectedExecutionMode === "live_llm"
-                      ? `Live LLM (${selectedPlanMeta.model || selectedPlanMeta.provider || "API"})`
-                      : selectedExecutionMode === "local_deterministic"
-                        ? "Local Deterministic Workspace Run"
-                        : "Simulated Seed Run"}
-                  </span>
+                  {selectedExecutionMode === "live_llm" && !attribution?.fallbackUsed ? (
+                    <span className="badge bg-success-soft text-success">
+                      Live LLM ({attribution?.model || selectedPlanMeta.model || selectedPlanMeta.provider || "API"})
+                    </span>
+                  ) : selectedExecutionMode === "local_deterministic" || attribution?.fallbackUsed ? (
+                    <span className="badge bg-warning-soft text-warning">
+                      Deterministic Fallback · Low Confidence (Not AI-generated)
+                    </span>
+                  ) : (
+                    <span className="badge bg-surface-2 text-ink-3">Simulated Seed Run</span>
+                  )}
+                  {attribution && (
+                    <TrustBadge source={attribution.dataSource} />
+                  )}
                 </div>
                 <p className="mt-1.5 line-clamp-2 max-w-3xl text-[12.5px] leading-relaxed text-ink-2">{selectedExecution.prompt}</p>
+                {attribution && (
+                  <p className="mt-2 font-mono text-[10.5px] text-ink-3">
+                    Paid by:{" "}
+                    <span className="text-ink">
+                      {attribution.apiAccount?.accountName ||
+                        attribution.subscription?.customPlanName ||
+                        attribution.providerSlug}
+                    </span>
+                    {" · "}Model: <span className="text-ink">{attribution.model}</span>
+                    {" · "}Tools: <span className="text-ink">{attribution.toolCallsCount ?? 0}</span>
+                    {attribution.balanceBefore !== null && attribution.balanceAfter !== null && (
+                      <>
+                        {" · "}Balance:{" "}
+                        <span className="text-ink">
+                          ${Number(attribution.balanceBefore).toFixed(4)} → ${Number(attribution.balanceAfter).toFixed(4)}
+                        </span>
+                      </>
+                    )}
+                    {attribution.fallbackReason && (
+                      <span className="text-warning"> · Fallback reason: {attribution.fallbackReason}</span>
+                    )}
+                  </p>
+                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-2">

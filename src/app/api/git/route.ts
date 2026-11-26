@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
+import { decryptSecret } from "@/lib/crypto"
 import { resolveUserGithubToken } from "@/lib/github-auth"
 import { getUserAccessibleWorkspaceIds, requireProjectAccess } from "@/lib/permissions"
 import {
@@ -35,6 +36,25 @@ function parseGithubOwnerRepo(repoUrl: string | null | undefined): { owner: stri
   const match = clean.match(/^https?:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/i)
   if (!match) return null
   return { owner: match[1], repo: match[2] }
+}
+
+function parseGitlabProjectPath(repoUrl: string | null | undefined): string | null {
+  if (!repoUrl) return null
+  const clean = repoUrl.trim().replace(/\.git$/i, "").replace(/\/$/, "")
+  const match = clean.match(/^https?:\/\/gitlab\.com\/(.+)$/i)
+  return match ? match[1] : null
+}
+
+async function resolveUserGitlabToken(userId: string): Promise<string | null> {
+  const cred = await prisma.integrationCredential.findUnique({
+    where: { userId_providerSlug: { userId, providerSlug: "gitlab" } },
+  })
+  if (!cred?.encryptedKey) return null
+  try {
+    return decryptSecret(cred.encryptedKey).trim() || null
+  } catch {
+    return null
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -147,7 +167,10 @@ export async function GET(req: NextRequest) {
         author: user.name || user.email,
         status: op.status,
         url: op.prUrl,
-        isRemote: Boolean(op.prUrl && op.prUrl.startsWith("https://github.com/")),
+        isRemote: Boolean(
+          op.prUrl &&
+            (op.prUrl.startsWith("https://github.com/") || op.prUrl.startsWith("https://gitlab.com/"))
+        ),
         createdAt: op.createdAt.toISOString(),
       }))
 
@@ -278,6 +301,8 @@ export async function POST(req: NextRequest) {
       const title = prTitle || `PR: ${headBranch}`
       const ghToken = await resolveUserGithubToken(user.id)
       const ghRepo = parseGithubOwnerRepo(project.repositoryUrl)
+      const glToken = await resolveUserGitlabToken(user.id)
+      const glPath = parseGitlabProjectPath(project.repositoryUrl)
 
       let prNumber = 0
       let prUrl = ""
@@ -317,10 +342,40 @@ export async function POST(req: NextRequest) {
         } catch (err) {
           notice = `GitHub API unreachable (${err instanceof Error ? err.message : "network error"}); recorded as local PR draft.`
         }
+      } else if (glToken && glPath) {
+        try {
+          const glRes = await fetch(
+            `https://gitlab.com/api/v4/projects/${encodeURIComponent(glPath)}/merge_requests`,
+            {
+              method: "POST",
+              headers: {
+                "PRIVATE-TOKEN": glToken,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                title,
+                source_branch: headBranch,
+                target_branch: baseBranch,
+                description: prBody || `Opened from MODELVAULT workspace (${project.name}).`,
+              }),
+              signal: AbortSignal.timeout(10000),
+            }
+          )
+          if (glRes.ok) {
+            const createdMr = (await glRes.json()) as { iid: number; web_url: string }
+            prNumber = createdMr.iid
+            prUrl = createdMr.web_url
+            simulated = false
+          } else {
+            notice = `GitLab API declined MR (HTTP ${glRes.status}); recorded as local PR draft.`
+          }
+        } catch (err) {
+          notice = `GitLab API unreachable (${err instanceof Error ? err.message : "network error"}); recorded as local PR draft.`
+        }
       } else {
-        notice = !ghRepo
-          ? "Project has no GitHub repository URL; recorded as local PR draft."
-          : "No GitHub token connected in Integrations; recorded as local PR draft."
+        notice = !ghRepo && !glPath
+          ? "Project has no GitHub/GitLab repository URL; recorded as local PR draft (not pushed to remote)."
+          : "No remote Git token connected in Integrations; recorded as local PR draft (not pushed to remote)."
       }
 
       if (simulated) {

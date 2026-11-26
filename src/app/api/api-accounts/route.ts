@@ -3,6 +3,7 @@ import { z } from "zod"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
 import { parseJson } from "@/lib/validation"
+import { getProviderCapability } from "@/lib/providers/capabilities"
 import { logger, errorContext } from "@/lib/logger"
 
 const apiAccountCreateSchema = z.object({
@@ -19,13 +20,55 @@ const apiAccountCreateSchema = z.object({
 export async function GET(_request: NextRequest) {
   try {
     const user = await requireAuthenticatedUser()
-    const accounts = await prisma.apiAccount.findMany({
-      where: { userId: user.id },
-      include: { provider: true },
-      orderBy: { createdAt: "desc" },
-    })
+    const [accounts, snapshots] = await Promise.all([
+      prisma.apiAccount.findMany({
+        where: { userId: user.id },
+        include: { provider: true },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.usageSnapshot.findMany({
+        where: { userId: user.id, apiAccountId: { not: null } },
+        orderBy: { syncedAt: "desc" },
+        take: 100,
+      }),
+    ])
 
-    return NextResponse.json({ data: accounts })
+    const latestSnapByAccount = new Map<string, (typeof snapshots)[number]>()
+    for (const snap of snapshots) {
+      if (snap.apiAccountId && !latestSnapByAccount.has(snap.apiAccountId)) {
+        latestSnapByAccount.set(snap.apiAccountId, snap)
+      }
+    }
+
+    return NextResponse.json({
+      data: accounts.map((acc) => {
+        const snap = latestSnapByAccount.get(acc.id) || null
+        const effectiveDataSource =
+          snap?.dataSource ||
+          (acc.integrationStatus === "connected" && acc.lastSyncAt && acc.lastSyncStatus === "success"
+            ? getProviderCapability(acc.provider.slug).canSyncCredits ||
+              getProviderCapability(acc.provider.slug).canSyncUsage
+              ? "live_api_sync"
+              : "manual"
+            : "manual")
+        return {
+          ...acc,
+          dataSource: effectiveDataSource,
+          capability: getProviderCapability(acc.provider.slug),
+          latestSnapshot: snap
+            ? {
+                id: snap.id,
+                syncedAt: snap.syncedAt.toISOString(),
+                dataSource: snap.dataSource,
+                syncStatus: snap.syncStatus,
+                errorMessage: snap.errorMessage,
+                creditsRemaining: snap.creditsRemaining,
+                creditsUsed: snap.creditsUsed,
+              }
+            : null,
+        }
+      }),
+    })
   } catch (err: unknown) {
     logger.error("API Accounts GET error", errorContext(err))
     return authErrorResponse(err, "Failed to fetch API accounts")

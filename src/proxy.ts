@@ -14,7 +14,7 @@ const PUBLIC_EXACT_PATHS = new Set([
   "/twitter-image",
   "/api/health",
 ])
-const PUBLIC_PREFIX_PATHS = ["/api/auth/", "/_next/", "/opengraph-image", "/twitter-image"]
+const PUBLIC_PREFIX_PATHS = ["/api/auth/", "/api/webhooks/", "/_next/", "/opengraph-image", "/twitter-image"]
 const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"])
 
 function isPublicPath(pathname: string): boolean {

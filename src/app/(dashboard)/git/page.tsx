@@ -741,7 +741,7 @@ export default function GitControlPage() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="badge bg-surface-2 text-ink-3">
-                      {pr.isRemote ? "GitHub Remote" : "Local Branch PR"}
+                      {pr.isRemote ? "Remote PR" : "Local PR Draft (Not Pushed)"}
                     </span>
                     <span className={cn("badge shrink-0", pr.status === "merged" ? "bg-success-soft text-success" : "bg-accent-soft text-accent")}>
                       {String(pr.status || "").replaceAll("_", " ")}

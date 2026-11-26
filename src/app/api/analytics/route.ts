@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
 import { unpackBillingDescription } from "@/lib/billing-meta"
 import { convertCurrency, getExchangeRatesMap } from "@/lib/currency"
+import { getProviderCapability } from "@/lib/providers/capabilities"
 
 function formatContextWindow(tokens: number): string {
   if (tokens >= 1_000_000) {
@@ -19,13 +20,13 @@ export async function GET(_request: NextRequest) {
     const now = new Date()
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
 
-    const [rates, dbUser, subscriptions, apiAccounts, billingRecords, apiUsageRecords, dbModels] =
+    const [rates, dbUser, subscriptions, apiAccounts, billingRecords, apiUsageRecords, dbModels, usageSnapshots] =
       await Promise.all([
         getExchangeRatesMap(),
         prisma.user.findUnique({ where: { id: user.id }, select: { currency: true } }),
         prisma.subscription.findMany({
           where: { userId: user.id },
-          include: { provider: true },
+          include: { provider: true, plan: true },
         }),
         prisma.apiAccount.findMany({
           where: { userId: user.id },
@@ -43,10 +44,18 @@ export async function GET(_request: NextRequest) {
             apiAccount: { userId: user.id },
             date: { gte: sixMonthsAgo },
           },
+          include: {
+            apiAccount: { include: { provider: true } },
+          },
           orderBy: { date: "asc" },
         }),
         prisma.aiModel.findMany({
           orderBy: [{ providerName: "asc" }, { outputPricePerM: "asc" }],
+        }),
+        prisma.usageSnapshot.findMany({
+          where: { userId: user.id },
+          orderBy: { syncedAt: "desc" },
+          take: 100,
         }),
       ])
 
@@ -210,12 +219,107 @@ export async function GET(_request: NextRequest) {
       bestFor: m.bestFor,
     }))
 
+    const latestSnapByAccount = new Map<string, (typeof usageSnapshots)[number]>()
+    for (const snap of usageSnapshots) {
+      if (snap.apiAccountId && !latestSnapByAccount.has(snap.apiAccountId)) {
+        latestSnapByAccount.set(snap.apiAccountId, snap)
+      }
+    }
+
+    const accountSnapshots = apiAccounts.map((acc) => {
+      const snap = latestSnapByAccount.get(acc.id) || null
+      const cap = getProviderCapability(acc.provider.slug)
+      const dataSource =
+        snap?.dataSource ||
+        (acc.integrationStatus === "connected" && acc.lastSyncStatus === "success" && (cap.canSyncCredits || cap.canSyncUsage)
+          ? "live_api_sync"
+          : cap.canSyncCredits || cap.canSyncUsage
+            ? "manual"
+            : "unsupported")
+
+      return {
+        id: acc.id,
+        accountName: acc.accountName || acc.provider.name,
+        providerSlug: acc.provider.slug,
+        providerName: acc.provider.name,
+        currency: acc.currency || "USD",
+        prepaidBalance: acc.prepaidBalance ?? 0,
+        totalSpent: acc.totalSpent ?? 0,
+        integrationStatus: acc.integrationStatus,
+        syncedAt: (snap?.syncedAt || acc.lastSyncAt)?.toISOString() || null,
+        syncStatus: snap?.syncStatus || (acc.lastSyncStatus === "error" ? "error" : "ok"),
+        errorMessage: snap?.errorMessage || acc.lastSyncError || null,
+        dataSource,
+        inputTokens: snap?.inputTokens ?? 0,
+        outputTokens: snap?.outputTokens ?? 0,
+        cachedTokens: snap?.cachedTokens ?? 0,
+        requests: snap?.requests ?? 0,
+        capability: cap,
+      }
+    })
+
+    const subscriptionDrilldown = subscriptions.map((sub) => {
+      const cap = getProviderCapability(sub.provider.slug)
+      return {
+        id: sub.id,
+        providerSlug: sub.provider.slug,
+        providerName: sub.provider.name,
+        planName: sub.customPlanName || sub.plan?.name || "Standard Plan",
+        type: sub.type,
+        status: sub.status,
+        price: sub.price,
+        currency: sub.currency,
+        billingCycle: sub.billingCycle,
+        dataSource:
+          sub.dataSource ||
+          (cap.canSyncUsage || cap.canSyncCredits ? "manual" : "unsupported"),
+        syncedAt: sub.updatedAt.toISOString(),
+        quotaMessages: sub.quotaMessages,
+        usedMessages: sub.usedMessages ?? 0,
+        quotaRequests: sub.quotaRequests,
+        usedRequests: sub.usedRequests ?? 0,
+        quotaTokens: sub.quotaTokens,
+        usedTokens: sub.usedTokens ?? 0,
+        quotaCredits: sub.quotaCredits,
+        usedCredits: sub.usedCredits ?? 0,
+        capability: cap,
+      }
+    })
+
+    const modelUsageMap = new Map<
+      string,
+      { model: string; providerName: string; providerSlug: string; tokens: number; cost: number; requests: number; dataSource: string }
+    >()
+    for (const u of apiUsageRecords) {
+      const modelKey = u.model || "unknown"
+      const cur = modelUsageMap.get(modelKey) || {
+        model: modelKey,
+        providerName: u.apiAccount.provider.name,
+        providerSlug: u.apiAccount.provider.slug,
+        tokens: 0,
+        cost: 0,
+        requests: 0,
+        dataSource: u.dataSource || "manual",
+      }
+      cur.tokens += u.totalTokens || 0
+      cur.cost += convertCurrency(u.cost || 0, u.currency || "USD", "USD", rates)
+      cur.requests += u.requestCount || 0
+      if (u.dataSource === "live_api_sync" || u.dataSource === "agent_execution") {
+        cur.dataSource = u.dataSource
+      }
+      modelUsageMap.set(modelKey, cur)
+    }
+
+    const baseCurrency =
+      dbUser?.currency || subscriptions[0]?.currency || apiAccounts[0]?.currency || "USD"
+
     return NextResponse.json({
       data: {
-        baseCurrency: dbUser?.currency === "USD" ? "USD" : "INR",
+        baseCurrency,
         spendingTrends,
         providerBreakdown,
         exchangeRateUsdToInr: rates.USD_INR,
+        exchangeRates: rates,
         overview: {
           monthlySubscriptions: parseFloat(activeSubMonthlyTotal.toFixed(2)),
           annualSubscriptions: parseFloat(activeSubAnnualTotal.toFixed(2)),
@@ -224,6 +328,9 @@ export async function GET(_request: NextRequest) {
         },
         insights,
         modelComparison,
+        accountSnapshots,
+        subscriptionDrilldown,
+        modelBreakdown: Array.from(modelUsageMap.values()).sort((a, b) => b.cost - a.cost),
       },
     })
   } catch (error) {

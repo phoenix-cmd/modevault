@@ -34,6 +34,11 @@ model User {
   billingRecords BillingRecord[]
   executions     Execution[]
   integrations   IntegrationCredential[]
+  usageSnapshots UsageSnapshot[]
+  replenishmentRules  ReplenishmentRule[]
+  replenishmentEvents ReplenishmentEvent[]
+  codingBindings CodingCredentialBinding[]
+  executionAttributions ExecutionUsageAttribution[]
 }
 
 model Organization {
@@ -170,6 +175,7 @@ model Execution {
   artifacts    ExecutionArtifact[]
   gitOperations GitOperation[]
   comments     ReviewComment[]
+  usageAttribution ExecutionUsageAttribution?
 }
 
 model ExecutionTask {
@@ -315,6 +321,7 @@ model Provider {
   subscriptions Subscription[]
   apiAccounts   ApiAccount[]
   plans         Plan[]
+  capabilities  ProviderCapability[]
 }
 
 model Plan {
@@ -373,6 +380,11 @@ model Subscription {
   plan         Plan?           @relation(fields: [planId], references: [id])
   usageRecords UsageRecord[]
   billingRecords BillingRecord[]
+  usageSnapshots UsageSnapshot[]
+  replenishmentRules ReplenishmentRule[]
+  replenishmentEvents ReplenishmentEvent[]
+  codingBindings CodingCredentialBinding[]
+  executionAttributions ExecutionUsageAttribution[]
 }
 
 model ApiAccount {
@@ -397,6 +409,11 @@ model ApiAccount {
   user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   provider        Provider         @relation(fields: [providerId], references: [id])
   apiUsageRecords ApiUsageRecord[]
+  usageSnapshots  UsageSnapshot[]
+  replenishmentRules ReplenishmentRule[]
+  replenishmentEvents ReplenishmentEvent[]
+  codingBindings  CodingCredentialBinding[]
+  executionAttributions ExecutionUsageAttribution[]
 }
 
 model UsageRecord {
@@ -430,6 +447,7 @@ model ApiUsageRecord {
   createdAt    DateTime @default(now())
 
   apiAccount ApiAccount @relation(fields: [apiAccountId], references: [id], onDelete: Cascade)
+  executionAttributions ExecutionUsageAttribution[]
 }
 
 model BillingRecord {
@@ -446,6 +464,7 @@ model BillingRecord {
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+  replenishmentEvents ReplenishmentEvent[]
 }
 
 model Notification {
@@ -503,6 +522,8 @@ model IntegrationCredential {
   updatedAt     DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  usageSnapshots UsageSnapshot[]
+  codingBindings CodingCredentialBinding[]
 
   @@unique([userId, providerSlug])
   @@index([userId])
@@ -525,4 +546,195 @@ model AiModel {
   sampleResponse    String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+}
+
+// --- Provider Capabilities, Live Snapshots, Replenishment & Coding Bindings ---
+
+model ProviderCapability {
+  id                  String   @id @default(cuid())
+  providerSlug        String   @unique
+  providerId          String?
+  displayName         String
+  canSyncUsage        Boolean  @default(false)
+  canSyncCredits      Boolean  @default(false)
+  canReplenish        Boolean  @default(false)
+  canCode             Boolean  @default(false)
+  authMode            String   @default("manual") // "api_key" | "oauth" | "device_code" | "local_bridge" | "manual"
+  syncCadence         String   @default("manual") // "5m" | "15m" | "1h" | "6h" | "manual"
+  termsStatus         String   @default("manual_only") // "official" | "limited" | "manual_only" | "unsupported"
+  billingUrl          String?
+  capabilitiesNote    String?
+  supportedModelsJson String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  provider Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+}
+
+model UsageSnapshot {
+  id               String   @id @default(cuid())
+  userId           String
+  providerSlug     String
+  subscriptionId   String?
+  apiAccountId     String?
+  credentialId     String?
+  periodStart      DateTime
+  periodEnd        DateTime
+  inputTokens      Int      @default(0)
+  outputTokens     Int      @default(0)
+  cachedTokens     Int      @default(0)
+  requests         Int      @default(0)
+  cost             Float    @default(0)
+  currency         String   @default("USD")
+  creditsRemaining Float?
+  creditsUsed      Float?
+  dataSource       String   @default("live_api_sync") // "live_api_sync" | "manual" | "estimated" | "unsupported"
+  syncStatus       String   @default("ok") // "ok" | "error" | "unsupported"
+  errorMessage     String?
+  rawReferenceHash String?
+  breakdownJson    String?
+  syncedAt         DateTime @default(now())
+  createdAt        DateTime @default(now())
+
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription Subscription?          @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  apiAccount   ApiAccount?            @relation(fields: [apiAccountId], references: [id], onDelete: SetNull)
+  credential   IntegrationCredential? @relation(fields: [credentialId], references: [id], onDelete: SetNull)
+  attributions ExecutionUsageAttribution[]
+
+  @@index([userId, providerSlug, syncedAt])
+  @@index([apiAccountId, syncedAt])
+  @@index([subscriptionId, syncedAt])
+}
+
+model ReplenishmentRule {
+  id                   String    @id @default(cuid())
+  userId               String
+  providerSlug         String
+  apiAccountId         String?
+  subscriptionId       String?
+  enabled              Boolean   @default(false)
+  thresholdAmount      Float     @default(10)
+  topUpAmount          Float     @default(25)
+  currency             String    @default("USD")
+  maxMonthlySpend      Float     @default(100)
+  cooldownMinutes      Int       @default(60)
+  paymentMethodRef     String?
+  autoPayAuthorized    Boolean   @default(false)
+  autoPayAuthorizedAt  DateTime?
+  notifyOnLow          Boolean   @default(true)
+  notifyOnSuccess      Boolean   @default(true)
+  notifyOnFailure      Boolean   @default(true)
+  lastTriggeredAt      DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiAccount   ApiAccount?          @relation(fields: [apiAccountId], references: [id], onDelete: Cascade)
+  subscription Subscription?        @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  events       ReplenishmentEvent[]
+
+  @@index([userId, enabled])
+}
+
+model ReplenishmentEvent {
+  id                 String    @id @default(cuid())
+  userId             String
+  ruleId             String?
+  apiAccountId       String?
+  subscriptionId     String?
+  billingRecordId    String?
+  providerSlug       String
+  idempotencyKey     String    @unique
+  triggerReason      String    // "low_balance_sync" | "manual_trigger" | "execution_guardrail"
+  mode               String    // "programmatic_recharge" | "webhook_checkout" | "manual_topup" | "manual_alert"
+  status             String    @default("pending") // "pending" | "awaiting_webhook" | "confirmed" | "manual_required" | "failed" | "capped"
+  requestedAmount    Float
+  creditedAmount     Float?
+  currency           String    @default("USD")
+  balanceBefore      Float?
+  balanceAfter       Float?
+  paymentProviderRef String?
+  checkoutUrl        String?
+  failureReason      String?
+  metadataJson       String?
+  confirmedAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rule          ReplenishmentRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  apiAccount    ApiAccount?        @relation(fields: [apiAccountId], references: [id], onDelete: SetNull)
+  subscription  Subscription?      @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  billingRecord BillingRecord?     @relation(fields: [billingRecordId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([apiAccountId, status])
+}
+
+model CodingCredentialBinding {
+  id                  String   @id @default(cuid())
+  userId              String
+  label               String
+  providerSlug        String
+  backendType         String   // "direct_api" | "local_bridge" | "manual_unsupported"
+  subscriptionId      String?
+  apiAccountId        String?
+  credentialId        String?
+  bridgeEndpoint      String?
+  defaultModel        String?
+  allowedModelsJson   String?
+  maxCostPerRun       Float?   @default(2.0)
+  minBalanceGuardrail Float?   @default(1.0)
+  isEnabled           Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription Subscription?          @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  apiAccount   ApiAccount?            @relation(fields: [apiAccountId], references: [id], onDelete: SetNull)
+  credential   IntegrationCredential? @relation(fields: [credentialId], references: [id], onDelete: SetNull)
+  attributions ExecutionUsageAttribution[]
+
+  @@index([userId, isEnabled])
+}
+
+model ExecutionUsageAttribution {
+  id              String   @id @default(cuid())
+  executionId     String   @unique
+  userId          String
+  bindingId       String?
+  subscriptionId  String?
+  apiAccountId    String?
+  usageRecordId   String?
+  snapshotId      String?
+  providerSlug    String
+  backendType     String   // "direct_api" | "local_bridge" | "deterministic_fallback"
+  model           String
+  inputTokens     Int      @default(0)
+  outputTokens    Int      @default(0)
+  cachedTokens    Int      @default(0)
+  totalTokens     Int      @default(0)
+  cost            Float    @default(0)
+  currency        String   @default("USD")
+  balanceBefore   Float?
+  balanceAfter    Float?
+  fallbackUsed    Boolean  @default(false)
+  fallbackReason  String?
+  confidenceLevel String   @default("high") // "high" | "low"
+  dataSource      String   @default("live_api_sync") // "live_api_sync" | "estimated" | "deterministic_fallback"
+  toolCallsCount  Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  execution     Execution                @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  user          User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  binding       CodingCredentialBinding? @relation(fields: [bindingId], references: [id], onDelete: SetNull)
+  subscription  Subscription?            @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  apiAccount    ApiAccount?              @relation(fields: [apiAccountId], references: [id], onDelete: SetNull)
+  usageRecord   ApiUsageRecord?          @relation(fields: [usageRecordId], references: [id], onDelete: SetNull)
+  snapshot      UsageSnapshot?           @relation(fields: [snapshotId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([apiAccountId])
+  @@index([subscriptionId])
 }

@@ -105,12 +105,22 @@ export async function POST(
         await deleteBranch(sourcePath, execution.targetBranch).catch(() => {})
       } else if (action === "request_revision" && diffArtifact?.path) {
         try {
+          const openComments = await prisma.reviewComment.findMany({
+            where: { executionId: id, status: "open" },
+            orderBy: { createdAt: "desc" },
+            take: 5,
+          })
+          const commentSummary = openComments
+            .map((c) => `${c.filePath}:${c.lineNumber} — ${c.comment}`)
+            .join(" | ")
           const currentFile = await readWorkspaceFile(sourcePath, diffArtifact.path).catch(() => "")
           if (currentFile) {
-            const note = (feedback || "Apply reviewer revision safeguards").replace(/\r?\n/g, " ").slice(0, 120)
+            const note = (feedback || commentSummary || "Apply reviewer revision safeguards")
+              .replace(/\r?\n/g, " ")
+              .slice(0, 140)
             const commentLine = diffArtifact.path.endsWith(".py")
-              ? `\n# Revision applied: ${note}\n`
-              : `\n// Revision applied: ${note}\n`
+              ? `\n# Revision requested by reviewer: ${note}\n`
+              : `\n// Revision requested by reviewer: ${note}\n`
             await writeWorkspaceFile(sourcePath, diffArtifact.path, `${currentFile.trimEnd()}${commentLine}`)
             revisedCommitSha = await commitWorkspace(sourcePath, `fix(revision): ${note}`)
             const newDiff = await getLatestCommitDiff(sourcePath)

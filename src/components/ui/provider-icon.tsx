@@ -48,6 +48,7 @@ export function ProviderIcon({
     perplexity: "#6ec7c0",
     openrouter: "#729bff",
     windsurf: "#56d887",
+    antigravity: "#317ef5",
     huggingface: "#d89b34",
   }
 

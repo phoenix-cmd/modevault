@@ -5,7 +5,9 @@ export type ProviderSlug =
   | "anthropic"
   | "google"
   | "github-copilot"
+  | "github"
   | "cursor"
+  | "antigravity"
   | "perplexity"
   | "openrouter"
   | "windsurf"
@@ -14,7 +16,13 @@ export type ProviderSlug =
 export type SubscriptionType = "consumer" | "api"
 export type SubscriptionStatus = "active" | "paused" | "expired" | "cancelled" | "trial"
 export type BillingCycle = "monthly" | "yearly" | "custom"
-export type DataSource = "manual" | "api_sync" | "estimated"
+export type DataSource =
+  | "live_api_sync"
+  | "api_sync"
+  | "manual"
+  | "estimated"
+  | "unsupported"
+  | "deterministic_fallback"
 export type IntegrationStatus = "connected" | "manual" | "error" | "expired"
 export type UsageUnit = "messages" | "tokens" | "requests" | "credits" | "percentage"
 export type NotificationType = "quota_warning" | "renewal_reminder" | "credit_low" | "trial_expiring" | "sync_error" | "general"
@@ -95,6 +103,7 @@ export interface ApiAccountData {
   lastSyncAt: string | null
   lastSyncStatus: string | null
   lastSyncError: string | null
+  dataSource?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -163,6 +172,7 @@ export interface RawApiAccount {
   lastSyncAt: string | null
   lastSyncStatus: string | null
   lastSyncError: string | null
+  dataSource?: string | null
   createdAt: string
   updatedAt: string
 }

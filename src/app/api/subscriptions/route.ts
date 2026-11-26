@@ -3,6 +3,7 @@ import { z } from "zod"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
 import { syncSubscriptionRenewals } from "@/lib/subscription-lifecycle"
+import { getProviderCapability } from "@/lib/providers/capabilities"
 import { parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
@@ -41,7 +42,12 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "desc" },
     })
 
-    return NextResponse.json({ data: subscriptions })
+    return NextResponse.json({
+      data: subscriptions.map((sub) => ({
+        ...sub,
+        capability: getProviderCapability(sub.provider.slug),
+      })),
+    })
   } catch (err: unknown) {
     logger.error("Subscriptions GET error", errorContext(err))
     return authErrorResponse(err, "Failed to fetch subscriptions")

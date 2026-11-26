@@ -56,7 +56,14 @@ function buildSanitizedPreviewEnv(port: number): NodeJS.ProcessEnv {
 
 export async function startPreview(
   projectId: string
-): Promise<{ port: number; status: string; mode: string; url: string }> {
+): Promise<{
+  port: number
+  status: string
+  mode: string
+  simulated: boolean
+  simulationReason: string | null
+  url: string
+}> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     include: { environments: true, sources: true },
@@ -69,7 +76,15 @@ export async function startPreview(
   const url = `/api/projects/${projectId}/preview/proxy`
   const existing = previews.get(projectId)
   if (existing && (!existing.process || !existing.process.killed)) {
-    return { port: existing.port, status: "running", mode: existing.mode, url }
+    const isSimulated = existing.mode !== "process"
+    return {
+      port: existing.port,
+      status: "running",
+      mode: existing.mode,
+      simulated: isSimulated,
+      simulationReason: isSimulated ? resolveSimulationReason() : null,
+      url,
+    }
   }
 
   const cwd = await ensureProjectSourceWorkspace(project)
@@ -129,7 +144,21 @@ export async function startPreview(
     data: { status: "running" },
   })
 
-  return { port, status: "running", mode, url }
+  const simulated = mode !== "process"
+  return {
+    port,
+    status: "running",
+    mode,
+    simulated,
+    simulationReason: simulated ? resolveSimulationReason() : null,
+    url,
+  }
+}
+
+function resolveSimulationReason(): string {
+  if (process.env.VERCEL) return "Serverless Vercel environment uses simulated static workspace renderer"
+  if (process.env.DISABLE_HOST_PREVIEW === "1") return "Host process spawning disabled (DISABLE_HOST_PREVIEW=1) — simulated static workspace renderer"
+  return "Dependencies not installed locally — serving simulated static workspace renderer"
 }
 
 export async function stopPreview(projectId: string): Promise<{ status: string }> {
@@ -162,14 +191,19 @@ export function getPreview(projectId: string): {
   running: boolean
   port?: number
   mode?: string
+  simulated?: boolean
+  simulationReason?: string | null
   url?: string
 } {
   const state = previews.get(projectId)
   if (!state) return { running: false }
+  const simulated = state.mode !== "process"
   return {
     running: true,
     port: state.port,
     mode: state.mode,
+    simulated,
+    simulationReason: simulated ? resolveSimulationReason() : null,
     url: `/api/projects/${projectId}/preview/proxy`,
   }
 }
@@ -178,6 +212,8 @@ export async function getPreviewWithDbSync(projectId: string): Promise<{
   running: boolean
   port?: number
   mode?: string
+  simulated?: boolean
+  simulationReason?: string | null
   url?: string
 }> {
   const live = getPreview(projectId)

@@ -8,6 +8,7 @@ import { ApiAccountsCards } from "@/components/api-usage/api-accounts-cards"
 import { ApiTokenChart } from "@/components/api-usage/api-token-chart"
 import { ApiRecordsTable } from "@/components/api-usage/api-records-table"
 import { AddApiRecordModal } from "@/components/api-usage/add-api-record-modal"
+import { ReplenishmentPanel } from "@/components/api-usage/replenishment-panel"
 import { PageHeader } from "@/components/ui/page-header"
 import { StatBand, StatBandSkeleton } from "@/components/ui/stat-band"
 import { useModalA11y } from "@/lib/use-modal-a11y"
@@ -83,6 +84,7 @@ export default function ApiUsagePage() {
           lastSyncAt: a.lastSyncAt,
           lastSyncStatus: a.lastSyncStatus,
           lastSyncError: a.lastSyncError,
+          dataSource: a.dataSource || null,
           createdAt: a.createdAt,
           updatedAt: a.updatedAt,
         }))
@@ -291,6 +293,8 @@ export default function ApiUsagePage() {
       )}
 
       <ApiRecordsTable records={records} />
+
+      <ReplenishmentPanel accounts={accounts} onUpdated={fetchData} />
 
       <AddApiRecordModal
         apiAccounts={accounts}

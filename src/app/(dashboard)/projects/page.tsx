@@ -509,12 +509,12 @@ export default function ProjectsPage() {
           items={[
             { label: "Projects", value: String(projects.length), meta: "Attached to this workspace" },
             {
-              label: "Sandboxes",
+              label: "Local workspaces",
               value: String(provisionedSandboxCount),
               meta:
                 runningPreviewCount > 0
-                  ? `${runningPreviewCount} live preview · ${provisionedSandboxCount} ready`
-                  : `${provisionedSandboxCount} provisioned workspaces`,
+                  ? `${runningPreviewCount} running preview · ${provisionedSandboxCount} ready`
+                  : `${provisionedSandboxCount} extracted project directories`,
             },
             { label: "Executions", value: String(executionCount), meta: "Recorded agent runs" },
             { label: "Archive / Git", value: `${zipCount} / ${gitCount}`, meta: "Import source mix" },
