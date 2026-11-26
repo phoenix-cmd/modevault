@@ -228,7 +228,12 @@ export default function NotificationsPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <p className={cn("text-[13px] font-medium text-ink", !n.isRead && "font-semibold")}>{n.title}</p>
-                      {!n.isRead && <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-label="Unread" />}
+                      {!n.isRead && (
+                        <>
+                          <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
+                          <span className="sr-only">Unread</span>
+                        </>
+                      )}
                       <span className="font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-3">{meta.label}</span>
                     </div>
                     <p className="mt-1 text-[12.5px] leading-relaxed text-ink-2">{n.message}</p>

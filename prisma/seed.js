@@ -18,8 +18,8 @@ async function main() {
       email: "demo@modelvault.dev",
       name: "Alex Kumar",
       passwordHash: bcrypt.hashSync("password", 10),
-      currency: "INR",
-      timezone: "Asia/Kolkata",
+      currency: "USD",
+      timezone: "UTC",
     },
     update: {
       passwordHash: bcrypt.hashSync("password", 10),

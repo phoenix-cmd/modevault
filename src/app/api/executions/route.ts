@@ -232,6 +232,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (allowDeterministicFallback === false && resolved.backendType === "deterministic_fallback") {
+      return NextResponse.json(
+        {
+          error:
+            "No live provider API key or local CLI bridge is connected. Connect a key in Integrations or explicitly opt in to non-AI deterministic fallback.",
+          code: "NO_LIVE_CODING_CREDENTIAL",
+        },
+        { status: 422 }
+      )
+    }
+
     const chosenModel = requestedModel?.trim() || resolved.model
 
     // Pre-run maxCostPerRun check against catalog estimate

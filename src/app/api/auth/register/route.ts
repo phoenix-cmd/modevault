@@ -73,8 +73,8 @@ export async function POST(req: NextRequest) {
         name,
         email,
         passwordHash,
-        currency: "INR",
-        timezone: "Asia/Kolkata",
+        currency: "USD",
+        timezone: "UTC",
         memberships: {
           create: {
             role: "owner",

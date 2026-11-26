@@ -59,13 +59,16 @@ export function ActivityFeed({ activities }: ActivityFeedProps) {
                   <div className="flex min-w-0 items-center gap-1.5">
                     <p className="truncate text-[13px] font-medium text-ink">{activity.title}</p>
                     {activity.severity !== "info" && (
-                      <span
-                        className={cn(
-                          "h-1.5 w-1.5 shrink-0 rounded-full",
-                          SEVERITY_DOT[activity.severity] ?? SEVERITY_DOT.info
-                        )}
-                        aria-label={activity.severity}
-                      />
+                      <>
+                        <span
+                          className={cn(
+                            "h-1.5 w-1.5 shrink-0 rounded-full",
+                            SEVERITY_DOT[activity.severity] ?? SEVERITY_DOT.info
+                          )}
+                          aria-hidden="true"
+                        />
+                        <span className="sr-only">{activity.severity}</span>
+                      </>
                     )}
                   </div>
                   <time className="shrink-0 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-3">

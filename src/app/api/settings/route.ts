@@ -79,8 +79,8 @@ export async function GET() {
     return NextResponse.json({
       data: {
         email: user?.email || authUser.email,
-        currency: user?.currency || "INR",
-        timezone: user?.timezone || "Asia/Kolkata",
+        currency: user?.currency || "USD",
+        timezone: user?.timezone || "UTC",
         ...prefs,
       },
     })
@@ -156,8 +156,8 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({
       data: {
-        currency: updatedUser?.currency || "INR",
-        timezone: updatedUser?.timezone || "Asia/Kolkata",
+        currency: updatedUser?.currency || "USD",
+        timezone: updatedUser?.timezone || "UTC",
         ...nextPrefs,
       },
     })
@@ -166,6 +166,8 @@ export async function PATCH(req: NextRequest) {
     return authErrorResponse(err, "Failed to save settings")
   }
 }
+
+export const PUT = PATCH
 
 export async function DELETE(req: NextRequest) {
   try {
