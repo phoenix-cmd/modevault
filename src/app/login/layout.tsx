@@ -1,11 +1,14 @@
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "Sign in",
-  description:
-    "Sign in to your MODELVAULT command center to manage coding agents, workflows, code verification, and AI spend.",
+  title: "Sign In",
+  description: "Sign in to MODELVAULT to coordinate coding agents, workflows, and AI spend.",
   alternates: {
     canonical: "/login",
+  },
+  openGraph: {
+    url: "/login",
+    title: "Sign In | MODELVAULT",
   },
 }
 

@@ -1,11 +1,14 @@
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "Create account",
-  description:
-    "Create a MODELVAULT workspace to orchestrate AI coding agents, verify diffs before merge, and monitor provider spend.",
+  title: "Create Account",
+  description: "Create a MODELVAULT workspace for coordinated AI software engineering and spend governance.",
   alternates: {
     canonical: "/register",
+  },
+  openGraph: {
+    url: "/register",
+    title: "Create Account | MODELVAULT",
   },
 }
 

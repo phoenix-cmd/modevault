@@ -243,6 +243,7 @@ export function ReplenishmentPanel({
 
       <div className="overflow-x-auto border-t border-line">
         <table className="data-table">
+          <caption className="sr-only">Configured low-balance credit replenishment rules and monthly caps</caption>
           <thead>
             <tr>
               <th>Account</th>
@@ -320,6 +321,7 @@ export function ReplenishmentPanel({
           </p>
           <div className="overflow-x-auto border-t border-line">
             <table className="data-table">
+              <caption className="sr-only">Replenishment evaluation and manual or webhook top-up audit log</caption>
               <thead>
                 <tr>
                   <th>Provider &amp; Mode</th>

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next"
 import { Chivo_Mono, Instrument_Sans, Space_Grotesk } from "next/font/google"
+import { getSiteUrl } from "@/lib/site-url"
 import "./globals.css"
 
 const spaceGrotesk = Space_Grotesk({
@@ -20,13 +21,6 @@ const chivoMono = Chivo_Mono({
   display: "swap",
   variable: "--font-mono",
 })
-
-function getSiteUrl(): URL {
-  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim()
-  if (configured) return new URL(configured)
-  if (process.env.VERCEL_URL) return new URL(`https://${process.env.VERCEL_URL}`)
-  return new URL("https://modelvault.dev")
-}
 
 export const metadata: Metadata = {
   metadataBase: getSiteUrl(),
@@ -50,13 +44,9 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "MODELVAULT" }],
   creator: "MODELVAULT",
-  alternates: {
-    canonical: "/",
-  },
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "/",
     siteName: "MODELVAULT",
     title: "MODELVAULT — Software development. Orchestrated.",
     description:
@@ -83,8 +73,8 @@ export const viewport: Viewport = {
   ],
 }
 
-// Dark Rig charcoal is the default system; opt-in archival paper light theme toggles .light.
-const themeScript = `(function(){try{var t=localStorage.getItem("mv-theme");document.documentElement.classList.toggle("light",t==="light")}catch(e){document.documentElement.classList.remove("light")}})()`
+// Dark Rig charcoal is the default system; opt-in archival paper light theme toggles .light, and density toggles data-density.
+const themeScript = `(function(){try{var t=localStorage.getItem("mv-theme");document.documentElement.classList.toggle("light",t==="light");var d=localStorage.getItem("mv-density");if(d==="compact"){document.documentElement.setAttribute("data-density","compact")}else{document.documentElement.removeAttribute("data-density")}}catch(e){document.documentElement.classList.remove("light")}})()`
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -97,6 +87,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="min-h-full bg-canvas text-ink" suppressHydrationWarning>
+        <a href="#main-content" className="skip-link">
+          Skip to main content
+        </a>
         {children}
       </body>
     </html>

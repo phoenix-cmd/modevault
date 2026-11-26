@@ -189,6 +189,7 @@ export const gitActionSchema = z.object({
   commitSha: z.string().max(120).optional(),
   prTitle: z.string().max(300).optional(),
   prBody: z.string().max(10000).optional(),
+  allowLocalDraft: z.boolean().optional(),
   files: z.array(z.string().max(1024)).max(500).optional(),
   file: z.string().max(1024).optional(),
   strategy: z.enum(["ours", "theirs", "manual"]).optional(),

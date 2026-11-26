@@ -94,15 +94,29 @@ export default function AgentCenterPage() {
   const [currentUserName, setCurrentUserName] = useState("Workspace Reviewer")
   const [verifyMeta, setVerifyMeta] = useState<{ diffSha256?: string | null; commitSha?: string | null } | null>(null)
 
+  const promptHydratedProjectRef = useRef<string>("")
+
   const loadData = async () => {
     try {
       setLoading(true)
-      const [projRes, agentRes, execRes, meRes] = await Promise.all([
-        fetch("/api/projects"),
-        fetch("/api/agents"),
-        fetch("/api/executions"),
+      let wsParam = ""
+      try {
+        const ws = localStorage.getItem("mv-active-workspace")
+        if (ws) wsParam = `?workspaceId=${encodeURIComponent(ws)}`
+      } catch {}
+      const [projResInitial, agentRes, execRes, meRes] = await Promise.all([
+        fetch(`/api/projects${wsParam}`, { cache: "no-store" }),
+        fetch("/api/agents", { cache: "no-store" }),
+        fetch("/api/executions", { cache: "no-store" }),
         fetch("/api/auth/me").catch(() => null),
       ])
+      let projRes = projResInitial
+      if ((projRes.status === 403 || projRes.status === 404) && wsParam) {
+        try {
+          localStorage.removeItem("mv-active-workspace")
+        } catch {}
+        projRes = await fetch("/api/projects", { cache: "no-store" })
+      }
 
       const [projJson, agentJson, execJson, meJson] = await Promise.all([
         projRes.json(),
@@ -117,20 +131,37 @@ export default function AgentCenterPage() {
       const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null
       const urlProjectId = params?.get("projectId") || null
       const urlExecutionId = params?.get("executionId") || null
+      let savedProjectId: string | null = null
+      let savedExecutionId: string | null = null
+      try {
+        savedProjectId = localStorage.getItem("mv-active-project")
+        savedExecutionId = localStorage.getItem("mv-active-execution")
+      } catch {}
+
       if (Array.isArray(projJson?.data)) {
-        setProjects(projJson.data)
-        setSelectedProject((prev: string) => prev || urlProjectId || projJson.data[0]?.id || "")
+        const projList = projJson.data
+        setProjects(projList)
+        setSelectedProject((prev: string) => {
+          const candidates = [prev, urlProjectId, savedProjectId].filter(Boolean) as string[]
+          for (const candidate of candidates) {
+            if (projList.some((p: { id: string }) => p.id === candidate)) {
+              return candidate
+            }
+          }
+          return projList[0]?.id || ""
+        })
       }
       if (Array.isArray(agentJson?.data)) setAgents(agentJson.data)
       if (Array.isArray(execJson?.data)) {
-        setExecutions(execJson.data)
+        const execList = execJson.data
+        setExecutions(execList)
         setSelectedExecution((prev: any) => {
-          if (urlExecutionId) {
-            const matched = execJson.data.find((item: any) => item.id === urlExecutionId)
+          const targetId = urlExecutionId || prev?.id || savedExecutionId
+          if (targetId) {
+            const matched = execList.find((item: any) => item.id === targetId)
             if (matched) return matched
           }
-          if (prev) return prev
-          const first = execJson.data[0] || null
+          const first = execList[0] || null
           if (first?.id) loadComments(first.id)
           return first
         })
@@ -144,7 +175,7 @@ export default function AgentCenterPage() {
 
   const loadComments = async (executionId: string) => {
     try {
-      const res = await fetch(`/api/executions/${executionId}/comments`)
+      const res = await fetch(`/api/executions/${executionId}/comments`, { cache: "no-store" })
       const json = await res.json()
       if (json.data) setComments(json.data)
     } catch (err) {
@@ -154,7 +185,57 @@ export default function AgentCenterPage() {
 
   useEffect(() => {
     loadData()
+    const onWorkspaceChange = () => loadData()
+    window.addEventListener("mv-workspace-change", onWorkspaceChange)
+    return () => window.removeEventListener("mv-workspace-change", onWorkspaceChange)
   }, [])
+
+  // Restore and persist active project + per-project prompt draft across page refreshes
+  useEffect(() => {
+    if (!selectedProject) return
+    try {
+      localStorage.setItem("mv-active-project", selectedProject)
+      const draft = localStorage.getItem(`mv-agent-prompt:${selectedProject}`)
+      promptHydratedProjectRef.current = selectedProject
+      setPrompt(draft || "")
+    } catch {
+      promptHydratedProjectRef.current = selectedProject
+    }
+  }, [selectedProject])
+
+  useEffect(() => {
+    if (!selectedProject || promptHydratedProjectRef.current !== selectedProject) return
+    try {
+      const key = `mv-agent-prompt:${selectedProject}`
+      if (prompt.trim().length > 0) {
+        localStorage.setItem(key, prompt)
+      } else {
+        localStorage.removeItem(key)
+      }
+    } catch {}
+  }, [prompt, selectedProject])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      if (selectedExecution?.id) {
+        localStorage.setItem("mv-active-execution", selectedExecution.id)
+      }
+      const url = new URL(window.location.href)
+      let changed = false
+      if (selectedProject && url.searchParams.get("projectId") !== selectedProject) {
+        url.searchParams.set("projectId", selectedProject)
+        changed = true
+      }
+      if (selectedExecution?.id && url.searchParams.get("executionId") !== selectedExecution.id) {
+        url.searchParams.set("executionId", selectedExecution.id)
+        changed = true
+      }
+      if (changed) {
+        window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`)
+      }
+    } catch {}
+  }, [selectedProject, selectedExecution?.id])
 
   useEffect(() => {
     if (selectedExecution?.id) {
@@ -265,6 +346,9 @@ export default function AgentCenterPage() {
         setSelectedExecution(json.data)
         loadComments(json.data.id)
         setPrompt("")
+        try {
+          localStorage.removeItem(`mv-agent-prompt:${selectedProject}`)
+        } catch {}
         setActionSuccess("Execution completed & staged for approval!")
         setTimeout(() => setActionSuccess(null), 4000)
       }

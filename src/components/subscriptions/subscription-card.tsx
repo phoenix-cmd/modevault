@@ -51,51 +51,54 @@ export function SubscriptionCard({
               className="icon-btn"
               aria-label="Subscription actions"
               aria-expanded={menuOpen}
+              aria-controls={`sub-actions-menu-${sub.id}`}
             >
               <MoreVertical className="h-3.5 w-3.5" strokeWidth={1.8} />
             </button>
 
-            {menuOpen && (
-              <>
-                <div
-                  className="fixed inset-0 z-20"
-                  onClick={() => setMenuOpen(false)}
-                />
-                <div className="glass-panel absolute right-0 top-full z-30 mt-1 w-48 rounded-[2px] p-1 shadow-float">
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false)
-                      onRecordUsage(sub)
-                    }}
-                    className="flex min-h-[40px] w-full items-center gap-2 rounded-[2px] px-2.5 py-2 text-[12px] text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
-                  >
-                    <Gauge className="h-3.5 w-3.5" strokeWidth={1.8} />
-                    Record usage
-                  </button>
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false)
-                      onEdit(sub)
-                    }}
-                    className="flex min-h-[40px] w-full items-center gap-2 rounded-[2px] px-2.5 py-2 text-[12px] text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
-                  >
-                    <Edit2 className="h-3.5 w-3.5" strokeWidth={1.8} />
-                    Edit subscription
-                  </button>
-                  <div className="my-1 border-t border-line" />
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false)
-                      onDelete(sub.id)
-                    }}
-                    className="flex min-h-[40px] w-full items-center gap-2 rounded-[2px] px-2.5 py-2 text-[12px] text-danger transition-colors hover:bg-danger-soft"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
-                    Delete
-                  </button>
-                </div>
-              </>
-            )}
+            <div id={`sub-actions-menu-${sub.id}`}>
+              {menuOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-20"
+                    onClick={() => setMenuOpen(false)}
+                  />
+                  <div className="glass-panel absolute right-0 top-full z-30 mt-1 w-48 rounded-[2px] p-1 shadow-float">
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false)
+                        onRecordUsage(sub)
+                      }}
+                      className="flex min-h-[40px] w-full items-center gap-2 rounded-[2px] px-2.5 py-2 text-[12px] text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
+                    >
+                      <Gauge className="h-3.5 w-3.5" strokeWidth={1.8} />
+                      Record usage
+                    </button>
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false)
+                        onEdit(sub)
+                      }}
+                      className="flex min-h-[40px] w-full items-center gap-2 rounded-[2px] px-2.5 py-2 text-[12px] text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+                      Edit subscription
+                    </button>
+                    <div className="my-1 border-t border-line" />
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false)
+                        onDelete(sub.id)
+                      }}
+                      className="flex min-h-[40px] w-full items-center gap-2 rounded-[2px] px-2.5 py-2 text-[12px] text-danger transition-colors hover:bg-danger-soft"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+                      Delete
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>

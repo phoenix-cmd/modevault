@@ -11,7 +11,10 @@ import {
   readWorkspaceFile,
   writeWorkspaceFile,
 } from "@/lib/project-workspace"
-import { ensureProjectSourceWorkspace } from "@/lib/project-source"
+import {
+  ensureProjectSourceWorkspace,
+  persistProjectSourceSnapshot,
+} from "@/lib/project-source"
 import { publishExecutionComplete, publishExecutionEvent } from "@/lib/event-bus"
 import { approvalSchema, parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
@@ -137,6 +140,9 @@ export async function POST(
         } catch (err) {
           logger.warn("Revision workspace update skipped", errorContext(err))
         }
+      }
+      if (sourcePath) {
+        await persistProjectSourceSnapshot(execution.projectId, sourcePath)
       }
     }
 

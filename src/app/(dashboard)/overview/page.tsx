@@ -291,6 +291,7 @@ export default function OverviewPage() {
           <>
             <div className="hidden overflow-x-auto border-y border-line md:block">
               <table className="data-table">
+                <caption className="sr-only">Recent coding agent executions, token volume, and status</caption>
                 <thead>
                   <tr>
                     <th>Execution</th>

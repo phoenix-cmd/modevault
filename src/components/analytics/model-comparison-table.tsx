@@ -27,6 +27,7 @@ export function ModelComparisonTable({ models }: ModelComparisonTableProps) {
 
       <div className="hidden overflow-x-auto border-t border-line md:block">
         <table className="data-table">
+          <caption className="sr-only">Model pricing comparison per million input, output, and cached tokens</caption>
           <thead>
             <tr>
               <th>Provider</th>

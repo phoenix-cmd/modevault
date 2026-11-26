@@ -8,6 +8,7 @@ import {
   initializeGitRepository,
   isIgnoredWorkspaceEntry,
   isSafeRelativePath,
+  packWorkspaceToBase64Zip,
   stripCommonRootDirectory,
   writeWorkspaceFile,
 } from "@/lib/project-workspace"
@@ -30,128 +31,184 @@ export async function POST(req: NextRequest) {
     const user = await requireAuthenticatedUser()
     const formData = await req.formData()
     const file = formData.get("file") as File | null
+    const multiFiles = formData.getAll("files").filter((f): f is File => f instanceof File)
+    const multiPaths = formData.getAll("paths").map((p) => String(p))
+    const preStripped = formData.get("preStripped") === "1"
     const rawName = ((formData.get("name") as string) || "Imported Project").trim()
     const name = rawName.slice(0, 120) || "Imported Project"
     const requestedWorkspaceId = ((formData.get("workspaceId") as string) || "").trim()
 
-    if (!file) {
-      return NextResponse.json({ error: "No ZIP file provided" }, { status: 400 })
-    }
-
-    if (file.size <= 0) {
-      return NextResponse.json({ error: "Uploaded ZIP file is empty" }, { status: 400 })
-    }
-
-    if (file.size > MAX_COMPRESSED_BYTES) {
-      return NextResponse.json(
-        { error: `ZIP archive exceeds maximum compressed size (${Math.round(MAX_COMPRESSED_BYTES / (1024 * 1024))} MB)` },
-        { status: 413 }
-      )
+    if (!file && multiFiles.length === 0) {
+      return NextResponse.json({ error: "No archive or source files provided" }, { status: 400 })
     }
 
     const targetWorkspace = requestedWorkspaceId
       ? await requireWorkspaceAccess(requestedWorkspaceId, user.id, "member")
       : await resolveUserDefaultWorkspace(user.id, "member")
 
-    const arrayBuffer = await file.arrayBuffer()
-    let zip: JSZip
-    try {
-      zip = await JSZip.loadAsync(arrayBuffer)
-    } catch {
-      return NextResponse.json({ error: "Malformed or unsupported ZIP archive" }, { status: 422 })
+    const extractedBuffers: Array<{ relativePath: string; buffer: Buffer }> = []
+    let uploadLabelName = file?.name || multiFiles[0]?.name || "imported-files"
+    let uploadByteSize = file?.size ?? 0
+
+    // Direct multi-file or single non-ZIP source file upload path
+    const isDirectNonZipSingle =
+      Boolean(file) &&
+      multiFiles.length === 0 &&
+      !file!.name.toLowerCase().endsWith(".zip") &&
+      !file!.type.toLowerCase().includes("zip")
+
+    if (multiFiles.length > 0 || isDirectNonZipSingle) {
+      const filesToIngest = multiFiles.length > 0 ? multiFiles : [file!]
+      let totalBytes = 0
+      if (filesToIngest.length > MAX_ARCHIVE_FILES) {
+        return NextResponse.json(
+          { error: `Selection contains too many files (${filesToIngest.length} > ${MAX_ARCHIVE_FILES})` },
+          { status: 422 }
+        )
+      }
+      for (let idx = 0; idx < filesToIngest.length; idx += 1) {
+        const item = filesToIngest[idx]!
+        if (item.size <= 0 && filesToIngest.length === 1) {
+          return NextResponse.json({ error: "Uploaded file is empty" }, { status: 400 })
+        }
+        if (item.size > MAX_SINGLE_FILE_BYTES) {
+          return NextResponse.json(
+            { error: `File "${item.name}" exceeds maximum single-file size (10 MB)` },
+            { status: 413 }
+          )
+        }
+        const candidateRel = (multiPaths[idx] || item.name).replace(/\\/g, "/").replace(/^\/+/, "")
+        if (!candidateRel || candidateRel.length > 512 || !isSafeRelativePath(candidateRel) || isIgnoredWorkspaceEntry(candidateRel)) {
+          continue
+        }
+        const buf = Buffer.from(await item.arrayBuffer())
+        totalBytes += buf.byteLength
+        if (totalBytes > MAX_UNCOMPRESSED_BYTES) {
+          return NextResponse.json(
+            { error: "Uploaded files exceed maximum size limit (100 MB)" },
+            { status: 413 }
+          )
+        }
+        extractedBuffers.push({ relativePath: candidateRel, buffer: buf })
+      }
+      uploadByteSize = totalBytes
+      if (extractedBuffers.length === 0) {
+        return NextResponse.json(
+          { error: "Uploaded selection did not contain any valid source files" },
+          { status: 422 }
+        )
+      }
+    } else if (file) {
+      if (file.size <= 0) {
+        return NextResponse.json({ error: "Uploaded ZIP file is empty" }, { status: 400 })
+      }
+
+      if (file.size > MAX_COMPRESSED_BYTES) {
+        return NextResponse.json(
+          { error: `ZIP archive exceeds maximum compressed size (${Math.round(MAX_COMPRESSED_BYTES / (1024 * 1024))} MB)` },
+          { status: 413 }
+        )
+      }
+
+      const arrayBuffer = await file.arrayBuffer()
+      let zip: JSZip
+      try {
+        zip = await JSZip.loadAsync(arrayBuffer)
+      } catch {
+        return NextResponse.json({ error: "Malformed or unsupported ZIP archive" }, { status: 422 })
+      }
+
+      const preFilteredRawPaths: string[] = []
+      let symlinkDetected = false
+      zip.forEach((relativePath, zipEntry) => {
+        if (isSymlinkZipEntry(zipEntry)) {
+          symlinkDetected = true
+          return
+        }
+        if (!zipEntry.dir) {
+          const normalized = relativePath.replace(/\\/g, "/")
+          if (normalized.length <= 512 && isSafeRelativePath(normalized)) {
+            preFilteredRawPaths.push(relativePath)
+          }
+        }
+      })
+
+      if (symlinkDetected) {
+        return NextResponse.json(
+          { error: "ZIP archive contains symbolic links, which are rejected by security policy" },
+          { status: 422 }
+        )
+      }
+
+      const { strip } = stripCommonRootDirectory(preFilteredRawPaths, { skipStrip: preStripped })
+      const safeEntries: Array<{ rawPath: string; cleanPath: string }> = []
+      for (const rawPath of preFilteredRawPaths) {
+        const cleanPath = strip(rawPath)
+        if (
+          !cleanPath ||
+          cleanPath.length > 512 ||
+          !isSafeRelativePath(cleanPath) ||
+          isIgnoredWorkspaceEntry(cleanPath)
+        ) {
+          continue
+        }
+        safeEntries.push({ rawPath, cleanPath })
+      }
+
+      if (safeEntries.length === 0) {
+        return NextResponse.json(
+          { error: "ZIP archive did not contain any supported source files" },
+          { status: 422 }
+        )
+      }
+
+      if (safeEntries.length > MAX_ARCHIVE_FILES) {
+        return NextResponse.json(
+          { error: `ZIP archive contains too many files (${safeEntries.length} > ${MAX_ARCHIVE_FILES})` },
+          { status: 422 }
+        )
+      }
+
+      let totalUncompressedBytes = 0
+      for (const { rawPath, cleanPath } of safeEntries) {
+        const zipEntry = zip.file(rawPath)
+        if (!zipEntry || zipEntry.dir) continue
+        const buffer = await zipEntry.async("nodebuffer")
+        if (buffer.byteLength > MAX_SINGLE_FILE_BYTES) {
+          return NextResponse.json(
+            { error: `File "${cleanPath}" exceeds maximum single-file size (10 MB)` },
+            { status: 413 }
+          )
+        }
+        totalUncompressedBytes += buffer.byteLength
+        if (totalUncompressedBytes > MAX_UNCOMPRESSED_BYTES) {
+          return NextResponse.json(
+            { error: "ZIP archive exceeds maximum uncompressed size limit (100 MB)" },
+            { status: 413 }
+          )
+        }
+        if (
+          totalUncompressedBytes > 5 * 1024 * 1024 &&
+          file.size > 0 &&
+          totalUncompressedBytes / Math.max(file.size, 64) > MAX_COMPRESSION_RATIO
+        ) {
+          return NextResponse.json(
+            { error: "ZIP archive rejected due to excessive compression ratio" },
+            { status: 422 }
+          )
+        }
+        extractedBuffers.push({ relativePath: cleanPath, buffer })
+      }
+      uploadLabelName = file.name
+      uploadByteSize = file.size
     }
 
-    const preFilteredRawPaths: string[] = []
     let detectedFramework = "custom"
     let detectedLanguage = "javascript"
     let packageJsonContent: {
       dependencies?: Record<string, string>
       devDependencies?: Record<string, string>
     } | null = null
-
-    let symlinkDetected = false
-    zip.forEach((relativePath, zipEntry) => {
-      if (isSymlinkZipEntry(zipEntry)) {
-        symlinkDetected = true
-        return
-      }
-      if (!zipEntry.dir) {
-        const normalized = relativePath.replace(/\\/g, "/")
-        if (normalized.length <= 512 && isSafeRelativePath(normalized)) {
-          preFilteredRawPaths.push(relativePath)
-        }
-      }
-    })
-
-    if (symlinkDetected) {
-      return NextResponse.json(
-        { error: "ZIP archive contains symbolic links, which are rejected by security policy" },
-        { status: 422 }
-      )
-    }
-
-    const { strip } = stripCommonRootDirectory(preFilteredRawPaths)
-    const safeEntries: Array<{ rawPath: string; cleanPath: string }> = []
-    for (const rawPath of preFilteredRawPaths) {
-      const cleanPath = strip(rawPath)
-      if (
-        !cleanPath ||
-        cleanPath.length > 512 ||
-        !isSafeRelativePath(cleanPath) ||
-        isIgnoredWorkspaceEntry(cleanPath)
-      ) {
-        continue
-      }
-      safeEntries.push({ rawPath, cleanPath })
-    }
-
-    if (safeEntries.length === 0) {
-      return NextResponse.json(
-        { error: "ZIP archive did not contain any supported source files" },
-        { status: 422 }
-      )
-    }
-
-    if (safeEntries.length > MAX_ARCHIVE_FILES) {
-      return NextResponse.json(
-        { error: `ZIP archive contains too many files (${safeEntries.length} > ${MAX_ARCHIVE_FILES})` },
-        { status: 422 }
-      )
-    }
-
-    // Decompress entries into memory buffers while enforcing total uncompressed size & compression ratio
-    const extractedBuffers: Array<{ relativePath: string; buffer: Buffer }> = []
-    let totalUncompressedBytes = 0
-
-    for (const { rawPath, cleanPath } of safeEntries) {
-      const zipEntry = zip.file(rawPath)
-      if (!zipEntry || zipEntry.dir) continue
-      const buffer = await zipEntry.async("nodebuffer")
-      if (buffer.byteLength > MAX_SINGLE_FILE_BYTES) {
-        return NextResponse.json(
-          { error: `File "${cleanPath}" exceeds maximum single-file size (10 MB)` },
-          { status: 413 }
-        )
-      }
-      totalUncompressedBytes += buffer.byteLength
-      if (totalUncompressedBytes > MAX_UNCOMPRESSED_BYTES) {
-        return NextResponse.json(
-          { error: "ZIP archive exceeds maximum uncompressed size limit (100 MB)" },
-          { status: 413 }
-        )
-      }
-      if (
-        totalUncompressedBytes > 5 * 1024 * 1024 &&
-        file.size > 0 &&
-        totalUncompressedBytes / Math.max(file.size, 64) > MAX_COMPRESSION_RATIO
-      ) {
-        return NextResponse.json(
-          { error: "ZIP archive rejected due to excessive compression ratio" },
-          { status: 422 }
-        )
-      }
-      extractedBuffers.push({ relativePath: cleanPath, buffer })
-    }
 
     const pkgEntry =
       extractedBuffers.find((e) => e.relativePath === "package.json") ||
@@ -194,7 +251,7 @@ export async function POST(req: NextRequest) {
         workspaceId: targetWorkspace.workspaceId,
         name,
         slug,
-        description: `Imported from archive: ${file.name} (${Math.round(file.size / 1024)} KB, ${extractedBuffers.length} files)`,
+        description: `Imported from ${uploadLabelName} (${Math.max(1, Math.round(uploadByteSize / 1024))} KB, ${extractedBuffers.length} files)`,
         framework: detectedFramework,
         language: detectedLanguage,
         status: "ready",
@@ -210,12 +267,12 @@ export async function POST(req: NextRequest) {
         sources: {
           create: {
             type: "zip_upload",
-            fileName: file.name,
-            fileSize: file.size,
+            fileName: uploadLabelName,
+            fileSize: uploadByteSize,
             branch: "main",
             manifestJson: JSON.stringify({
-              fileName: file.name,
-              fileSize: file.size,
+              fileName: uploadLabelName,
+              fileSize: uploadByteSize,
               fileCount: extractedBuffers.length,
               files: extractedBuffers.map((e) => e.relativePath).slice(0, 500),
               detectedFramework,
@@ -227,7 +284,19 @@ export async function POST(req: NextRequest) {
       },
       include: {
         environments: true,
-        sources: true,
+        sources: {
+          select: {
+            id: true,
+            projectId: true,
+            type: true,
+            sourcePath: true,
+            fileName: true,
+            fileSize: true,
+            branch: true,
+            manifestJson: true,
+            createdAt: true,
+          },
+        },
       },
     })
 
@@ -240,19 +309,24 @@ export async function POST(req: NextRequest) {
       )
     }
     await initializeGitRepository(workspacePath)
+    const archiveData = await packWorkspaceToBase64Zip(workspacePath)
 
     if (project.sources?.[0]?.id) {
       await prisma.projectSource.update({
         where: { id: project.sources[0].id },
-        data: { sourcePath: workspacePath },
+        data: {
+          sourcePath: workspacePath,
+          ...(archiveData ? { archiveData } : {}),
+        },
       })
+      project.sources[0].sourcePath = workspacePath
     }
 
     return NextResponse.json({
       data: {
         project,
         inspection: {
-          fileName: file.name,
+          fileName: uploadLabelName,
           fileCount: extractedBuffers.length,
           framework: detectedFramework,
           language: detectedLanguage,

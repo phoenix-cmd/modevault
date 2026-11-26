@@ -119,6 +119,7 @@ export function AgentOrchestration() {
                   type="button"
                   onClick={() => setActiveId(step.id)}
                   aria-expanded={isActive}
+                  aria-controls={`orchestration-step-${step.id}`}
                   className="relative min-h-[44px] w-full border-b border-[var(--rig-paper-18)] px-4 py-5 text-left transition-colors last:border-b-0 focus-visible:outline-2 sm:px-8 sm:py-6"
                 >
                   {/* Left 2px active bar */}
@@ -130,7 +131,7 @@ export function AgentOrchestration() {
                   />
 
                   <span
-                    className={`block rig-mono text-[10.5px] uppercase tracking-[0.2em] ${
+                    className={`block rig-mono text-[11px] uppercase tracking-[0.16em] ${
                       isActive ? "text-[var(--rig-blue)]" : "text-[var(--rig-paper-40)]"
                     }`}
                   >
@@ -144,12 +145,14 @@ export function AgentOrchestration() {
                     {step.title}
                   </h3>
 
-                  {isActive && (
-                    <div className="mt-3.5 space-y-2 text-[0.9rem] leading-[1.68] text-[var(--rig-paper-75)]">
-                      <p>{step.summary}</p>
-                      <p className="text-[var(--rig-paper-50)]">{step.detail}</p>
-                    </div>
-                  )}
+                  <div
+                    id={`orchestration-step-${step.id}`}
+                    hidden={!isActive}
+                    className="mt-3.5 space-y-2 text-[0.9rem] leading-[1.68] text-[var(--rig-paper-75)]"
+                  >
+                    <p>{step.summary}</p>
+                    <p className="text-[var(--rig-paper-50)]">{step.detail}</p>
+                  </div>
                 </button>
               )
             })}

@@ -85,6 +85,11 @@ interface AnalyticsData {
   }>
   exchangeRateUsdToInr?: number
   exchangeRates?: { USD_INR: number; EUR_USD: number; GBP_USD: number }
+  fxMeta?: {
+    isFallback: boolean
+    source: string
+    fetchedAt: string | null
+  }
   overview: {
     monthlySubscriptions: number
     annualSubscriptions: number
@@ -207,26 +212,31 @@ export default function AnalyticsPage() {
     impact: convertInrText(ins.impact),
   }))
 
+  const fxIsFallback = data?.fxMeta?.isFallback !== false
+  const fxProvenanceText = fxIsFallback
+    ? "Estimated fallback FX rate"
+    : `Live FX (${data?.fxMeta?.fetchedAt ? new Date(data.fxMeta.fetchedAt).toLocaleDateString() : "synced"})`
+
   const metrics = data?.overview
     ? [
         {
           label: "Monthly subscriptions",
-          value: inr(data.overview.monthlySubscriptions),
-          meta: "Fixed recurring spend",
+          value: `${currency !== "INR" && fxIsFallback ? "~" : ""}${inr(data.overview.monthlySubscriptions)}`,
+          meta: `Fixed recurring spend · ${fxProvenanceText}`,
         },
         {
           label: "Annual run-rate",
-          value: inr(data.overview.annualSubscriptions),
-          meta: "Projected 12-month baseline",
+          value: `${currency !== "INR" && fxIsFallback ? "~" : ""}${inr(data.overview.annualSubscriptions)}`,
+          meta: `Projected 12-month baseline · ${currency}`,
         },
         {
           label: "API spend",
-          value: usd(data.overview.apiSpent),
-          meta: "Tracked developer consumption",
+          value: `${currency !== "USD" && fxIsFallback ? "~" : ""}${usd(data.overview.apiSpent)}`,
+          meta: `Tracked developer consumption · ${currency}`,
         },
         {
           label: "Prepaid balance",
-          value: usd(data.overview.apiBalance),
+          value: `${currency !== "USD" && fxIsFallback ? "~" : ""}${usd(data.overview.apiBalance)}`,
           meta: "Available across accounts",
         },
       ]
@@ -255,10 +265,10 @@ export default function AnalyticsPage() {
             </button>
             <div className="segmented" role="group" aria-label="Display currency">
               {[
-                { code: "INR", label: "INR ₹" },
                 { code: "USD", label: "USD $" },
                 { code: "EUR", label: "EUR €" },
                 { code: "GBP", label: "GBP £" },
+                { code: "INR", label: "INR ₹" },
               ].map((c) => (
                 <button
                   key={c.code}
@@ -300,6 +310,7 @@ export default function AnalyticsPage() {
 
         <div className="overflow-x-auto border-t border-line">
           <table className="data-table">
+            <caption className="sr-only">Developer API account balances, usage sync provenance, and total spend</caption>
             <thead>
               <tr>
                 <th>Account / Provider</th>
@@ -380,6 +391,7 @@ export default function AnalyticsPage() {
           </div>
           <div className="overflow-x-auto border-t border-line">
             <table className="data-table">
+              <caption className="sr-only">Per-model request, token, and USD spend breakdown</caption>
               <thead>
                 <tr>
                   <th>Model</th>
@@ -426,6 +438,7 @@ export default function AnalyticsPage() {
           </div>
           <div className="overflow-x-auto border-t border-line">
             <table className="data-table">
+              <caption className="sr-only">Subscription plan quota utilization, provenance, and recurring cost</caption>
               <thead>
                 <tr>
                   <th>Plan</th>

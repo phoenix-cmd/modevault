@@ -23,6 +23,7 @@ import {
   Sun,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { clearSessionScopedStorage } from "@/lib/client-session-state"
 import type { RawSubscription } from "@/lib/types"
 
 const PAGE_META: Record<string, { section: string; title: string }> = {
@@ -114,6 +115,7 @@ export function Header({
   const meta = PAGE_META[pathname] || { section: "Workspace", title: "Dashboard" }
 
   const [isLight, setIsLight] = useState(false)
+  const [density, setDensity] = useState<"comfortable" | "compact">("comfortable")
   const [mounted, setMounted] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -134,6 +136,11 @@ export function Header({
   useEffect(() => {
     setMounted(true)
     setIsLight(document.documentElement.classList.contains("light"))
+    setDensity(
+      document.documentElement.getAttribute("data-density") === "compact"
+        ? "compact"
+        : "comfortable"
+    )
   }, [])
 
   useEffect(() => {
@@ -256,6 +263,21 @@ export function Header({
     document.documentElement.classList.toggle("light", nextLight)
     try {
       localStorage.setItem("mv-theme", nextLight ? "light" : "dark")
+    } catch {
+      /* storage unavailable */
+    }
+  }
+
+  function toggleDensity() {
+    const next = density === "compact" ? "comfortable" : "compact"
+    setDensity(next)
+    if (next === "compact") {
+      document.documentElement.setAttribute("data-density", "compact")
+    } else {
+      document.documentElement.removeAttribute("data-density")
+    }
+    try {
+      localStorage.setItem("mv-density", next)
     } catch {
       /* storage unavailable */
     }
@@ -460,6 +482,17 @@ export function Header({
         </Link>
 
         <button
+          type="button"
+          onClick={toggleDensity}
+          aria-pressed={density === "compact"}
+          className="hidden h-8 items-center rounded-[2px] border border-line bg-surface px-2 font-mono text-[11px] uppercase tracking-[0.04em] text-ink-2 transition-colors hover:border-line-strong hover:text-ink xl:inline-flex"
+          title={density === "compact" ? "Switch to comfortable spacing" : "Switch to compact density"}
+          aria-label={density === "compact" ? "Compact density enabled — switch to comfortable" : "Comfortable density enabled — switch to compact"}
+        >
+          {density === "compact" ? "Compact" : "Comfort"}
+        </button>
+
+        <button
           onClick={toggleTheme}
           className="icon-btn"
           aria-label={isLight ? "Switch to dark charcoal theme" : "Switch to archival paper light theme"}
@@ -478,6 +511,7 @@ export function Header({
             className="icon-btn relative"
             aria-label="Notifications"
             aria-expanded={notificationsOpen}
+            aria-controls="header-notifications-panel"
           >
             <Bell className="h-4 w-4" strokeWidth={1.8} />
             {unreadCount > 0 && (
@@ -485,8 +519,9 @@ export function Header({
             )}
           </button>
 
-          <AnimatePresence>
-            {notificationsOpen && (
+          <div id="header-notifications-panel">
+            <AnimatePresence>
+              {notificationsOpen && (
               <>
                 <div
                   className="fixed inset-0 z-40"
@@ -568,25 +603,27 @@ export function Header({
                       Open notifications
                     </Link>
                   </div>
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
 
         <div className="mx-0.5 hidden h-5 w-px bg-line sm:block" />
 
         <Link
           href="/settings"
-          className="hidden h-8 w-8 items-center justify-center rounded-[2px] border border-line bg-surface font-mono text-[10px] font-medium text-ink-2 transition-colors hover:border-line-strong hover:text-ink sm:flex"
-          aria-label={userLabel}
-          title={userLabel}
+          className="hidden h-8 w-8 items-center justify-center rounded-[2px] border border-line bg-surface font-mono text-[11px] font-medium text-ink-2 transition-colors hover:border-line-strong hover:text-ink sm:flex"
+          aria-label={`${userInitials} — ${userLabel}`}
+          title={`${userInitials} — ${userLabel}`}
         >
           {userInitials}
         </Link>
         <button
           type="button"
           onClick={async () => {
+            clearSessionScopedStorage()
             await fetch("/api/auth/logout", { method: "POST" })
             window.location.href = "/login"
           }}

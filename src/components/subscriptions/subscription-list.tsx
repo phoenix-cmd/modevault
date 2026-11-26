@@ -215,6 +215,7 @@ export function SubscriptionList({
     <>
       <div className="hidden overflow-x-auto border-t border-line md:block">
         <table className="data-table">
+          <caption className="sr-only">Active and tracked AI subscriptions</caption>
           <thead>
             <tr>
               <SortHeader label="Provider" column="provider" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />

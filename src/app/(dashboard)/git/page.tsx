@@ -52,6 +52,7 @@ export default function GitControlPage() {
   const [editingConflictContent, setEditingConflictContent] = useState<string>("")
   const [hasGithubToken, setHasGithubToken] = useState(false)
   const [hasGithubRemote, setHasGithubRemote] = useState(false)
+  const [canCreateRemotePr, setCanCreateRemotePr] = useState(false)
   const [pendingRollback, setPendingRollback] = useState<string | null>(null)
   const [sync, setSync] = useState<{
     hasRemote: boolean
@@ -69,7 +70,7 @@ export default function GitControlPage() {
     if (!pid) return
     try {
       setLoading(true)
-      const res = await fetch(`/api/git?projectId=${pid}`)
+      const res = await fetch(`/api/git?projectId=${encodeURIComponent(pid)}`, { cache: "no-store" })
       const json = await res.json()
       if (json.data) {
         setBranches(json.data.branches || [])
@@ -79,6 +80,7 @@ export default function GitControlPage() {
         setConflicts(json.data.conflicts || [])
         setHasGithubToken(Boolean(json.data.hasGithubToken))
         setHasGithubRemote(Boolean(json.data.hasGithubRemote))
+        setCanCreateRemotePr(Boolean(json.data.canCreateRemotePr))
         setCurrentBranch(json.data.currentBranch || "main")
         setDiff(json.data.diff || "")
         setSync(json.data.sync || null)
@@ -92,26 +94,64 @@ export default function GitControlPage() {
 
   useEffect(() => {
     let active = true
-    fetch("/api/projects")
-      .then((res) => res.json())
-      .then((json) => {
-        if (!active) return
-        const list = json?.data || []
-        setProjects(list)
-        if (list.length > 0) {
-          const id = list[0].id
-          setProjectId(id)
-          loadGitData(id)
-        }
-      })
-      .catch(() => {})
+    const loadProjects = () => {
+      let wsParam = ""
+      try {
+        const ws = localStorage.getItem("mv-active-workspace")
+        if (ws) wsParam = `?workspaceId=${encodeURIComponent(ws)}`
+      } catch {}
+      fetch(`/api/projects${wsParam}`, { cache: "no-store" })
+        .then(async (res) => {
+          if ((res.status === 403 || res.status === 404) && wsParam) {
+            try {
+              localStorage.removeItem("mv-active-workspace")
+            } catch {}
+            return fetch("/api/projects", { cache: "no-store" }).then((r) => r.json())
+          }
+          return res.json()
+        })
+        .then((json) => {
+          if (!active) return
+          const list = Array.isArray(json?.data) ? json.data : []
+          setProjects(list)
+          if (list.length > 0) {
+            let preferredId = ""
+            try {
+              const params = new URLSearchParams(window.location.search)
+              preferredId = params.get("projectId") || localStorage.getItem("mv-active-project") || ""
+            } catch {}
+            const matched = list.find((item: { id: string }) => item.id === preferredId)
+            const id = matched ? matched.id : list[0].id
+            setProjectId(id)
+          } else {
+            setProjectId("")
+            setLoading(false)
+          }
+        })
+        .catch(() => {
+          if (active) setLoading(false)
+        })
+    }
+    loadProjects()
+    const onWorkspaceChange = () => loadProjects()
+    window.addEventListener("mv-workspace-change", onWorkspaceChange)
     return () => {
       active = false
+      window.removeEventListener("mv-workspace-change", onWorkspaceChange)
     }
   }, [])
 
   useEffect(() => {
-    if (projectId) loadGitData(projectId)
+    if (!projectId) return
+    try {
+      localStorage.setItem("mv-active-project", projectId)
+      const url = new URL(window.location.href)
+      if (url.searchParams.get("projectId") !== projectId) {
+        url.searchParams.set("projectId", projectId)
+        window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`)
+      }
+    } catch {}
+    loadGitData(projectId)
   }, [projectId])
 
   const handleSync = async (action: "pull" | "push" | "fetch") => {
@@ -168,8 +208,7 @@ export default function GitControlPage() {
     }
   }
 
-  const handleCreatePr = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const submitPrRequest = async (allowLocalDraft: boolean) => {
     setCreatingPr(true)
     setSyncError(null)
     try {
@@ -181,6 +220,7 @@ export default function GitControlPage() {
           projectId,
           branchName: prBranch || currentBranch,
           prTitle: prTitle || `PR: ${prBranch || currentBranch}`,
+          allowLocalDraft,
         }),
       })
 
@@ -205,6 +245,11 @@ export default function GitControlPage() {
     } finally {
       setCreatingPr(false)
     }
+  }
+
+  const handleCreatePr = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await submitPrRequest(false)
   }
 
   const handleCheckoutBranch = async (branchName: string) => {
@@ -678,13 +723,17 @@ export default function GitControlPage() {
                     <GitCommit className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.8} />
                     <div className="min-w-0">
                       <p className="text-[13px] font-medium leading-snug text-ink">{c.message}</p>
-                      <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.06em] text-ink-3">
+                      <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.06em] text-ink-3">
                         {c.author} · {c.branch} · {new Date(c.timestamp).toLocaleString()} ·{" "}
-                        <span className="text-ink-2">
-                          {c.filesChanged ?? 0} file(s)
-                        </span>{" "}
-                        (<span className="text-success">+{c.additions ?? 0}</span> /{" "}
-                        <span className="text-danger">-{c.deletions ?? 0}</span>)
+                        {c.filesChanged != null ? (
+                          <>
+                            <span className="text-ink-2">{c.filesChanged} file(s)</span>{" "}
+                            (<span className="text-success">+{c.additions ?? 0}</span> /{" "}
+                            <span className="text-danger">-{c.deletions ?? 0}</span>)
+                          </>
+                        ) : (
+                          <span className="text-ink-3">diff stats not recorded</span>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -914,10 +963,10 @@ export default function GitControlPage() {
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">Pull request</p>
-                  <span className={cn("badge", hasGithubToken && hasGithubRemote ? "bg-success-soft text-success" : "bg-surface-2 text-ink-3")}>
-                    {hasGithubToken && hasGithubRemote
-                      ? "Live GitHub API"
-                      : "Local PR draft — connect GitHub token"}
+                  <span className={cn("badge", canCreateRemotePr ? "bg-success-soft text-success" : "bg-warning-soft text-warning")}>
+                    {canCreateRemotePr
+                      ? "Live Remote PR Ready"
+                      : "Remote PR Prerequisites Missing"}
                   </span>
                 </div>
                 <h2 id="pr-dialog-title" className="mt-1 font-display text-[16px] font-medium tracking-[-0.02em] text-ink">Open pull request</h2>
@@ -975,11 +1024,46 @@ export default function GitControlPage() {
                 </ul>
               </div>
 
-              <div className="flex items-center justify-end gap-2 border-t border-line pt-4">
+              {!canCreateRemotePr && (
+                <div className="border border-warning/35 bg-warning-soft/25 p-3 text-[12px] leading-relaxed text-ink">
+                  <p className="font-medium text-warning">Live GitHub/GitLab pull request unavailable:</p>
+                  <ul className="mt-1.5 list-disc space-y-1 pl-4 text-ink-2">
+                    {!hasGithubRemote && (
+                      <li>Project has no remote GitHub/GitLab repository URL configured.</li>
+                    )}
+                    {!hasGithubToken && (
+                      <li>
+                        No GitHub/GitLab token connected — configure OAuth or a personal access token in{" "}
+                        <a href="/integrations" className="text-accent underline">
+                          Integrations
+                        </a>
+                        .
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line pt-4">
                 <button type="button" onClick={() => setShowPrModal(false)} className="btn-ghost">Cancel</button>
-                <button type="submit" disabled={creatingPr} className="btn-primary">
+                {!canCreateRemotePr && (
+                  <button
+                    type="button"
+                    disabled={creatingPr || !prTitle.trim()}
+                    onClick={() => submitPrRequest(true)}
+                    className="btn-secondary"
+                  >
+                    Save local review draft
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  disabled={creatingPr || !canCreateRemotePr || !prTitle.trim()}
+                  className="btn-primary"
+                  title={!canCreateRemotePr ? "Connect a GitHub/GitLab remote and token to open a live remote PR" : undefined}
+                >
                   <GitPullRequest className="h-3.5 w-3.5" strokeWidth={1.8} />
-                  {creatingPr ? "Submitting…" : "Submit pull request"}
+                  {creatingPr ? "Submitting…" : "Open live pull request"}
                 </button>
               </div>
             </form>

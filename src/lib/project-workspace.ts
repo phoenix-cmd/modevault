@@ -28,15 +28,52 @@ export function isIgnoredWorkspaceEntry(relativePath: string): boolean {
   return segments.some((segment) => IGNORED_WORKSPACE_SEGMENTS.has(segment))
 }
 
+const PROTECTED_PROJECT_ROOT_DIRS = new Set([
+  "src",
+  "app",
+  "pages",
+  "components",
+  "lib",
+  "public",
+  "server",
+  "client",
+  "api",
+  "styles",
+  "utils",
+  "hooks",
+  "types",
+  "tests",
+  "test",
+  "scripts",
+  "prisma",
+  "config",
+  "assets",
+  "packages",
+  "docs",
+  "cmd",
+  "pkg",
+  "internal",
+  "include",
+  "bin",
+  ".github",
+])
+
 /**
  * Strips a single shared top-level directory (e.g. `repo-main/` from a GitHub zipball
- * or `my-app/` from a zipped project folder) only when EVERY entry resides inside it.
+ * or `my-app/` from a zipped project folder) only when EVERY entry resides inside it
+ * AND that directory is not a standard project source directory like `src/` or `app/`.
  * Archives that already have root-level files (e.g. `README.md`, `icon.png`) keep paths intact.
  */
-export function stripCommonRootDirectory(entries: string[]): {
+export function stripCommonRootDirectory(
+  entries: string[],
+  opts?: { skipStrip?: boolean }
+): {
   prefix: string
   strip: (relativePath: string) => string
 } {
+  if (opts?.skipStrip) {
+    return { prefix: "", strip: (p) => p.replace(/\\/g, "/") }
+  }
   const normalized = entries.map((e) => e.replace(/\\/g, "/")).filter(Boolean)
   if (normalized.length === 0) {
     return { prefix: "", strip: (p) => p.replace(/\\/g, "/") }
@@ -46,6 +83,9 @@ export function stripCommonRootDirectory(entries: string[]): {
     return { prefix: "", strip: (p) => p.replace(/\\/g, "/") }
   }
   const firstSegment = normalized[0]!.slice(0, firstSlash)
+  if (PROTECTED_PROJECT_ROOT_DIRS.has(firstSegment.toLowerCase())) {
+    return { prefix: "", strip: (p) => p.replace(/\\/g, "/") }
+  }
   const expectedPrefix = `${firstSegment}/`
   const allSharePrefix = normalized.every(
     (entry) => entry.startsWith(expectedPrefix) && entry.length > expectedPrefix.length
@@ -396,10 +436,57 @@ export async function listWorkspaceTree(
   return nodes
 }
 
-export async function readWorkspaceFile(
+const BINARY_EXTENSIONS = new Set([
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "ico",
+  "bmp",
+  "tiff",
+  "pdf",
+  "zip",
+  "gz",
+  "tar",
+  "7z",
+  "rar",
+  "woff",
+  "woff2",
+  "ttf",
+  "otf",
+  "eot",
+  "mp3",
+  "mp4",
+  "wav",
+  "ogg",
+  "webm",
+  "wasm",
+  "exe",
+  "dll",
+  "so",
+  "dylib",
+  "pyc",
+  "class",
+  "db",
+  "sqlite",
+  "sqlite3",
+])
+
+export function isBinaryBufferOrPath(buf: Buffer, relativePath: string): boolean {
+  const ext = relativePath.split(".").pop()?.toLowerCase() || ""
+  if (BINARY_EXTENSIONS.has(ext)) return true
+  const checkLen = Math.min(buf.byteLength, 8192)
+  for (let i = 0; i < checkLen; i += 1) {
+    if (buf[i] === 0) return true
+  }
+  return false
+}
+
+export async function readWorkspaceFileBuffer(
   rootPath: string,
   relativePath: string
-): Promise<string> {
+): Promise<Buffer> {
   if (!isSafeRelativePath(relativePath)) {
     throw new Error("Invalid file path")
   }
@@ -408,7 +495,109 @@ export async function readWorkspaceFile(
   if (!absolutePath.startsWith(resolvedRoot + path.sep)) {
     throw new Error("Invalid file path")
   }
-  return readFile(absolutePath, "utf8")
+  return readFile(absolutePath)
+}
+
+export async function readWorkspaceFileDetailed(
+  rootPath: string,
+  relativePath: string
+): Promise<{ content: string; isBinary: boolean; byteSize: number }> {
+  const buf = await readWorkspaceFileBuffer(rootPath, relativePath)
+  const isBinary = isBinaryBufferOrPath(buf, relativePath)
+  return {
+    content: isBinary ? "" : buf.toString("utf8"),
+    isBinary,
+    byteSize: buf.byteLength,
+  }
+}
+
+export async function readWorkspaceFile(
+  rootPath: string,
+  relativePath: string
+): Promise<string> {
+  const buf = await readWorkspaceFileBuffer(rootPath, relativePath)
+  if (isBinaryBufferOrPath(buf, relativePath)) {
+    return ""
+  }
+  return buf.toString("utf8")
+}
+
+export async function packWorkspaceToBase64Zip(
+  rootPath: string,
+  maxTotalBytes = 12 * 1024 * 1024
+): Promise<string | null> {
+  try {
+    const tree = await listWorkspaceTree(rootPath)
+    const files = flattenWorkspaceTree(tree)
+    if (files.length === 0) return null
+
+    const zip = new JSZip()
+    let totalBytes = 0
+    let included = 0
+
+    for (const rel of files.slice(0, 2000)) {
+      if (!isSafeRelativePath(rel) || isIgnoredWorkspaceEntry(rel)) continue
+      const buf = await readWorkspaceFileBuffer(rootPath, rel).catch(() => null)
+      if (!buf || buf.byteLength > 4 * 1024 * 1024) continue
+      if (totalBytes + buf.byteLength > maxTotalBytes) break
+      totalBytes += buf.byteLength
+      zip.file(rel, buf)
+      included += 1
+    }
+
+    if (included === 0) return null
+    const compressed = await zip.generateAsync({
+      type: "nodebuffer",
+      compression: "DEFLATE",
+      compressionOptions: { level: 6 },
+    })
+    if (compressed.byteLength > 8 * 1024 * 1024) return null
+    return compressed.toString("base64")
+  } catch {
+    return null
+  }
+}
+
+export async function restoreWorkspaceFromBase64Zip(
+  rootPath: string,
+  base64Zip: string
+): Promise<number> {
+  if (!base64Zip) return 0
+  const rawBuf = Buffer.from(base64Zip, "base64")
+  const zip = await JSZip.loadAsync(rawBuf)
+  const paths: string[] = []
+  zip.forEach((relPath, entry) => {
+    const unixPerms = typeof entry.unixPermissions === "number" ? entry.unixPermissions : 0
+    const isSymlink = (unixPerms & 0o170000) === 0o120000
+    if (!entry.dir && !isSymlink) {
+      const clean = relPath.replace(/\\/g, "/")
+      if (clean.length > 0 && clean.length <= 512 && isSafeRelativePath(clean) && !isIgnoredWorkspaceEntry(clean)) {
+        paths.push(relPath)
+      }
+    }
+  })
+
+  let restored = 0
+  await mkdir(rootPath, { recursive: true })
+  const BATCH_SIZE = 20
+  for (let i = 0; i < paths.length; i += BATCH_SIZE) {
+    const batch = paths.slice(i, i + BATCH_SIZE)
+    await Promise.all(
+      batch.map(async (rawPath) => {
+        const entry = zip.file(rawPath)
+        if (!entry || entry.dir) return
+        const buf = await entry.async("nodebuffer")
+        if (buf.byteLength > 10 * 1024 * 1024) return
+        const clean = rawPath.replace(/\\/g, "/")
+        await writeWorkspaceFile(rootPath, clean, buf)
+        restored += 1
+      })
+    )
+  }
+  if (restored > 0) {
+    await initializeGitRepository(rootPath)
+  }
+  return restored
 }
 
 export async function writeWorkspaceFile(
@@ -794,9 +983,9 @@ export async function getGitCommits(
     message: string
     author: string
     date: string
-    filesChanged: number
-    additions: number
-    deletions: number
+    filesChanged: number | null
+    additions: number | null
+    deletions: number | null
   }>
 > {
   const safeLimit = Math.min(Math.max(Math.trunc(limit) || 20, 1), 100)
@@ -812,18 +1001,18 @@ export async function getGitCommits(
       message: string
       author: string
       date: string
-      filesChanged: number
-      additions: number
-      deletions: number
+      filesChanged: number | null
+      additions: number | null
+      deletions: number | null
     }> = []
     let current: {
       sha: string
       message: string
       author: string
       date: string
-      filesChanged: number
-      additions: number
-      deletions: number
+      filesChanged: number | null
+      additions: number | null
+      deletions: number | null
     } | null = null
 
     for (const rawLine of stdout.split(/\r?\n/)) {
@@ -837,18 +1026,18 @@ export async function getGitCommits(
           author,
           date,
           message: messageParts.join("\x1f"),
-          filesChanged: 0,
-          additions: 0,
-          deletions: 0,
+          filesChanged: null,
+          additions: null,
+          deletions: null,
         }
       } else if (current) {
         const parts = line.split("\t")
         if (parts.length >= 3) {
           const add = Number.parseInt(parts[0] || "0", 10)
           const del = Number.parseInt(parts[1] || "0", 10)
-          current.filesChanged += 1
-          if (!Number.isNaN(add)) current.additions += add
-          if (!Number.isNaN(del)) current.deletions += del
+          current.filesChanged = (current.filesChanged ?? 0) + 1
+          current.additions = (current.additions ?? 0) + (Number.isNaN(add) ? 0 : add)
+          current.deletions = (current.deletions ?? 0) + (Number.isNaN(del) ? 0 : del)
         }
       }
     }

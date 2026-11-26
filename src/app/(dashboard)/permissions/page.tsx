@@ -55,12 +55,14 @@ function PermissionFlag({ label, on }: { label: string; on: boolean }) {
 
 function RoleCell({ enabled }: { enabled: boolean }) {
   return enabled ? (
-    <span className="inline-flex justify-center text-accent" aria-label="Allowed">
-      <CheckCircle2 className="h-4 w-4" strokeWidth={2} />
+    <span className="inline-flex justify-center text-accent">
+      <CheckCircle2 className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+      <span className="sr-only">Allowed</span>
     </span>
   ) : (
-    <span className="inline-flex justify-center text-ink-3/30" aria-label="Not allowed">
-      <span className="block h-px w-3 bg-current" />
+    <span className="inline-flex justify-center text-ink-3">
+      <span className="block h-px w-3 bg-current" aria-hidden="true" />
+      <span className="sr-only">Not allowed</span>
     </span>
   )
 }
@@ -341,6 +343,7 @@ export default function PermissionsPage() {
 
         <div className="hidden overflow-x-auto border-t border-line md:block">
           <table className="data-table">
+            <caption className="sr-only">Organization team members and role capability overrides</caption>
             <thead>
               <tr>
                 <th>Member</th>
@@ -500,6 +503,7 @@ export default function PermissionsPage() {
 
         <div className="hidden overflow-x-auto border-t border-line sm:block">
           <table className="data-table">
+            <caption className="sr-only">Default role capability matrix across Owner, Lead, Developer, and Viewer roles</caption>
             <thead>
               <tr>
                 <th>Capability</th>

@@ -308,6 +308,7 @@ export default function ModelLibraryPage() {
               <>
                 <div className="hidden overflow-x-auto border-t border-line md:block">
                   <table className="data-table">
+                    <caption className="sr-only">AI model catalog with context window, token pricing, and latency benchmarks</caption>
                     <thead>
                       <tr>
                         <th>Model</th>

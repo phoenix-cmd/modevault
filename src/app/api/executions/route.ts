@@ -3,7 +3,10 @@ import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
 import { decryptSecret } from "@/lib/crypto"
 import { getUserAccessibleWorkspaceIds, requireProjectAccess } from "@/lib/permissions"
-import { ensureProjectSourceWorkspace } from "@/lib/project-source"
+import {
+  ensureProjectSourceWorkspace,
+  persistProjectSourceSnapshot,
+} from "@/lib/project-source"
 import { syncAndListCodingBindings, type EnrichedCodingBinding } from "@/lib/coding-bindings"
 import { runCodingAgentLoop } from "@/lib/agent-loop"
 import { evaluateReplenishmentForAccount } from "@/lib/replenishment"
@@ -357,6 +360,10 @@ export async function POST(req: NextRequest) {
       allowDeterministicFallback: allowDeterministicFallback ?? true,
       appendEvent,
     })
+
+    if (ensuredPath) {
+      await persistProjectSourceSnapshot(project.id, ensuredPath)
+    }
 
     const scan = scanExecutionDiffServerSide(loopResult.diffContent, loopResult.targetFilePath)
     await appendEvent(

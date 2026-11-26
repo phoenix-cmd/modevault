@@ -341,21 +341,112 @@ export default function WorkflowsPage() {
     setSelectedNodeId(nextId)
   }
 
+  const draftHydratedRef = useRef(false)
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("mv-workflow-draft")
+      if (raw) {
+        const parsed = JSON.parse(raw) as {
+          activeTemplate?: string
+          selectedSavedId?: string
+          workflowName?: string
+          customPrompt?: string
+          nodes?: Node[]
+          edges?: Edge[]
+        }
+        if (parsed.activeTemplate) setActiveTemplate(parsed.activeTemplate)
+        if (typeof parsed.selectedSavedId === "string") setSelectedSavedId(parsed.selectedSavedId)
+        if (typeof parsed.workflowName === "string") setWorkflowName(parsed.workflowName)
+        if (typeof parsed.customPrompt === "string") setCustomPrompt(parsed.customPrompt)
+        if (Array.isArray(parsed.nodes) && parsed.nodes.length > 0) {
+          setNodes(
+            parsed.nodes.map((n) => {
+              const tone = (n.data?.tone as NodeTone | undefined) || "default"
+              return {
+                ...n,
+                style: workflowNodeStyle(tone),
+              }
+            })
+          )
+        }
+        if (Array.isArray(parsed.edges)) {
+          setEdges(
+            parsed.edges.map((e) => ({
+              ...e,
+              animated: true,
+              style: { stroke: "var(--mv-border-strong)" },
+            }))
+          )
+        }
+      }
+    } catch {
+      // Ignore corrupt local draft JSON
+    } finally {
+      draftHydratedRef.current = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!draftHydratedRef.current) return
+    try {
+      localStorage.setItem(
+        "mv-workflow-draft",
+        JSON.stringify({
+          activeTemplate,
+          selectedSavedId,
+          workflowName,
+          customPrompt,
+          nodes,
+          edges,
+        })
+      )
+    } catch {
+      // Ignore storage quota errors
+    }
+  }, [activeTemplate, selectedSavedId, workflowName, customPrompt, nodes, edges])
+
   const loadSavedWorkflows = useCallback(async () => {
     try {
-      const [res, projRes] = await Promise.all([
-        fetch("/api/workflows"),
-        fetch("/api/projects").catch(() => null),
+      let wsParam = ""
+      try {
+        const ws = localStorage.getItem("mv-active-workspace")
+        if (ws) wsParam = `?workspaceId=${encodeURIComponent(ws)}`
+      } catch {}
+      const [res, projResInitial] = await Promise.all([
+        fetch("/api/workflows", { cache: "no-store" }),
+        fetch(`/api/projects${wsParam}`, { cache: "no-store" }).catch(() => null),
       ])
+      let projRes = projResInitial
+      if (projRes && (projRes.status === 403 || projRes.status === 404) && wsParam) {
+        try {
+          localStorage.removeItem("mv-active-workspace")
+        } catch {}
+        projRes = await fetch("/api/projects", { cache: "no-store" }).catch(() => null)
+      }
       const json = await res.json()
       const projJson = projRes ? await projRes.json().catch(() => null) : null
       if (res.ok && Array.isArray(json?.data)) {
         setSavedWorkflows(json.data.filter((w: { isTemplate?: boolean }) => !w.isTemplate))
       }
       if (Array.isArray(projJson?.data)) {
-        setProjects(projJson.data)
-        if (projJson.data.length > 0) {
-          setSelectedProjectId((cur) => cur || projJson.data[0].id)
+        const projList = projJson.data as Array<{ id: string; name: string }>
+        setProjects(projList)
+        if (projList.length > 0) {
+          let preferredProject = ""
+          try {
+            const params = new URLSearchParams(window.location.search)
+            preferredProject = params.get("projectId") || localStorage.getItem("mv-active-project") || ""
+          } catch {}
+          setSelectedProjectId((cur) => {
+            const candidates = [cur, preferredProject].filter(Boolean)
+            for (const c of candidates) {
+              if (projList.some((p) => p.id === c)) return c
+            }
+            return projList[0].id
+          })
+        } else {
+          setSelectedProjectId("")
         }
       }
     } catch {
@@ -365,7 +456,22 @@ export default function WorkflowsPage() {
 
   useEffect(() => {
     loadSavedWorkflows()
+    const onWorkspaceChange = () => loadSavedWorkflows()
+    window.addEventListener("mv-workspace-change", onWorkspaceChange)
+    return () => window.removeEventListener("mv-workspace-change", onWorkspaceChange)
   }, [loadSavedWorkflows])
+
+  useEffect(() => {
+    if (!selectedProjectId) return
+    try {
+      localStorage.setItem("mv-active-project", selectedProjectId)
+      const url = new URL(window.location.href)
+      if (url.searchParams.get("projectId") !== selectedProjectId) {
+        url.searchParams.set("projectId", selectedProjectId)
+        window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`)
+      }
+    } catch {}
+  }, [selectedProjectId])
 
   const handleLoadSavedWorkflow = (wfId: string) => {
     setSelectedSavedId(wfId)

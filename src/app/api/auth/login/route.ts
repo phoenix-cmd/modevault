@@ -20,6 +20,16 @@ export async function POST(req: NextRequest) {
     if ("response" in parsed) return parsed.response
     const { email, password } = parsed.data
 
+    if (
+      process.env.DISABLE_DEMO_ACCOUNT === "1" &&
+      email.trim().toLowerCase() === "demo@modelvault.dev"
+    ) {
+      return NextResponse.json(
+        { error: "Demo account sign-in is disabled in this environment." },
+        { status: 403 }
+      )
+    }
+
     const accountLimit = checkRateLimit(`login:acct:${email}`, 10, 60_000)
     if (!accountLimit.allowed) {
       return NextResponse.json(

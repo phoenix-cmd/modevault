@@ -11,6 +11,7 @@ import {
 } from "@/lib/permissions"
 import {
   cloneOrScaffoldGitWorkspace,
+  packWorkspaceToBase64Zip,
   removeProjectWorkspace,
 } from "@/lib/project-workspace"
 import { ensureProjectSourceWorkspace } from "@/lib/project-source"
@@ -119,7 +120,19 @@ export async function GET(req: NextRequest) {
     const projects = await prisma.project.findMany({
       where: whereClause,
       include: {
-        sources: true,
+        sources: {
+          select: {
+            id: true,
+            projectId: true,
+            type: true,
+            sourcePath: true,
+            fileName: true,
+            fileSize: true,
+            branch: true,
+            manifestJson: true,
+            createdAt: true,
+          },
+        },
         environments: true,
         executions: {
           orderBy: { createdAt: "desc" },
@@ -152,7 +165,10 @@ export async function GET(req: NextRequest) {
       })
     )
 
-    return NextResponse.json({ data: projects })
+    return NextResponse.json(
+      { data: projects },
+      { headers: { "Cache-Control": "no-store, max-age=0" } }
+    )
   } catch (err: unknown) {
     logger.error("Projects GET failed", errorContext(err))
     return authErrorResponse(err, "Failed to load projects")
@@ -235,7 +251,19 @@ export async function POST(req: NextRequest) {
       },
       include: {
         environments: true,
-        sources: true,
+        sources: {
+          select: {
+            id: true,
+            projectId: true,
+            type: true,
+            sourcePath: true,
+            fileName: true,
+            fileSize: true,
+            branch: true,
+            manifestJson: true,
+            createdAt: true,
+          },
+        },
       },
     })
 
@@ -285,10 +313,12 @@ export async function POST(req: NextRequest) {
           },
         })
 
+        const archiveData = await packWorkspaceToBase64Zip(provisioned.workspacePath)
         await prisma.projectSource.update({
           where: { id: project.sources[0].id },
           data: {
             sourcePath: provisioned.workspacePath,
+            ...(archiveData ? { archiveData } : {}),
             manifestJson: JSON.stringify({
               repositoryUrl: normalizedRepoUrl,
               cloned: provisioned.cloned,

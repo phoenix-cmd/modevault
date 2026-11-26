@@ -29,9 +29,11 @@ export function FaqSection() {
                 className="border-t border-[var(--rig-paper-18)] last:border-b"
               >
                 <button
+                  id={`faq-trigger-${idx}`}
                   type="button"
                   onClick={() => setOpenIdx(isOpen ? null : idx)}
                   aria-expanded={isOpen}
+                  aria-controls={`faq-panel-${idx}`}
                   className="flex min-h-[48px] w-full items-center gap-4 py-5 text-left transition-colors hover:text-white focus-visible:outline-2 sm:gap-5 sm:py-6"
                 >
                   <span className="rig-mono text-[11px] font-bold tracking-[0.14em] text-[var(--rig-blue)]">
@@ -41,6 +43,7 @@ export function FaqSection() {
                     {item.q}
                   </span>
                   <Plus
+                    aria-hidden="true"
                     className={`h-4 w-4 shrink-0 text-[var(--rig-paper-50)] transition-transform duration-200 ${
                       isOpen ? "rotate-45 text-[var(--rig-blue)]" : ""
                     }`}
@@ -48,6 +51,9 @@ export function FaqSection() {
                 </button>
 
                 <div
+                  id={`faq-panel-${idx}`}
+                  role="region"
+                  aria-labelledby={`faq-trigger-${idx}`}
                   hidden={!isOpen}
                   className="pb-6 pl-7 pr-2 text-[0.92rem] leading-[1.7] text-[var(--rig-paper-75)] sm:pl-11 sm:pr-6"
                 >

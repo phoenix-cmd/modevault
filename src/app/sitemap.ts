@@ -1,14 +1,8 @@
 import type { MetadataRoute } from "next"
-
-function getSiteUrl(): string {
-  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim()
-  if (configured) return configured.replace(/\/+$/, "")
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
-  return "https://modelvault.dev"
-}
+import { getSiteUrlString } from "@/lib/site-url"
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const siteUrl = getSiteUrl()
+  const siteUrl = getSiteUrlString()
   const now = new Date()
 
   return [

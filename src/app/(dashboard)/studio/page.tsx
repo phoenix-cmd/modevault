@@ -1,9 +1,8 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import {
   Play,
   RotateCw,
@@ -24,6 +23,9 @@ import {
   Terminal,
   X,
   Link2,
+  Upload,
+  FolderOpen,
+  RotateCcw,
 } from "lucide-react"
 import { PageHeader } from "@/components/ui/page-header"
 import { StatBand } from "@/components/ui/stat-band"
@@ -111,13 +113,25 @@ interface StudioExecution {
   } | null
 }
 
+function getDraftKey(projectId: string, filePath: string): string {
+  return `mv-studio-draft:${projectId}:${filePath}`
+}
+
+function getOpenFileKey(projectId: string): string {
+  return `mv-studio-open-file:${projectId}`
+}
+
 export default function StudioPage() {
-  const router = useRouter()
   const [projects, setProjects] = useState<any[]>([])
   const [projectId, setProjectId] = useState<string>("")
   const [selectedFile, setSelectedFile] = useState("")
   const [fileList, setFileList] = useState<string[]>([])
   const [code, setCode] = useState("")
+  const [savedCode, setSavedCode] = useState("")
+  const [draftRestored, setDraftRestored] = useState(false)
+  const [isBinaryFile, setIsBinaryFile] = useState(false)
+  const [binaryByteSize, setBinaryByteSize] = useState(0)
+
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewRunning, setPreviewRunning] = useState(false)
   const [previewSimulated, setPreviewSimulated] = useState(false)
@@ -125,7 +139,6 @@ export default function StudioPage() {
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [previewFrameKey, setPreviewFrameKey] = useState(0)
 
-  // Phase 3: Coding bindings & Model selection
   const [bindings, setBindings] = useState<CodingBindingOption[]>([])
   const [selectedBindingId, setSelectedBindingId] = useState<string>("")
   const [selectedModelSlug, setSelectedModelSlug] = useState<string>("")
@@ -138,15 +151,22 @@ export default function StudioPage() {
   const [bridgeError, setBridgeError] = useState<string | null>(null)
   const [savingBridge, setSavingBridge] = useState(false)
 
-  // Active execution stream in Studio
   const [activeExecution, setActiveExecution] = useState<StudioExecution | null>(null)
   const [dispatchError, setDispatchError] = useState<string | null>(null)
   const [approvalBusy, setApprovalBusy] = useState(false)
   const eventSourceRef = useRef<EventSource | null>(null)
+  const fetchSeqRef = useRef(0)
+  const initialUrlFileRef = useRef<string | null>(null)
+  const prevProjectIdRef = useRef<string>("")
 
   const [newFileName, setNewFileName] = useState("")
   const [fileFilter, setFileFilter] = useState("")
   const [creatingFile, setCreatingFile] = useState(false)
+  const [uploadingFiles, setUploadingFiles] = useState(false)
+  const [explorerDragging, setExplorerDragging] = useState(false)
+  const studioFileInputRef = useRef<HTMLInputElement | null>(null)
+  const studioFolderInputRef = useRef<HTMLInputElement | null>(null)
+
   const [agentModalOpen, setAgentModalOpen] = useState(false)
   const [agentPrompt, setAgentPrompt] = useState("")
   const [dispatchingAgent, setDispatchingAgent] = useState(false)
@@ -169,6 +189,14 @@ export default function StudioPage() {
   const showEditorPane = isMdUp ? activePane === "editor" || activePane === "split" : mobileTab === "code"
   const showPreviewPane = isMdUp ? activePane === "preview" || activePane === "split" : mobileTab === "preview"
   const showDevToolsPanel = isMdUp ? showDevTools : mobileTab === "tools"
+  const isDirty = !isBinaryFile && Boolean(selectedFile) && code !== savedCode
+
+  useEffect(() => {
+    if (studioFolderInputRef.current) {
+      studioFolderInputRef.current.setAttribute("webkitdirectory", "")
+      studioFolderInputRef.current.setAttribute("directory", "")
+    }
+  }, [explorerOpen, mobileTab])
 
   useEffect(() => {
     const root = document.documentElement
@@ -180,7 +208,7 @@ export default function StudioPage() {
   }, [])
 
   const [logs, setLogs] = useState<Array<{ id: number; time: string; type: string; text: string }>>([
-    { id: 1, time: "init", type: "system", text: "Studio workspace initialized. Select an account & file to code." },
+    { id: 1, time: "init", type: "system", text: "Studio workspace initialized. Open or upload files to begin." },
   ])
 
   const [networkRequests, setNetworkRequests] = useState<Array<{ id: number; method: string; path: string; status: number; duration: string }>>([])
@@ -197,7 +225,7 @@ export default function StudioPage() {
 
   const loadBindings = async () => {
     try {
-      const res = await fetch("/api/coding-bindings")
+      const res = await fetch("/api/coding-bindings", { cache: "no-store" })
       const json = await res.json()
       if (Array.isArray(json?.data)) {
         const list = json.data as CodingBindingOption[]
@@ -208,9 +236,7 @@ export default function StudioPage() {
           setSelectedModelSlug(preferred.defaultModel || preferred.models[0]?.slug || "")
         }
       }
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 
   useEffect(() => {
@@ -262,58 +288,193 @@ export default function StudioPage() {
     return () => window.removeEventListener("message", handlePreviewMessage)
   }, [])
 
-  useEffect(() => {
-    let active = true
+  const loadProjects = useCallback(async () => {
+    const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null
     const urlProjectId =
-      typeof window !== "undefined"
-        ? new URLSearchParams(window.location.search).get("projectId") ||
-          window.localStorage.getItem("mv-active-project")
-        : null
-    fetch("/api/projects")
-      .then((res) => res.json())
-      .then((json) => {
-        if (!active) return
-        const list = json?.data || []
-        setProjects(list)
-        if (list.length > 0) {
-          const matched = urlProjectId
-            ? list.find((item: { id: string }) => item.id === urlProjectId)
-            : null
-          setProjectId((current) => current || matched?.id || list[0].id)
+      params?.get("projectId") ||
+      (typeof window !== "undefined" ? window.localStorage.getItem("mv-active-project") : null)
+    if (params?.get("file") && initialUrlFileRef.current === null) {
+      initialUrlFileRef.current = params.get("file")
+    }
+
+    const activeWs =
+      typeof window !== "undefined" ? window.localStorage.getItem("mv-active-workspace") || "" : ""
+
+    try {
+      let res = await fetch(
+        activeWs ? `/api/projects?workspaceId=${encodeURIComponent(activeWs)}` : "/api/projects",
+        { cache: "no-store" }
+      )
+      if ((res.status === 403 || res.status === 404) && activeWs) {
+        try {
+          window.localStorage.removeItem("mv-active-workspace")
+        } catch {}
+        res = await fetch("/api/projects", { cache: "no-store" })
+      }
+      const json = await res.json()
+      const list = json?.data || []
+      setProjects(list)
+      if (list.length > 0) {
+        const matched = urlProjectId
+          ? list.find((item: { id: string }) => item.id === urlProjectId)
+          : null
+        setProjectId((current) => {
+          if (current && list.some((item: { id: string }) => item.id === current)) return current
+          return matched?.id || list[0].id
+        })
+      }
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    loadProjects()
+    const onWsChange = () => loadProjects()
+    window.addEventListener("mv-workspace-change", onWsChange)
+    return () => window.removeEventListener("mv-workspace-change", onWsChange)
+  }, [loadProjects])
+
+  // Sync URL query params and localStorage so refreshing Studio NEVER loses projectId or selectedFile!
+  useEffect(() => {
+    if (!projectId || typeof window === "undefined") return
+    try {
+      window.localStorage.setItem("mv-active-project", projectId)
+      if (selectedFile) {
+        window.localStorage.setItem(getOpenFileKey(projectId), selectedFile)
+      }
+      const url = new URL(window.location.href)
+      url.searchParams.set("projectId", projectId)
+      if (selectedFile) {
+        url.searchParams.set("file", selectedFile)
+      }
+      window.history.replaceState(null, "", `${url.pathname}?${url.searchParams.toString()}`)
+    } catch {}
+  }, [projectId, selectedFile])
+
+  const fetchFile = useCallback(async (pid: string, path: string) => {
+    if (!pid || !path) return
+    const seq = ++fetchSeqRef.current
+    const started = performance.now()
+    const url = `/api/projects/${pid}/files?file=${encodeURIComponent(path)}`
+    try {
+      const res = await fetch(url, { cache: "no-store" })
+      const elapsed = `${Math.max(1, Math.round(performance.now() - started))}ms`
+      if (seq !== fetchSeqRef.current) return
+      setNetworkRequests((prev) => [
+        { id: Date.now(), method: "GET", path: url, status: res.status, duration: elapsed },
+        ...prev.slice(0, 19),
+      ])
+      const json = await res.json()
+      if (seq !== fetchSeqRef.current) return
+
+      if (json.data) {
+        if (json.data.isBinary) {
+          setIsBinaryFile(true)
+          setBinaryByteSize(Number(json.data.byteSize || 0))
+          setCode("")
+          setSavedCode("")
+          setDraftRestored(false)
+          setAstSummary(null)
+          return
         }
+        setIsBinaryFile(false)
+        setBinaryByteSize(Number(json.data.byteSize || 0))
+        const diskText = typeof json.data.content === "string" ? json.data.content : ""
+        setSavedCode(diskText)
+        setAstSummary(json.data.astSummary || null)
+
+        // Restore any unsaved session draft for (pid, path)
+        let restoredDraft: string | null = null
+        try {
+          restoredDraft = window.localStorage.getItem(getDraftKey(pid, path))
+        } catch {}
+
+        if (restoredDraft !== null && restoredDraft !== diskText) {
+          setCode(restoredDraft)
+          setDraftRestored(true)
+        } else {
+          setCode(diskText)
+          setDraftRestored(false)
+        }
+      } else {
+        setIsBinaryFile(false)
+        setCode("// Select or create a file to inspect")
+        setSavedCode("// Select or create a file to inspect")
+        setDraftRestored(false)
+        setAstSummary(null)
+      }
+    } catch {
+      if (seq !== fetchSeqRef.current) return
+      setIsBinaryFile(false)
+      setCode("// Unable to load file")
+      setSavedCode("// Unable to load file")
+      setDraftRestored(false)
+      setAstSummary(null)
+    }
+  }, [])
+
+  const loadFiles = useCallback(async (pid: string, preferredFile?: string | null) => {
+    if (!pid) return
+    setFilesLoading(true)
+    try {
+      const res = await fetch(`/api/projects/${pid}/files`, { cache: "no-store" })
+      const json = await res.json()
+      const files: string[] = json?.data?.allFiles || []
+      setFileList(files)
+
+      if (files.length === 0) {
+        setSelectedFile("")
+        setCode("")
+        setSavedCode("")
+        return
+      }
+
+      let savedOpenFile: string | null = null
+      try {
+        savedOpenFile = window.localStorage.getItem(getOpenFileKey(pid))
+      } catch {}
+
+      const urlFile = initialUrlFileRef.current
+      initialUrlFileRef.current = null
+
+      setSelectedFile((current) => {
+        if (preferredFile && files.includes(preferredFile)) return preferredFile
+        if (urlFile && files.includes(urlFile)) return urlFile
+        if (current && files.includes(current)) return current
+        if (savedOpenFile && files.includes(savedOpenFile)) return savedOpenFile
+        return files[0]!
       })
-      .catch(() => {})
-    return () => {
-      active = false
+    } finally {
+      setFilesLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    if (projectId && typeof window !== "undefined") {
-      window.localStorage.setItem("mv-active-project", projectId)
+    if (!projectId) return
+    const switchedProject = prevProjectIdRef.current && prevProjectIdRef.current !== projectId
+    prevProjectIdRef.current = projectId
+    if (switchedProject) {
+      setSelectedFile("")
+      setFileList([])
     }
-  }, [projectId])
+    loadFiles(projectId)
 
-  const loadFiles = async (pid: string) => {
-    if (!pid) return
-    setFilesLoading(true)
-    try {
-      const res = await fetch(`/api/projects/${pid}/files`)
-      const json = await res.json()
-      const files = json?.data?.allFiles || []
-      setFileList(files)
-      if (files.length > 0) setSelectedFile((current) => (current && files.includes(current) ? current : files[0]))
-    } finally {
-      setFilesLoading(false)
-    }
-  }
+    // Restore latest execution for this project so refreshing doesn't lose Agent Run panel
+    fetch(`/api/executions?projectId=${encodeURIComponent(projectId)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (Array.isArray(j?.data) && j.data.length > 0) {
+          setActiveExecution((prev) => (prev && prev.id === j.data[0].id ? prev : j.data[0]))
+        } else if (switchedProject) {
+          setActiveExecution(null)
+        }
+      })
+      .catch(() => {})
+  }, [projectId, loadFiles])
 
   useEffect(() => {
-    if (!projectId) return
-    setSelectedFile("")
-    setFileList([])
-    loadFiles(projectId)
-  }, [projectId])
+    if (!projectId || !selectedFile) return
+    fetchFile(projectId, selectedFile)
+  }, [selectedFile, projectId, fetchFile])
 
   useEffect(() => {
     if (!projectId) return
@@ -323,7 +484,7 @@ export default function StudioPage() {
     setPreviewSimReason(null)
     setPreviewUrl(null)
     setPreviewError(null)
-    fetch(`/api/projects/${projectId}/preview`)
+    fetch(`/api/projects/${projectId}/preview`, { cache: "no-store" })
       .then((res) => res.json())
       .then((json) => {
         if (!active) return
@@ -340,66 +501,38 @@ export default function StudioPage() {
     }
   }, [projectId])
 
-  const fetchFile = async (path: string) => {
-    if (!projectId || !path) return
-    const started = performance.now()
-    const url = `/api/projects/${projectId}/files?file=${encodeURIComponent(path)}`
-    try {
-      const res = await fetch(url)
-      const elapsed = `${Math.max(1, Math.round(performance.now() - started))}ms`
-      setNetworkRequests((prev) => [
-        { id: Date.now(), method: "GET", path: url, status: res.status, duration: elapsed },
-        ...prev.slice(0, 19),
-      ])
-      const json = await res.json()
-      if (json.data && typeof json.data.content === "string") {
-        setCode(json.data.content)
-        setAstSummary(json.data.astSummary || null)
-      } else {
-        setCode("// Select or create a file to inspect")
-        setAstSummary(null)
-      }
-    } catch {
-      setCode("// Unable to load file")
-      setAstSummary(null)
-    }
-  }
-
-  useEffect(() => {
-    fetchFile(selectedFile)
-  }, [selectedFile, projectId])
-
   useEffect(() => {
     return () => {
       eventSourceRef.current?.close()
     }
   }, [])
 
-  const subscribeToExecutionStream = (execId: string) => {
-    eventSourceRef.current?.close()
-    const source = new EventSource(`/api/executions/${execId}/events`)
-    eventSourceRef.current = source
-    source.onmessage = (ev) => {
-      try {
-        const parsed = JSON.parse(ev.data)
-        if (parsed.eventType === "done") return
-        setActiveExecution((prev) => {
-          if (!prev || prev.id !== execId) return prev
-          const curEvents = prev.events || []
-          if (curEvents.some((e) => e.id === parsed.id)) return prev
-          return { ...prev, events: [...curEvents, parsed] }
-        })
-      } catch {
-        // ignore
+  const handleEditorChange = (nextValue: string | undefined) => {
+    const val = nextValue ?? ""
+    setCode(val)
+    if (!projectId || !selectedFile || isBinaryFile) return
+    try {
+      const key = getDraftKey(projectId, selectedFile)
+      if (val !== savedCode) {
+        window.localStorage.setItem(key, val)
+      } else {
+        window.localStorage.removeItem(key)
+        setDraftRestored(false)
       }
-    }
-    source.onerror = () => {
-      source.close()
-    }
+    } catch {}
   }
 
-  const handleSave = async () => {
+  const handleDiscardDraft = () => {
     if (!projectId || !selectedFile) return
+    try {
+      window.localStorage.removeItem(getDraftKey(projectId, selectedFile))
+    } catch {}
+    setCode(savedCode)
+    setDraftRestored(false)
+  }
+
+  const handleSave = useCallback(async () => {
+    if (!projectId || !selectedFile || isBinaryFile) return
     try {
       const res = await fetch(`/api/projects/${projectId}/files`, {
         method: "PUT",
@@ -407,6 +540,13 @@ export default function StudioPage() {
         body: JSON.stringify({ file: selectedFile, content: code }),
       })
       if (!res.ok) throw new Error("Save failed")
+      const json = await res.json().catch(() => null)
+      if (json?.data?.astSummary) setAstSummary(json.data.astSummary)
+      setSavedCode(code)
+      setDraftRestored(false)
+      try {
+        window.localStorage.removeItem(getDraftKey(projectId, selectedFile))
+      } catch {}
       setSaveSuccess(true)
       setLogs((prev) => [
         ...prev,
@@ -414,7 +554,7 @@ export default function StudioPage() {
           id: Date.now(),
           time: new Date().toLocaleTimeString(),
           type: "build",
-          text: `Saved ${selectedFile}`,
+          text: `Saved ${selectedFile} to workspace & DB backup`,
         },
       ])
     } catch {
@@ -430,6 +570,115 @@ export default function StudioPage() {
     } finally {
       setTimeout(() => setSaveSuccess(false), 2500)
     }
+  }, [projectId, selectedFile, isBinaryFile, code])
+
+  // Global Ctrl+S / Cmd+S keyboard shortcut in Studio
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault()
+        handleSave()
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [handleSave])
+
+  const uploadFilesIntoProject = async (entries: Array<{ path: string; file: File }>) => {
+    if (!projectId || entries.length === 0) return
+    setUploadingFiles(true)
+    try {
+      const formData = new FormData()
+      for (const entry of entries) {
+        formData.append("files", entry.file)
+        formData.append("paths", entry.path)
+      }
+      const res = await fetch(`/api/projects/${projectId}/files/upload`, {
+        method: "POST",
+        body: formData,
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(json.error || "File upload failed")
+      }
+      const uploadedPaths: string[] = json.data?.uploadedPaths || []
+      const allFiles: string[] = json.data?.allFiles || []
+      if (allFiles.length > 0) {
+        setFileList(allFiles)
+      }
+      if (uploadedPaths[0]) {
+        setSelectedFile(uploadedPaths[0])
+        await fetchFile(projectId, uploadedPaths[0])
+      }
+      setLogs((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          time: new Date().toLocaleTimeString(),
+          type: "build",
+          text: `Imported ${json.data?.uploadedCount || entries.length} file(s) into project`,
+        },
+      ])
+    } catch (err) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          time: new Date().toLocaleTimeString(),
+          type: "error",
+          text: err instanceof Error ? err.message : "Upload failed",
+        },
+      ])
+    } finally {
+      setUploadingFiles(false)
+    }
+  }
+
+  const handleStudioFilePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = Array.from(e.target.files || [])
+    e.target.value = ""
+    if (picked.length === 0) return
+    await uploadFilesIntoProject(
+      picked.map((f) => ({
+        path: (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name,
+        file: f,
+      }))
+    )
+  }
+
+  const handleExplorerDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setExplorerDragging(false)
+    const dropped = Array.from(e.dataTransfer.files || [])
+    if (dropped.length === 0) return
+    await uploadFilesIntoProject(
+      dropped.map((f) => ({
+        path: (f as File & { webkitRelativePath?: string }).webkitRelativePath || f.name,
+        file: f,
+      }))
+    )
+  }
+
+  const subscribeToExecutionStream = (execId: string) => {
+    eventSourceRef.current?.close()
+    const source = new EventSource(`/api/executions/${execId}/events`)
+    eventSourceRef.current = source
+    source.onmessage = (ev) => {
+      try {
+        const parsed = JSON.parse(ev.data)
+        if (parsed.eventType === "done") return
+        setActiveExecution((prev) => {
+          if (!prev || prev.id !== execId) return prev
+          const curEvents = prev.events || []
+          if (curEvents.some((e) => e.id === parsed.id)) return prev
+          return { ...prev, events: [...curEvents, parsed] }
+        })
+      } catch {}
+    }
+    source.onerror = () => {
+      source.close()
+    }
   }
 
   const handleCreateFile = async (e: React.FormEvent) => {
@@ -437,7 +686,7 @@ export default function StudioPage() {
     if (!projectId || !newFileName.trim()) return
     setCreatingFile(true)
     try {
-      const target = newFileName.trim()
+      const target = newFileName.trim().replace(/^\/+/, "")
       const res = await fetch(`/api/projects/${projectId}/files`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -448,6 +697,7 @@ export default function StudioPage() {
         setFileList(json.data.allFiles)
         setSelectedFile(target)
         setNewFileName("")
+        await fetchFile(projectId, target)
       }
     } finally {
       setCreatingFile(false)
@@ -462,10 +712,17 @@ export default function StudioPage() {
     )
     const json = await res.json()
     if (res.ok && Array.isArray(json.data?.allFiles)) {
+      try {
+        window.localStorage.removeItem(getDraftKey(projectId, target))
+      } catch {}
       setFileList(json.data.allFiles)
       if (selectedFile === target) {
-        setSelectedFile(json.data.allFiles[0] || "")
-        if (!json.data.allFiles[0]) setCode("")
+        const nextFile = json.data.allFiles[0] || ""
+        setSelectedFile(nextFile)
+        if (!nextFile) {
+          setCode("")
+          setSavedCode("")
+        }
       }
     }
   }
@@ -476,7 +733,7 @@ export default function StudioPage() {
     setDispatchingAgent(true)
     setDispatchError(null)
     try {
-      if (selectedFile) {
+      if (selectedFile && !isBinaryFile && isDirty) {
         await handleSave()
       }
       const res = await fetch("/api/executions", {
@@ -486,8 +743,8 @@ export default function StudioPage() {
           projectId,
           bindingId: selectedBinding?.id || undefined,
           model: selectedModelSlug || undefined,
-          allowDeterministicFallback: allowFallback || (selectedBinding ? !selectedBinding.canExecuteLive : true),
-          prompt: selectedFile
+          allowDeterministicFallback: selectedBinding?.canExecuteLive ? false : allowFallback,
+          prompt: selectedFile && !isBinaryFile
             ? `Target file ${selectedFile}: ${agentPrompt.trim()}`
             : agentPrompt.trim(),
         }),
@@ -504,8 +761,8 @@ export default function StudioPage() {
         setAgentModalOpen(false)
         setAgentPrompt("")
         await loadBindings()
-        await loadFiles(projectId)
-        if (selectedFile) await fetchFile(selectedFile)
+        await loadFiles(projectId, selectedFile)
+        if (selectedFile) await fetchFile(projectId, selectedFile)
       }
     } catch (err) {
       setDispatchError(err instanceof Error ? err.message : "Failed to run coding agent")
@@ -529,8 +786,8 @@ export default function StudioPage() {
       const json = await res.json()
       if (res.ok && json.data) {
         setActiveExecution((prev) => (prev ? { ...prev, status: json.data.status } : prev))
-        await loadFiles(projectId)
-        if (selectedFile) await fetchFile(selectedFile)
+        await loadFiles(projectId, selectedFile)
+        if (selectedFile) await fetchFile(projectId, selectedFile)
       }
     } finally {
       setApprovalBusy(false)
@@ -610,16 +867,20 @@ export default function StudioPage() {
       ? "css"
       : selectedFile.endsWith(".md")
         ? "markdown"
-        : selectedFile.endsWith(".js") || selectedFile.endsWith(".jsx")
-          ? "javascript"
-          : "typescript"
+        : selectedFile.endsWith(".py")
+          ? "python"
+          : selectedFile.endsWith(".html")
+            ? "html"
+            : selectedFile.endsWith(".js") || selectedFile.endsWith(".jsx")
+              ? "javascript"
+              : "typescript"
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 pb-16">
       <PageHeader
         eyebrow="Build · Attributable Vibe Coding"
         title="Studio"
-        description="Code inside MODELVAULT using your managed API accounts or sanctioned local bridges — with real multi-step tool calls, cost guardrails, and honest fallback labeling."
+        description="Code inside MODELVAULT using your managed API accounts or sanctioned local bridges — with persistent open-file & draft recovery, direct file/folder import, and live tool-loop streaming."
         action={
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -652,9 +913,14 @@ export default function StudioPage() {
               {previewRunning ? <Square className="h-3 w-3" strokeWidth={2} /> : <Play className="h-3 w-3 fill-current" strokeWidth={1.8} />}
               {previewRunning ? "Stop preview" : "Start preview"}
             </button>
-            <button onClick={handleSave} className="btn-secondary btn-sm" disabled={!projectId || !selectedFile}>
+            <button
+              onClick={handleSave}
+              className="btn-secondary btn-sm"
+              disabled={!projectId || !selectedFile || isBinaryFile}
+              title="Save file (Ctrl+S / Cmd+S)"
+            >
               <Save className="h-3.5 w-3.5" strokeWidth={1.8} />
-              {saveSuccess ? "Saved" : "Save"}
+              {saveSuccess ? "Saved" : isDirty ? "Save ●" : "Save"}
             </button>
             <button
               onClick={() => {
@@ -739,23 +1005,28 @@ export default function StudioPage() {
           </div>
         </div>
 
-        {selectedBinding && (selectedBinding.backendType === "manual_unsupported" || selectedBinding.guardrailBlocked || !selectedBinding.hasLiveCredential) && (
-          <div className="flex flex-wrap items-center justify-between gap-2 border border-warning/30 bg-warning-soft/30 px-3 py-2 text-[12px] text-warning">
-            <span className="flex items-center gap-2">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+        {(!selectedBinding || !selectedBinding.canExecuteLive) && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex flex-wrap items-center justify-between gap-3 border border-warning/40 bg-warning-soft/30 px-3.5 py-2.5 text-[12.5px] text-ink"
+          >
+            <span className="flex items-start gap-2.5">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
               <span>
-                {selectedBinding.guardrailReason ||
-                  (!selectedBinding.hasLiveCredential
-                    ? `No live API key connected for ${selectedBinding.providerName}. Connect a key in Integrations or runs will use low-confidence deterministic fallback.`
-                    : selectedBinding.capabilityNote)}
+                <strong className="font-semibold text-warning">Simulated / No Live AI Key Active:</strong>{" "}
+                {selectedBinding?.guardrailReason ||
+                  (!selectedBinding?.hasLiveCredential
+                    ? `No live provider API key is connected for ${selectedBinding?.providerName || "this workspace"}. Connect an API key to run real multi-turn AI coding; without a live key, runs require explicit opt-in and only generate a non-AI deterministic scaffold.`
+                    : selectedBinding?.capabilityNote)}
               </span>
             </span>
-            <div className="flex items-center gap-3">
-              <Link href="/integrations" className="font-mono text-[10.5px] uppercase underline">
-                Connect key
+            <div className="flex shrink-0 items-center gap-2">
+              <Link href="/integrations" className="btn-primary btn-sm">
+                Connect live API key
               </Link>
-              <Link href="/api-usage" className="font-mono text-[10.5px] uppercase underline">
-                Top up
+              <Link href="/api-usage" className="btn-secondary btn-sm">
+                Top up credits
               </Link>
             </div>
           </div>
@@ -766,7 +1037,11 @@ export default function StudioPage() {
         columns={4}
         items={[
           { label: "Projects", value: String(projects.length), meta: activeProject?.name || "No project selected" },
-          { label: "Workspace files", value: filesLoading ? "—" : String(fileList.length), meta: selectedFile || "No file selected" },
+          {
+            label: "Workspace files",
+            value: filesLoading ? "—" : String(fileList.length),
+            meta: selectedFile ? `${selectedFile}${isDirty ? " (unsaved)" : ""}` : "No file selected",
+          },
           {
             label: "Preview",
             value: previewRunning
@@ -883,19 +1158,76 @@ export default function StudioPage() {
           <div className="flex min-h-0 flex-1 overflow-hidden">
             {((isMdUp && explorerOpen) || showFilesPane) && (
               <aside
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setExplorerDragging(true)
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setExplorerDragging(false)
+                }}
+                onDrop={handleExplorerDrop}
                 className={cn(
-                  "flex shrink-0 flex-col overflow-hidden bg-surface-2/10",
-                  showFilesPane ? "w-full min-h-[380px]" : "w-60 border-r border-line"
+                  "flex shrink-0 flex-col overflow-hidden bg-surface-2/10 transition-colors",
+                  explorerDragging && "bg-accent-soft/20 ring-1 ring-inset ring-accent",
+                  showFilesPane ? "w-full min-h-[380px]" : "w-64 border-r border-line"
                 )}
               >
-                <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
+                <div className="flex items-center justify-between border-b border-line px-3 py-2">
                   <span className="font-mono text-[9.5px] font-medium uppercase tracking-[0.14em] text-ink-3">Explorer</span>
                   <span className="font-mono text-[10px] tabular-nums text-ink-3">
-                    {fileFilter.trim()
-                      ? `${filteredFileList.length}/${fileList.length}`
-                      : String(fileList.length).padStart(2, "0")}
+                    {uploadingFiles
+                      ? "Uploading…"
+                      : fileFilter.trim()
+                        ? `${filteredFileList.length}/${fileList.length}`
+                        : String(fileList.length).padStart(2, "0")}
                   </span>
                 </div>
+
+                {/* Direct Upload Files / Folder inside Studio */}
+                <div className="grid grid-cols-2 gap-1 border-b border-line px-2 py-1.5">
+                  <label
+                    htmlFor="studio-upload-files"
+                    className={cn(
+                      "btn-secondary btn-sm cursor-pointer justify-center text-[10.5px]",
+                      (!projectId || uploadingFiles) && "pointer-events-none opacity-50"
+                    )}
+                    title="Upload source files or .zip archive into this project"
+                  >
+                    <Upload className="h-3 w-3" />
+                    Import files
+                  </label>
+                  <label
+                    htmlFor="studio-upload-folder"
+                    className={cn(
+                      "btn-secondary btn-sm cursor-pointer justify-center text-[10.5px]",
+                      (!projectId || uploadingFiles) && "pointer-events-none opacity-50"
+                    )}
+                    title="Upload an entire folder into this project"
+                  >
+                    <FolderOpen className="h-3 w-3" />
+                    Import folder
+                  </label>
+                  <input
+                    id="studio-upload-files"
+                    ref={studioFileInputRef}
+                    type="file"
+                    multiple
+                    onChange={handleStudioFilePick}
+                    className="hidden"
+                  />
+                  <input
+                    id="studio-upload-folder"
+                    ref={studioFolderInputRef}
+                    type="file"
+                    multiple
+                    onChange={handleStudioFilePick}
+                    className="hidden"
+                  />
+                </div>
+
                 <form onSubmit={handleCreateFile} className="flex gap-1 border-b border-line px-2 py-2">
                   <input
                     type="text"
@@ -938,7 +1270,9 @@ export default function StudioPage() {
                   {!filesLoading && fileList.length === 0 && (
                     <div className="px-3 py-8">
                       <p className="text-[12.5px] font-medium text-ink">No workspace files</p>
-                      <p className="mt-1 text-[11.5px] leading-relaxed text-ink-3">Select a project with an extracted workspace to browse files.</p>
+                      <p className="mt-1 text-[11.5px] leading-relaxed text-ink-3">
+                        Use Import files / Import folder above or drag files here.
+                      </p>
                     </div>
                   )}
                   {filteredFileList.map((file) => {
@@ -966,7 +1300,10 @@ export default function StudioPage() {
                           <span className={cn("absolute inset-y-1 left-0 w-[2px] rounded-full bg-accent transition-opacity", isSelected ? "opacity-100" : "opacity-0")} />
                           <FileCode className={cn("h-3.5 w-3.5 shrink-0", isSelected ? "text-accent" : "text-ink-3")} strokeWidth={1.8} />
                           <span className="min-w-0">
-                            <span className="block truncate font-mono text-[11px] md:text-[10.5px]">{name}</span>
+                            <span className="flex items-center gap-1.5 truncate font-mono text-[11px] md:text-[10.5px]">
+                              <span className="truncate">{name}</span>
+                              {isSelected && isDirty && <span className="text-warning" title="Unsaved changes">●</span>}
+                            </span>
                             {folder && <span className="block truncate font-mono text-[9.5px] text-ink-3 md:text-[9px]">{folder}</span>}
                           </span>
                         </button>
@@ -984,7 +1321,7 @@ export default function StudioPage() {
                   })}
                 </div>
                 <div className="border-t border-line px-3 py-2.5 font-mono text-[9.5px] uppercase tracking-[0.1em] text-ink-3">
-                  {activeProject?.name || "No project"} · {previewRunning ? (previewSimulated ? "simulated preview" : "live process") : "preview stopped"}
+                  Drop files to import · {previewRunning ? (previewSimulated ? "simulated preview" : "live process") : "preview stopped"}
                 </div>
               </aside>
             )}
@@ -1002,35 +1339,84 @@ export default function StudioPage() {
                   >
                     <div className="flex items-center justify-between gap-3 border-b border-line bg-surface-2/20 px-3 py-2">
                       <div className="min-w-0">
-                        <p className="truncate font-mono text-[10.5px] text-ink">{selectedFile || "No file selected"}</p>
-                        <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-ink-3">Monaco editor · {editorLanguage}</p>
+                        <p className="flex items-center gap-1.5 truncate font-mono text-[10.5px] text-ink">
+                          <span className="truncate">{selectedFile || "No file selected"}</span>
+                          {isDirty && (
+                            <span className="badge bg-warning-soft text-warning">Unsaved</span>
+                          )}
+                        </p>
+                        <p className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.1em] text-ink-3">
+                          {isBinaryFile ? `Binary asset · ${binaryByteSize} bytes` : `Monaco editor · ${editorLanguage} · Ctrl+S to save`}
+                        </p>
                       </div>
-                      <button onClick={handleSave} className="btn-secondary btn-sm" disabled={!projectId || !selectedFile}>
-                        <Save className="h-3 w-3" strokeWidth={1.8} />
-                        {saveSuccess ? "Saved" : "Save"}
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        {isDirty && (
+                          <button
+                            type="button"
+                            onClick={handleDiscardDraft}
+                            className="btn-ghost btn-sm"
+                            title="Discard unsaved local edits"
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                            Revert
+                          </button>
+                        )}
+                        <button
+                          onClick={handleSave}
+                          className="btn-secondary btn-sm"
+                          disabled={!projectId || !selectedFile || isBinaryFile}
+                        >
+                          <Save className="h-3 w-3" strokeWidth={1.8} />
+                          {saveSuccess ? "Saved" : "Save"}
+                        </button>
+                      </div>
                     </div>
+
+                    {draftRestored && isDirty && (
+                      <div className="flex items-center justify-between gap-2 border-b border-info/30 bg-info-soft/40 px-3 py-1.5 text-[11.5px] text-ink">
+                        <span>Unsaved session draft restored after reload.</span>
+                        <div className="flex items-center gap-2">
+                          <button type="button" onClick={handleSave} className="font-mono text-[10px] uppercase text-accent underline">
+                            Save to disk
+                          </button>
+                          <button type="button" onClick={handleDiscardDraft} className="font-mono text-[10px] uppercase text-ink-3 underline">
+                            Discard draft
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="min-h-0 flex-1">
-                      <Editor
-                        height="100%"
-                        language={editorLanguage}
-                        theme={editorTheme}
-                        value={code}
-                        onChange={(v) => setCode(v || "")}
-                        options={{
-                          fontSize: isMdUp ? 12.5 : 13,
-                          lineNumbersMinChars: isMdUp ? 4 : 3,
-                          glyphMargin: isMdUp,
-                          folding: isMdUp,
-                          wordWrap: isMdUp ? "off" : "on",
-                          minimap: { enabled: false },
-                          scrollBeyondLastLine: false,
-                          automaticLayout: true,
-                          lineNumbers: "on",
-                          fontFamily: "var(--font-jetbrains), monospace",
-                          padding: { top: 12, bottom: 12 },
-                        }}
-                      />
+                      {isBinaryFile ? (
+                        <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+                          <FileCode className="h-7 w-7 text-ink-3" />
+                          <p className="font-mono text-[12px] text-ink">{selectedFile}</p>
+                          <p className="max-w-xs text-[12px] text-ink-3">
+                            Binary asset ({binaryByteSize.toLocaleString()} bytes) — protected from UTF-8 text overwrite.
+                          </p>
+                        </div>
+                      ) : (
+                        <Editor
+                          height="100%"
+                          language={editorLanguage}
+                          theme={editorTheme}
+                          value={code}
+                          onChange={handleEditorChange}
+                          options={{
+                            fontSize: isMdUp ? 12.5 : 13,
+                            lineNumbersMinChars: isMdUp ? 4 : 3,
+                            glyphMargin: isMdUp,
+                            folding: isMdUp,
+                            wordWrap: isMdUp ? "off" : "on",
+                            minimap: { enabled: false },
+                            scrollBeyondLastLine: false,
+                            automaticLayout: true,
+                            lineNumbers: "on",
+                            fontFamily: "var(--font-jetbrains), monospace",
+                            padding: { top: 12, bottom: 12 },
+                          }}
+                        />
+                      )}
                     </div>
                   </div>
                 )}
@@ -1156,14 +1542,14 @@ export default function StudioPage() {
                       aria-pressed={devToolsTab === tab.id}
                       className={cn(
                         "-mb-1.5 border-b py-1.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] transition-colors",
-                        devToolsTab === tab.id ? "border-accent text-[#f4f2ec]" : "border-transparent text-[#77736c] hover:text-[#c9c6bf]"
+                        devToolsTab === tab.id ? "border-accent text-[#f4f2ec]" : "border-transparent text-[#a6a9a4] hover:text-[#c9c6bf]"
                       )}
                     >
                       {tab.label}
                     </button>
                   ))}
                 </div>
-                <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[#77736c]">Telemetry &amp; Attributable Runs</span>
+                <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[#a6a9a4]">Telemetry &amp; Attributable Runs</span>
               </div>
 
               <div className="flex-1 space-y-1 overflow-y-auto p-3 font-mono text-[10.5px] leading-relaxed sm:px-4">
@@ -1171,7 +1557,7 @@ export default function StudioPage() {
                   <>
                     {logs.map((log) => (
                       <div key={log.id} className="flex items-start gap-2">
-                        <span className="shrink-0 text-[#77736c]">[{log.time}]</span>
+                        <span className="shrink-0 text-[#a6a9a4]">[{log.time}]</span>
                         <span
                           className={cn(
                             "shrink-0 font-medium",
@@ -1200,7 +1586,7 @@ export default function StudioPage() {
                           <span className="shrink-0 text-[9px] font-medium text-success">{req.method}</span>
                           <span className="truncate text-[#c9c6bf]">{req.path}</span>
                         </div>
-                        <div className="flex shrink-0 items-center gap-3 text-[#77736c]">
+                        <div className="flex shrink-0 items-center gap-3 text-[#a6a9a4]">
                           <span className="font-medium text-success">{req.status}</span>
                           <span className="tabular-nums">{req.duration}</span>
                         </div>
@@ -1211,25 +1597,25 @@ export default function StudioPage() {
 
                 {devToolsTab === "ast" && (
                   <div className="space-y-2">
-                    <p className="text-[9px] uppercase tracking-[0.12em] text-[#77736c]">
+                    <p className="text-[9px] uppercase tracking-[0.12em] text-[#a6a9a4]">
                       {astSummary?.parserEngine === "python-ast"
                         ? "Python AST analysis"
                         : "TypeScript Compiler AST analysis"}{" "}
                       · ({astSummary?.lineCount ?? code.split(/\r?\n/).length} lines)
                     </p>
-                    <p className="text-[#77736c]">
+                    <p className="text-[#a6a9a4]">
                       Exported symbols{" "}
                       <span className="text-accent">
                         {astSummary?.exportedSymbols?.length ? astSummary.exportedSymbols.join(", ") : "None detected"}
                       </span>
                     </p>
-                    <p className="text-[#77736c]">
+                    <p className="text-[#a6a9a4]">
                       Dependencies{" "}
                       <span className="text-success">
                         {astSummary?.importedModules?.length ? astSummary.importedModules.join(", ") : "None"}
                       </span>
                     </p>
-                    <p className="text-[#77736c]">
+                    <p className="text-[#a6a9a4]">
                       Complexity{" "}
                       <span className="text-warning">
                         {astSummary?.complexityScore ?? 1} · {astSummary?.complexityRating || "safe"}
@@ -1241,7 +1627,7 @@ export default function StudioPage() {
                 {devToolsTab === "agent" && (
                   <div className="space-y-3">
                     {!activeExecution ? (
-                      <p className="text-[#77736c]">
+                      <p className="text-[#a6a9a4]">
                         Click “Save &amp; Run Agent” to launch a streaming tool-use coding run billed to the selected account.
                       </p>
                     ) : (
@@ -1362,18 +1748,27 @@ export default function StudioPage() {
                   className="field min-h-[100px]"
                 />
               </div>
-              {selectedBinding && !selectedBinding.canExecuteLive && (
-                <label className="flex items-start gap-2 text-[12px] text-ink-2">
-                  <input
-                    type="checkbox"
-                    checked={allowFallback}
-                    onChange={(e) => setAllowFallback(e.target.checked)}
-                    className="mt-0.5"
-                  />
-                  <span>
-                    Proceed using deterministic fallback scaffold (marked Low Confidence, Not AI-generated).
-                  </span>
-                </label>
+              {(!selectedBinding || !selectedBinding.canExecuteLive) && (
+                <div className="space-y-2.5 border border-warning/35 bg-warning-soft/25 p-3">
+                  <p className="text-[12px] font-medium text-warning">
+                    No live AI coding credential selected — connect an API key in{" "}
+                    <Link href="/integrations" className="underline">
+                      Integrations
+                    </Link>{" "}
+                    for real AI code generation.
+                  </p>
+                  <label className="flex items-start gap-2 text-[12px] text-ink-2">
+                    <input
+                      type="checkbox"
+                      checked={allowFallback}
+                      onChange={(e) => setAllowFallback(e.target.checked)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      Opt in to non-AI deterministic scaffold fallback (clearly tagged Simulated / Not AI-generated).
+                    </span>
+                  </label>
+                </div>
               )}
               <div className="flex items-center justify-end gap-2 border-t border-line pt-3">
                 <button type="button" onClick={() => setAgentModalOpen(false)} className="btn-ghost">
@@ -1384,7 +1779,7 @@ export default function StudioPage() {
                   disabled={
                     dispatchingAgent ||
                     !agentPrompt.trim() ||
-                    (selectedBinding?.backendType === "manual_unsupported" && !allowFallback)
+                    ((!selectedBinding || !selectedBinding.canExecuteLive) && !allowFallback)
                   }
                   className="btn-primary"
                 >

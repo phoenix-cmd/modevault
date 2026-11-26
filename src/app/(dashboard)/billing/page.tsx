@@ -276,6 +276,7 @@ export default function BillingPage() {
           <>
             <div className="hidden overflow-x-auto md:block">
               <table className="data-table">
+                <caption className="sr-only">Billing ledger of subscription payments, top-ups, and refunds</caption>
                 <thead>
                   <tr>
                     <th>Date</th>

@@ -26,7 +26,7 @@ import {
   unstageFiles,
   verifyCommitExists,
 } from "@/lib/project-workspace"
-import { ensureProjectSourceWorkspace } from "@/lib/project-source"
+import { ensureProjectSourceWorkspace, persistProjectSourceSnapshot } from "@/lib/project-source"
 import { gitActionSchema, parseJson } from "@/lib/validation"
 import { logger, errorContext } from "@/lib/logger"
 
@@ -89,6 +89,9 @@ export async function GET(req: NextRequest) {
     const ghToken = await resolveUserGithubToken(user.id)
     const hasGithubToken = Boolean(ghToken)
     const ghRepo = parseGithubOwnerRepo(project.repositoryUrl)
+    const glToken = await resolveUserGitlabToken(user.id)
+    const hasGitlabToken = Boolean(glToken)
+    const glPath = parseGitlabProjectPath(project.repositoryUrl)
 
     let sourcePath: string | null = null
     try {
@@ -108,9 +111,9 @@ export async function GET(req: NextRequest) {
       author: string
       branch: string
       timestamp: string
-      filesChanged: number
-      additions: number
-      deletions: number
+      filesChanged: number | null
+      additions: number | null
+      deletions: number | null
       status: string
     }> = []
     let diff = ""
@@ -174,29 +177,35 @@ export async function GET(req: NextRequest) {
         createdAt: op.createdAt.toISOString(),
       }))
 
-    return NextResponse.json({
-      data: {
-        currentBranch,
-        branches,
-        commits,
-        pullRequests,
-        operations,
-        diff,
-        changes,
-        conflicts,
-        hasGithubToken,
-        hasGithubRemote: Boolean(ghRepo),
-        isLocalWorkspace: Boolean(sourcePath),
-        sync: sync || {
-          hasRemote: false,
-          remoteUrl: null,
-          upstream: null,
-          branch: currentBranch,
-          ahead: 0,
-          behind: 0,
+    return NextResponse.json(
+      {
+        data: {
+          currentBranch,
+          branches,
+          commits,
+          pullRequests,
+          operations,
+          diff,
+          changes,
+          conflicts,
+          hasGithubToken,
+          hasGithubRemote: Boolean(ghRepo),
+          hasGitlabToken,
+          hasGitlabRemote: Boolean(glPath),
+          canCreateRemotePr: Boolean((ghToken && ghRepo) || (glToken && glPath)),
+          isLocalWorkspace: Boolean(sourcePath),
+          sync: sync || {
+            hasRemote: false,
+            remoteUrl: null,
+            upstream: null,
+            branch: currentBranch,
+            ahead: 0,
+            behind: 0,
+          },
         },
       },
-    })
+      { headers: { "Cache-Control": "no-store, max-age=0" } }
+    )
   } catch (err: unknown) {
     logger.error("Failed to load git state", errorContext(err))
     return authErrorResponse(err, "Failed to load git state")
@@ -248,6 +257,7 @@ export async function POST(req: NextRequest) {
         )
       }
       const sha = await commitWorkspace(source.sourcePath, commitMessage || "feat: automated agent mutation")
+      await persistProjectSourceSnapshot(project.id, source.sourcePath)
       const op = await prisma.gitOperation.create({
         data: {
           projectId: project.id,
@@ -272,6 +282,7 @@ export async function POST(req: NextRequest) {
       }
       try {
         const revertSha = await revertCommit(source.sourcePath, commitSha)
+        await persistProjectSourceSnapshot(project.id, source.sourcePath)
         const op = await prisma.gitOperation.create({
           data: {
             projectId: project.id,
@@ -373,9 +384,18 @@ export async function POST(req: NextRequest) {
           notice = `GitLab API unreachable (${err instanceof Error ? err.message : "network error"}); recorded as local PR draft.`
         }
       } else {
-        notice = !ghRepo && !glPath
-          ? "Project has no GitHub/GitLab repository URL; recorded as local PR draft (not pushed to remote)."
-          : "No remote Git token connected in Integrations; recorded as local PR draft (not pushed to remote)."
+        const missingReason = !ghRepo && !glPath
+          ? "Project has no GitHub or GitLab repository URL configured."
+          : "No GitHub or GitLab token connected in Integrations."
+        if (!body.allowLocalDraft) {
+          return NextResponse.json(
+            {
+              error: `${missingReason} Connect a remote repository and provider token to open a live pull request, or explicitly save a local review draft.`,
+            },
+            { status: 422 }
+          )
+        }
+        notice = `${missingReason} Saved as local review draft (not pushed to remote).`
       }
 
       if (simulated) {
@@ -429,6 +449,7 @@ export async function POST(req: NextRequest) {
     if (action === "discard") {
       if (source?.sourcePath && Array.isArray(body.files)) {
         await discardFiles(source.sourcePath, body.files)
+        await persistProjectSourceSnapshot(project.id, source.sourcePath)
       }
       const changes = source?.sourcePath ? await getGitStatusFiles(source.sourcePath).catch(() => []) : []
       return NextResponse.json({ data: { message: "Changes discarded", changes } })
@@ -448,7 +469,10 @@ export async function POST(req: NextRequest) {
       if (!branchName) {
         return NextResponse.json({ error: "branchName is required" }, { status: 400 })
       }
-      if (source?.sourcePath) await checkoutBranch(source.sourcePath, branchName)
+      if (source?.sourcePath) {
+        await checkoutBranch(source.sourcePath, branchName)
+        await persistProjectSourceSnapshot(project.id, source.sourcePath)
+      }
       await prisma.project.update({ where: { id: project.id }, data: { defaultBranch: branchName } })
       return NextResponse.json({ data: { message: "Checked out branch", branchName } })
     }
@@ -466,6 +490,7 @@ export async function POST(req: NextRequest) {
         body.strategy || "ours",
         body.content
       )
+      await persistProjectSourceSnapshot(project.id, source.sourcePath)
       const conflicts = await getGitConflicts(source.sourcePath).catch(() => [])
       const changes = await getGitStatusFiles(source.sourcePath).catch(() => [])
       return NextResponse.json({
@@ -488,6 +513,7 @@ export async function POST(req: NextRequest) {
       const target = body.targetBranch || "main"
       try {
         const result = await mergeBranch(source.sourcePath, branchName, target)
+        await persistProjectSourceSnapshot(project.id, source.sourcePath)
         if (body.operationId) {
           await prisma.gitOperation
             .update({
@@ -539,6 +565,7 @@ export async function POST(req: NextRequest) {
         }
         if (action === "pull") {
           const result = await gitPull(source.sourcePath)
+          await persistProjectSourceSnapshot(project.id, source.sourcePath)
           const sync = await getGitSyncStatus(source.sourcePath)
           return NextResponse.json({ data: { ...result, sync } })
         }

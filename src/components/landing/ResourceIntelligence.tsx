@@ -98,6 +98,7 @@ export function ResourceIntelligence() {
 
             <div className="hidden overflow-x-auto md:block">
               <table className="w-full border-collapse text-left text-[12.5px]">
+                <caption className="sr-only">Illustrative provider usage, token allowances, and spend</caption>
                 <thead>
                   <tr className="border-b border-[var(--rig-paper-12)] rig-mono text-[10px] uppercase tracking-[0.12em] text-[var(--rig-paper-40)]">
                     <th className="px-4 py-2.5">Provider</th>

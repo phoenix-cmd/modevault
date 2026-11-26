@@ -32,6 +32,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { clearSessionScopedStorage } from "@/lib/client-session-state"
 
 const navSections: Array<{
   label: string
@@ -143,6 +144,10 @@ function useWorkspaceIdentity() {
         setSelectedOrgId(org.id)
         const ws = org.workspaces?.find((w) => w.id === savedWs) || org.workspaces?.[0]
         if (ws) setSelectedWsId(ws.id)
+        try {
+          localStorage.setItem("mv-active-org", org.id)
+          if (ws) localStorage.setItem("mv-active-workspace", ws.id)
+        } catch {}
       }
     })
     return () => {
@@ -162,14 +167,29 @@ function useWorkspaceIdentity() {
     try {
       localStorage.setItem("mv-active-org", orgId)
       if (firstWs) localStorage.setItem("mv-active-workspace", firstWs)
+      else localStorage.removeItem("mv-active-workspace")
+      localStorage.removeItem("mv-active-project")
     } catch {}
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("mv-workspace-change", { detail: { orgId, workspaceId: firstWs } })
+      )
+    }
   }
 
   const selectWorkspace = (wsId: string) => {
     setSelectedWsId(wsId)
     try {
       localStorage.setItem("mv-active-workspace", wsId)
+      localStorage.removeItem("mv-active-project")
     } catch {}
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("mv-workspace-change", {
+          detail: { orgId: activeOrg?.id || "", workspaceId: wsId },
+        })
+      )
+    }
   }
 
   return {
@@ -278,6 +298,7 @@ function NavContent({
 
   async function handleSignOut() {
     onNavigate?.()
+    clearSessionScopedStorage()
     await fetch("/api/auth/logout", { method: "POST" })
     window.location.href = "/login"
   }

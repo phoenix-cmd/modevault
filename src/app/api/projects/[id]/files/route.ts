@@ -8,10 +8,15 @@ import {
   deleteWorkspaceFile,
   flattenWorkspaceTree,
   listWorkspaceTree,
-  readWorkspaceFile,
+  readWorkspaceFileDetailed,
   writeWorkspaceFile,
 } from "@/lib/project-workspace"
-import { ensureProjectSourceWorkspace } from "@/lib/project-source"
+import {
+  ensureProjectSourceWorkspace,
+  persistProjectSourceSnapshot,
+} from "@/lib/project-source"
+
+const NO_STORE_HEADERS = { "Cache-Control": "no-store, max-age=0" }
 
 function inferLanguage(filePath: string): string {
   const extension = filePath.split(".").pop()?.toLowerCase()
@@ -23,6 +28,14 @@ function inferLanguage(filePath: string): string {
   if (extension === "html") return "html"
   if (extension === "md") return "markdown"
   return "plaintext"
+}
+
+const SOURCE_SELECT = {
+  id: true,
+  type: true,
+  sourcePath: true,
+  branch: true,
+  manifestJson: true,
 }
 
 export async function GET(
@@ -37,20 +50,16 @@ export async function GET(
 
     const project = await prisma.project.findUnique({
       where: { id },
-      include: { sources: true },
+      include: { sources: { select: SOURCE_SELECT } },
     })
 
     if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 })
+      return NextResponse.json({ error: "Project not found" }, { status: 404, headers: NO_STORE_HEADERS })
     }
 
     await requireProjectAccess(project.id, user.id, "viewer")
 
-    let resolvedSourcePath = (
-      project.sources?.find((item: unknown) => (item as { sourcePath?: string }).sourcePath) as
-        | { sourcePath?: string }
-        | undefined
-    )?.sourcePath
+    let resolvedSourcePath = project.sources?.find((item) => item.sourcePath)?.sourcePath
 
     try {
       const githubToken = await resolveUserGithubToken(user.id)
@@ -66,50 +75,67 @@ export async function GET(
     if (resolvedSourcePath) {
       if (filePath) {
         try {
-          const content = await readWorkspaceFile(resolvedSourcePath, filePath)
+          const detailed = await readWorkspaceFileDetailed(resolvedSourcePath, filePath)
           const language = inferLanguage(filePath)
-          const astSummary = analyzeSourceCodeAst(filePath, content)
-          return NextResponse.json({
-            data: {
-              path: filePath,
-              language,
-              content,
-              astSummary,
+          const astSummary = detailed.isBinary ? null : analyzeSourceCodeAst(filePath, detailed.content)
+          return NextResponse.json(
+            {
+              data: {
+                path: filePath,
+                language,
+                content: detailed.content,
+                isBinary: detailed.isBinary,
+                byteSize: detailed.byteSize,
+                astSummary,
+              },
             },
-          })
+            { headers: NO_STORE_HEADERS }
+          )
         } catch (err: unknown) {
           const error = err as { message?: string }
-          return NextResponse.json({ error: error.message || "File not found" }, { status: 404 })
+          return NextResponse.json(
+            { error: error.message || "File not found" },
+            { status: 404, headers: NO_STORE_HEADERS }
+          )
         }
       }
 
       const allFiles = flattenWorkspaceTree(initialTree)
-      return NextResponse.json({
+      return NextResponse.json(
+        {
+          data: {
+            projectId: project.id,
+            projectName: project.name,
+            branch: project.defaultBranch,
+            tree: initialTree,
+            allFiles,
+            hasWorkspace: true,
+          },
+        },
+        { headers: NO_STORE_HEADERS }
+      )
+    }
+
+    if (filePath) {
+      return NextResponse.json(
+        { error: "File not found — project has no local workspace" },
+        { status: 404, headers: NO_STORE_HEADERS }
+      )
+    }
+
+    return NextResponse.json(
+      {
         data: {
           projectId: project.id,
           projectName: project.name,
           branch: project.defaultBranch,
-          tree: initialTree,
-          allFiles,
-          hasWorkspace: true,
+          tree: [],
+          allFiles: [],
+          hasWorkspace: false,
         },
-      })
-    }
-
-    if (filePath) {
-      return NextResponse.json({ error: "File not found — project has no local workspace" }, { status: 404 })
-    }
-
-    return NextResponse.json({
-      data: {
-        projectId: project.id,
-        projectName: project.name,
-        branch: project.defaultBranch,
-        tree: [],
-        allFiles: [],
-        hasWorkspace: false,
       },
-    })
+      { headers: NO_STORE_HEADERS }
+    )
   } catch (err: unknown) {
     return authErrorResponse(err, "Failed to load project files")
   }
@@ -132,7 +158,7 @@ export async function PUT(
 
     const project = await prisma.project.findUnique({
       where: { id },
-      include: { sources: true },
+      include: { sources: { select: SOURCE_SELECT } },
     })
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
@@ -141,7 +167,16 @@ export async function PUT(
     await requireProjectAccess(project.id, user.id, "member")
 
     const sourcePath = await ensureProjectSourceWorkspace(project)
+    const existing = await readWorkspaceFileDetailed(sourcePath, file).catch(() => null)
+    if (existing?.isBinary) {
+      return NextResponse.json(
+        { error: `Cannot save text edits over binary asset "${file}".` },
+        { status: 422 }
+      )
+    }
+
     await writeWorkspaceFile(sourcePath, file, content)
+    await persistProjectSourceSnapshot(project.id, sourcePath)
     const astSummary = analyzeSourceCodeAst(file, content)
     return NextResponse.json({ data: { saved: true, file, astSummary } })
   } catch (err: unknown) {
@@ -166,7 +201,7 @@ export async function POST(
 
     const project = await prisma.project.findUnique({
       where: { id },
-      include: { sources: true },
+      include: { sources: { select: SOURCE_SELECT } },
     })
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
@@ -176,6 +211,7 @@ export async function POST(
 
     const sourcePath = await ensureProjectSourceWorkspace(project)
     await writeWorkspaceFile(sourcePath, file, content)
+    await persistProjectSourceSnapshot(project.id, sourcePath)
     const tree = await listWorkspaceTree(sourcePath).catch(() => [])
     return NextResponse.json(
       { data: { created: true, file, allFiles: flattenWorkspaceTree(tree) } },
@@ -201,7 +237,7 @@ export async function DELETE(
 
     const project = await prisma.project.findUnique({
       where: { id },
-      include: { sources: true },
+      include: { sources: { select: SOURCE_SELECT } },
     })
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 })
@@ -211,6 +247,7 @@ export async function DELETE(
 
     const sourcePath = await ensureProjectSourceWorkspace(project)
     await deleteWorkspaceFile(sourcePath, filePath)
+    await persistProjectSourceSnapshot(project.id, sourcePath)
     const tree = await listWorkspaceTree(sourcePath).catch(() => [])
     return NextResponse.json({
       data: { deleted: true, file: filePath, allFiles: flattenWorkspaceTree(tree) },

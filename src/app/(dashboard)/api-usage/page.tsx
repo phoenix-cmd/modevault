@@ -2,17 +2,32 @@
 
 /* eslint-disable react-hooks/set-state-in-effect -- session state is hydrated from the API on mount */
 
-import { useEffect, useState } from "react"
+import { startTransition, useEffect, useState } from "react"
+import dynamic from "next/dynamic"
 import { Plus, RefreshCw, X } from "lucide-react"
 import { ApiAccountsCards } from "@/components/api-usage/api-accounts-cards"
-import { ApiTokenChart } from "@/components/api-usage/api-token-chart"
 import { ApiRecordsTable } from "@/components/api-usage/api-records-table"
 import { AddApiRecordModal } from "@/components/api-usage/add-api-record-modal"
-import { ReplenishmentPanel } from "@/components/api-usage/replenishment-panel"
 import { PageHeader } from "@/components/ui/page-header"
 import { StatBand, StatBandSkeleton } from "@/components/ui/stat-band"
 import { useModalA11y } from "@/lib/use-modal-a11y"
-import { formatNumber } from "@/lib/utils"
+import { formatCurrency, formatNumber } from "@/lib/utils"
+
+const ApiTokenChart = dynamic(
+  () => import("@/components/api-usage/api-token-chart").then((m) => m.ApiTokenChart),
+  {
+    ssr: false,
+    loading: () => <div className="skeleton h-[260px] w-full" />,
+  }
+)
+
+const ReplenishmentPanel = dynamic(
+  () => import("@/components/api-usage/replenishment-panel").then((m) => m.ReplenishmentPanel),
+  {
+    ssr: false,
+    loading: () => <div className="skeleton h-32 w-full" />,
+  }
+)
 import type {
   ApiAccountData,
   ApiUsageRecordData,
@@ -37,6 +52,7 @@ export default function ApiUsagePage() {
   const [newAccountName, setNewAccountName] = useState("")
   const [newKeyLastFour, setNewKeyLastFour] = useState("")
   const [newBalance, setNewBalance] = useState("50")
+  const [defaultCurrency, setDefaultCurrency] = useState("USD")
   const [newCurrency, setNewCurrency] = useState("USD")
   const [newRateLimit, setNewRateLimit] = useState("")
   const [creatingAccount, setCreatingAccount] = useState(false)
@@ -45,19 +61,25 @@ export default function ApiUsagePage() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const [accRes, recRes, sumRes, provRes] = await Promise.all([
+      const [accRes, recRes, sumRes, provRes, settingsRes] = await Promise.all([
         fetch("/api/api-accounts"),
-        fetch("/api/api-usage?limit=100"),
+        fetch("/api/api-usage?limit=60"),
         fetch("/api/api-usage/summary"),
         fetch("/api/providers"),
+        fetch("/api/settings").catch(() => null),
       ])
 
-      const [accJson, recJson, sumJson, provJson] = await Promise.all([
+      const [accJson, recJson, sumJson, provJson, settingsJson] = await Promise.all([
         accRes.json(),
         recRes.json(),
         sumRes.json(),
         provRes.json().catch(() => ({ data: [] })),
+        settingsRes ? settingsRes.json().catch(() => null) : Promise.resolve(null),
       ])
+
+      const prefCurrency = String(settingsJson?.data?.currency || "USD").toUpperCase()
+      setDefaultCurrency(prefCurrency)
+      setNewCurrency((cur) => (editingAccount ? cur : prefCurrency))
 
       if (Array.isArray(provJson?.data)) {
         setProviders(provJson.data)
@@ -66,33 +88,35 @@ export default function ApiUsagePage() {
         }
       }
 
-      if (accJson.data) {
-        const mappedAcc: ApiAccountData[] = accJson.data.map((a: RawApiAccount) => ({
-          id: a.id,
-          userId: a.userId,
-          providerId: a.providerId,
-          providerSlug: a.provider?.slug || "openai",
-          providerName: a.provider?.name || "Provider",
-          accountName: a.accountName,
-          apiKeyLastFour: a.apiKeyLastFour,
-          prepaidBalance: a.prepaidBalance || 0,
-          totalSpent: a.totalSpent || 0,
-          currency: a.currency || "USD",
-          rateLimit: a.rateLimit,
-          rateLimitTokens: a.rateLimitTokens,
-          integrationStatus: a.integrationStatus || "manual",
-          lastSyncAt: a.lastSyncAt,
-          lastSyncStatus: a.lastSyncStatus,
-          lastSyncError: a.lastSyncError,
-          dataSource: a.dataSource || null,
-          createdAt: a.createdAt,
-          updatedAt: a.updatedAt,
-        }))
-        setAccounts(mappedAcc)
-      }
+      startTransition(() => {
+        if (accJson.data) {
+          const mappedAcc: ApiAccountData[] = accJson.data.map((a: RawApiAccount) => ({
+            id: a.id,
+            userId: a.userId,
+            providerId: a.providerId,
+            providerSlug: a.provider?.slug || "openai",
+            providerName: a.provider?.name || "Provider",
+            accountName: a.accountName,
+            apiKeyLastFour: a.apiKeyLastFour,
+            prepaidBalance: a.prepaidBalance || 0,
+            totalSpent: a.totalSpent || 0,
+            currency: a.currency || prefCurrency,
+            rateLimit: a.rateLimit,
+            rateLimitTokens: a.rateLimitTokens,
+            integrationStatus: a.integrationStatus || "manual",
+            lastSyncAt: a.lastSyncAt,
+            lastSyncStatus: a.lastSyncStatus,
+            lastSyncError: a.lastSyncError,
+            dataSource: a.dataSource || null,
+            createdAt: a.createdAt,
+            updatedAt: a.updatedAt,
+          }))
+          setAccounts(mappedAcc)
+        }
 
-      if (recJson.data) setRecords(recJson.data)
-      if (sumJson.data) setSummary(sumJson.data)
+        if (recJson.data) setRecords(recJson.data)
+        if (sumJson.data) setSummary(sumJson.data)
+      })
     } catch (err) {
       console.error("Failed to fetch API usage:", err)
     } finally {
@@ -175,8 +199,8 @@ export default function ApiUsagePage() {
         },
         {
           label: "API spend",
-          value: `$${summary.totalCost.toFixed(2)}`,
-          meta: `Recorded across API usage logs`,
+          value: formatCurrency(summary.totalCost, "USD"),
+          meta: `USD metered logs · Account default: ${defaultCurrency}`,
         },
         {
           label: "Requests",
@@ -379,8 +403,9 @@ export default function ApiUsagePage() {
                     <label className="label">Currency</label>
                     <select value={newCurrency} onChange={(e) => setNewCurrency(e.target.value)} className="select">
                       <option value="USD">USD</option>
-                      <option value="INR">INR</option>
                       <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                      <option value="INR">INR</option>
                     </select>
                   </div>
                 </div>

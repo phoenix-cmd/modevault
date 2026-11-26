@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import { AgentOrchestration } from "@/components/landing/AgentOrchestration"
 import { BenefitsSection } from "@/components/landing/BenefitsSection"
 import { DevelopmentStudio } from "@/components/landing/DevelopmentStudio"
@@ -38,6 +39,15 @@ const structuredData = {
   ],
 }
 
+export const metadata: Metadata = {
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    url: "/",
+  },
+}
+
 export default function LandingPage() {
   return (
     <div className="rig-page min-h-screen">
@@ -58,7 +68,7 @@ export default function LandingPage() {
       {/* Pixel-dithered transition from Electric Blue Hero to Deep Charcoal */}
       <div className="rig-pixel-transition" aria-hidden="true" />
 
-      <main id="main-content" className="relative z-10">
+      <main id="main-content" tabIndex={-1} className="relative z-10 outline-none">
         <ProblemSection />
         <IntroducingSection />
         <AgentOrchestration />

@@ -56,7 +56,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           sidebarCollapsed={collapsed}
           onToggleSidebar={toggleCollapsed}
         />
-        <main className="mx-auto w-full max-w-[1440px] min-w-0 flex-1 px-4 pb-16 pt-5 sm:px-6 lg:px-8 lg:py-8">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto w-full max-w-[1440px] min-w-0 flex-1 px-4 pb-16 pt-5 outline-none sm:px-6 lg:px-8 lg:py-8"
+        >
           {children}
         </main>
       </div>

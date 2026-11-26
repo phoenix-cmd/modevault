@@ -435,6 +435,7 @@ export default function IntegrationsPage() {
         ) : (
           <div className="overflow-x-auto border-t border-line">
             <table className="data-table">
+              <caption className="sr-only">Provider integrations, usage sync capabilities, and authentication modes</caption>
               <thead>
                 <tr>
                   <th>Provider</th>

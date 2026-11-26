@@ -1,9 +1,11 @@
 "use client"
 
+import { memo } from "react"
 import { Key, Trash2, Plus } from "lucide-react"
 import { ProviderIcon } from "@/components/ui/provider-icon"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { TrustBadge } from "@/components/ui/trust-badge"
+import { useMediaQuery } from "@/lib/use-media-query"
 import { formatCurrency } from "@/lib/utils"
 import type { ApiAccountData } from "@/lib/types"
 
@@ -15,13 +17,14 @@ interface ApiAccountsCardsProps {
   onDeleteAccount?: (accountId: string) => void
 }
 
-export function ApiAccountsCards({
+export const ApiAccountsCards = memo(function ApiAccountsCards({
   accounts,
   onAddLog,
   onCreateAccount,
   onEditAccount,
   onDeleteAccount,
 }: ApiAccountsCardsProps) {
+  const isDesktop = useMediaQuery("(min-width: 768px)")
   if (accounts.length === 0) {
     return (
       <section className="border-t border-line pt-5">
@@ -57,8 +60,10 @@ export function ApiAccountsCards({
         <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-ink-3">{accounts.length} accounts</span>
       </div>
 
-      <div className="hidden overflow-x-auto border-t border-line md:block">
+      {isDesktop ? (
+      <div className="overflow-x-auto border-t border-line">
         <table className="data-table">
+          <caption className="sr-only">Connected and manual developer API accounts, prepaid balances, and spend</caption>
           <thead>
             <tr>
               <th>Account</th>
@@ -140,8 +145,8 @@ export function ApiAccountsCards({
           </tbody>
         </table>
       </div>
-
-      <div className="border-t border-line md:hidden">
+      ) : (
+      <div className="border-t border-line">
         {accounts.map((acc) => (
           <div key={acc.id} className="border-b border-line py-3.5 last:border-b-0">
             <div className="flex items-start justify-between gap-3">
@@ -198,6 +203,7 @@ export function ApiAccountsCards({
           </div>
         ))}
       </div>
+      )}
     </section>
   )
-}
+})

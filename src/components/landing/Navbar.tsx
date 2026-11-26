@@ -128,6 +128,7 @@ export function Navbar() {
           type="button"
           onClick={() => setMobileOpen((v) => !v)}
           aria-expanded={mobileOpen}
+          aria-controls="landing-mobile-menu"
           aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
           className={`inline-flex h-11 w-11 items-center justify-center border lg:hidden ${
             scrolled
@@ -140,38 +141,40 @@ export function Navbar() {
       </nav>
 
       {/* Mobile Drawer */}
-      {mobileOpen && (
-        <div className="max-h-[calc(100dvh-68px)] overflow-y-auto border-t border-[var(--rig-paper-18)] bg-[#101514] px-5 py-5 text-[var(--rig-paper)] lg:hidden">
-          <div className="flex flex-col space-y-1">
-            {NAV_LINKS.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setMobileOpen(false)}
-                className="flex min-h-[44px] items-center border-b border-[var(--rig-paper-12)] py-2 text-sm font-medium text-[var(--rig-paper-75)] hover:text-[var(--rig-paper)]"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </div>
-          <div className="mt-4 flex flex-col gap-2.5">
+      <div
+        id="landing-mobile-menu"
+        hidden={!mobileOpen}
+        className="max-h-[calc(100dvh-68px)] overflow-y-auto border-t border-[var(--rig-paper-18)] bg-[#101514] px-5 py-5 text-[var(--rig-paper)] lg:hidden"
+      >
+        <div className="flex flex-col space-y-1">
+          {NAV_LINKS.map((item) => (
             <Link
-              href="/login"
+              key={item.href}
+              href={item.href}
               onClick={() => setMobileOpen(false)}
-              className="rig-btn-outline w-full text-center"
+              className="flex min-h-[44px] items-center border-b border-[var(--rig-paper-12)] py-2 text-sm font-medium text-[var(--rig-paper-75)] hover:text-[var(--rig-paper)]"
             >
-              Sign in
+              {item.label}
             </Link>
-            <Link
-              href="/register"
-              onClick={() => setMobileOpen(false)}
-              className="rig-btn-chamfer rig-btn-blue w-full"
-            >
-              Get started
-            </Link>
-          </div>
+          ))}
         </div>
-      )}
+        <div className="mt-4 flex flex-col gap-2.5">
+          <Link
+            href="/login"
+            onClick={() => setMobileOpen(false)}
+            className="rig-btn-outline w-full text-center"
+          >
+            Sign in
+          </Link>
+          <Link
+            href="/register"
+            onClick={() => setMobileOpen(false)}
+            className="rig-btn-chamfer rig-btn-blue w-full"
+          >
+            Get started
+          </Link>
+        </div>
+      </div>
     </header>
   )
 }

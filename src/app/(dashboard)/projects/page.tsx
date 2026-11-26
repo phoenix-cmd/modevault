@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState, useRef } from "react"
+import { useRouter } from "next/navigation"
 import JSZip from "jszip"
 import { useModalA11y } from "@/lib/use-modal-a11y"
 import Link from "next/link"
@@ -24,8 +25,6 @@ const CLIENT_IGNORED_SEGMENTS = new Set([
   "node_modules",
   ".git",
   ".next",
-  "dist",
-  "build",
   ".turbo",
   ".cache",
   "__pycache__",
@@ -34,6 +33,30 @@ const CLIENT_IGNORED_SEGMENTS = new Set([
   "__MACOSX",
   ".DS_Store",
   "Thumbs.db",
+])
+
+const PROTECTED_ROOT_DIRS = new Set([
+  "src",
+  "app",
+  "pages",
+  "components",
+  "lib",
+  "public",
+  "server",
+  "client",
+  "api",
+  "styles",
+  "utils",
+  "hooks",
+  "types",
+  "tests",
+  "test",
+  "scripts",
+  "prisma",
+  "config",
+  "assets",
+  "packages",
+  "docs",
 ])
 
 const MAX_ZIP_UPLOAD_BYTES = 25 * 1024 * 1024
@@ -46,17 +69,22 @@ function isClientIgnoredPath(relPath: string): boolean {
 
 function stripClientCommonRoot(entries: Array<{ path: string; file: File }>): {
   rootName: string | null
+  wasStripped: boolean
   entries: Array<{ path: string; file: File }>
 } {
-  if (entries.length === 0) return { rootName: null, entries }
+  if (entries.length === 0) return { rootName: null, wasStripped: false, entries }
   const firstSlash = entries[0]!.path.indexOf("/")
-  if (firstSlash <= 0) return { rootName: null, entries }
+  if (firstSlash <= 0) return { rootName: null, wasStripped: false, entries }
   const firstSeg = entries[0]!.path.slice(0, firstSlash)
+  if (PROTECTED_ROOT_DIRS.has(firstSeg.toLowerCase())) {
+    return { rootName: firstSeg, wasStripped: false, entries }
+  }
   const prefix = `${firstSeg}/`
   const allMatch = entries.every((e) => e.path.startsWith(prefix) && e.path.length > prefix.length)
-  if (!allMatch) return { rootName: null, entries }
+  if (!allMatch) return { rootName: null, wasStripped: false, entries }
   return {
     rootName: firstSeg,
+    wasStripped: true,
     entries: entries.map((e) => ({ path: e.path.slice(prefix.length), file: e.file })),
   }
 }
@@ -140,6 +168,7 @@ function deriveProjectNameFromRepoInput(input: string): string {
 }
 
 export default function ProjectsPage() {
+  const router = useRouter()
   const [projects, setProjects] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
@@ -152,6 +181,8 @@ export default function ProjectsPage() {
   const [repoUrl, setRepoUrl] = useState("")
   const [importMode, setImportMode] = useState<"zip" | "git">("zip")
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [wasPreStripped, setWasPreStripped] = useState(false)
+  const [createdProjectId, setCreatedProjectId] = useState<string | null>(null)
   const [selectionSummary, setSelectionSummary] = useState<{
     mode: "zip" | "folder" | "files"
     name: string
@@ -166,6 +197,7 @@ export default function ProjectsPage() {
   const [inspectionResult, setInspectionResult] = useState<any | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const zipInputRef = useRef<HTMLInputElement | null>(null)
+  const filesInputRef = useRef<HTMLInputElement | null>(null)
   const folderInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -177,9 +209,11 @@ export default function ProjectsPage() {
 
   const clearSelectedArchive = () => {
     setSelectedFile(null)
+    setWasPreStripped(false)
     setSelectionSummary(null)
     setFormError(null)
     if (zipInputRef.current) zipInputRef.current.value = ""
+    if (filesInputRef.current) filesInputRef.current.value = ""
     if (folderInputRef.current) folderInputRef.current.value = ""
   }
 
@@ -197,10 +231,22 @@ export default function ProjectsPage() {
     }
   }
 
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     try {
       setLoading(true)
-      const res = await fetch("/api/projects")
+      const activeWs =
+        typeof window !== "undefined" ? window.localStorage.getItem("mv-active-workspace") || "" : ""
+      let res = await fetch(
+        activeWs ? `/api/projects?workspaceId=${encodeURIComponent(activeWs)}` : "/api/projects",
+        { cache: "no-store" }
+      )
+      // Auto-heal stale workspace ID from previous login session
+      if ((res.status === 403 || res.status === 404) && activeWs) {
+        try {
+          window.localStorage.removeItem("mv-active-workspace")
+        } catch {}
+        res = await fetch("/api/projects", { cache: "no-store" })
+      }
       const json = await res.json()
       if (json.data) setProjects(json.data)
     } catch (e) {
@@ -208,11 +254,14 @@ export default function ProjectsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     fetchProjects()
-  }, [])
+    const onWsChange = () => fetchProjects()
+    window.addEventListener("mv-workspace-change", onWsChange)
+    return () => window.removeEventListener("mv-workspace-change", onWsChange)
+  }, [fetchProjects])
 
   const applySelectedZipFile = (file: File) => {
     setFormError(null)
@@ -225,6 +274,7 @@ export default function ProjectsPage() {
       return
     }
     setSelectedFile(file)
+    setWasPreStripped(false)
     setSelectionSummary({
       mode: "zip",
       name: file.name,
@@ -257,7 +307,7 @@ export default function ProjectsPage() {
         return
       }
 
-      const { rootName, entries } = stripClientCommonRoot(kept)
+      const { rootName, wasStripped, entries } = stripClientCommonRoot(kept)
       const archiveLabel = rootName || fallbackLabel
       const zip = new JSZip()
 
@@ -282,6 +332,7 @@ export default function ProjectsPage() {
       const packedFile = new File([blob], `${safeBaseName}.zip`, { type: "application/zip" })
 
       setSelectedFile(packedFile)
+      setWasPreStripped(wasStripped)
       setSelectionSummary({
         mode,
         name: archiveLabel,
@@ -289,23 +340,49 @@ export default function ProjectsPage() {
         skippedCount,
         sizeBytes: packedFile.size,
       })
-      setProjectName((prev) => prev.trim() || archiveLabel.replace(/[-_]+/g, " ").trim())
+      setProjectName((prev) => prev.trim() || archiveLabel.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim())
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Failed to package selected folder into ZIP archive.")
+      setFormError(err instanceof Error ? err.message : "Failed to package selected files into archive.")
     } finally {
       setPacking(false)
     }
   }
 
-  const handleZipInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
+  const handleZipInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = Array.from(e.target.files || [])
     e.target.value = ""
-    if (!file) return
-    if (!file.name.toLowerCase().endsWith(".zip") && file.type && !file.type.includes("zip")) {
-      setFormError("Please select a valid .zip archive, or use Choose folder / drag & drop.")
+    if (picked.length === 0) return
+    if (
+      picked.length === 1 &&
+      (picked[0]!.name.toLowerCase().endsWith(".zip") || picked[0]!.type.toLowerCase().includes("zip"))
+    ) {
+      applySelectedZipFile(picked[0]!)
       return
     }
-    applySelectedZipFile(file)
+    // Gracefully package non-zip file(s) if chosen via this picker
+    await packFilesToZip(
+      picked.map((f) => ({ path: f.name, file: f })),
+      "files",
+      picked[0]!.name.replace(/\.[^.]+$/, "") || "imported-files"
+    )
+  }
+
+  const handleFilesInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = Array.from(e.target.files || [])
+    e.target.value = ""
+    if (picked.length === 0) return
+    if (
+      picked.length === 1 &&
+      (picked[0]!.name.toLowerCase().endsWith(".zip") || picked[0]!.type.toLowerCase().includes("zip"))
+    ) {
+      applySelectedZipFile(picked[0]!)
+      return
+    }
+    await packFilesToZip(
+      picked.map((f) => ({ path: f.name, file: f })),
+      "files",
+      picked.length === 1 ? picked[0]!.name.replace(/\.[^.]+$/, "") : `${picked.length}-source-files`
+    )
   }
 
   const handleFolderInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -408,12 +485,21 @@ export default function ProjectsPage() {
       "Imported Project"
 
     setUploading(true)
+    setCreatedProjectId(null)
+
+    const activeWs =
+      typeof window !== "undefined" ? window.localStorage.getItem("mv-active-workspace") || "" : ""
 
     try {
+      let nextProjId: string | null = null
+      let nextInspection: any = null
+
       if (importMode === "zip" && selectedFile) {
         const formData = new FormData()
         formData.append("file", selectedFile)
         formData.append("name", effectiveName)
+        if (wasPreStripped) formData.append("preStripped", "1")
+        if (activeWs) formData.append("workspaceId", activeWs)
 
         const res = await fetch("/api/projects/upload", {
           method: "POST",
@@ -421,10 +507,12 @@ export default function ProjectsPage() {
         })
         const json = await res.json().catch(() => ({}))
         if (!res.ok) {
-          throw new Error(json.error || `Failed to upload ZIP archive (HTTP ${res.status})`)
+          throw new Error(json.error || `Failed to upload files (HTTP ${res.status})`)
         }
+        nextProjId = json.data?.project?.id || null
         if (json.data?.inspection) {
-          setInspectionResult(json.data.inspection)
+          nextInspection = json.data.inspection
+          setInspectionResult(nextInspection)
         }
       } else {
         const res = await fetch("/api/projects", {
@@ -433,25 +521,37 @@ export default function ProjectsPage() {
           body: JSON.stringify({
             name: effectiveName,
             repositoryUrl: repoUrl.trim() || null,
+            ...(activeWs ? { workspaceId: activeWs } : {}),
           }),
         })
         const json = await res.json().catch(() => ({}))
         if (!res.ok) {
           throw new Error(json.error || `Failed to import Git repository (HTTP ${res.status})`)
         }
+        nextProjId = json.data?.id || null
         if (json.inspection) {
-          setInspectionResult(json.inspection)
+          nextInspection = json.inspection
+          setInspectionResult(nextInspection)
         }
       }
 
+      if (nextProjId && typeof window !== "undefined") {
+        window.localStorage.setItem("mv-active-project", nextProjId)
+        setCreatedProjectId(nextProjId)
+      }
+
       await fetchProjects()
-      setTimeout(() => {
-        setModalOpen(false)
-        clearSelectedArchive()
-        setProjectName("")
-        setRepoUrl("")
-        setInspectionResult(null)
-      }, 900)
+      // Keep modal open when a warning/fallback happened so the user can read it or jump to Studio
+      if (nextInspection?.provisionMode !== "starter_fallback") {
+        setTimeout(() => {
+          setModalOpen(false)
+          clearSelectedArchive()
+          setProjectName("")
+          setRepoUrl("")
+          setInspectionResult(null)
+          setCreatedProjectId(null)
+        }, 900)
+      }
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : "Failed to provision project")
     } finally {
@@ -899,11 +999,11 @@ export default function ProjectsPage() {
 
                     <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                       <label
-                        htmlFor="project-zip-input"
+                        htmlFor="project-files-input"
                         className="btn-secondary btn-sm cursor-pointer"
                       >
-                        <Upload className="h-3.5 w-3.5" strokeWidth={1.8} />
-                        Choose .zip file
+                        <FileCode className="h-3.5 w-3.5" strokeWidth={1.8} />
+                        Choose file(s)
                       </label>
                       <label
                         htmlFor="project-folder-input"
@@ -912,13 +1012,28 @@ export default function ProjectsPage() {
                         <FolderOpen className="h-3.5 w-3.5" strokeWidth={1.8} />
                         Choose folder
                       </label>
+                      <label
+                        htmlFor="project-zip-input"
+                        className="btn-secondary btn-sm cursor-pointer"
+                      >
+                        <Upload className="h-3.5 w-3.5" strokeWidth={1.8} />
+                        Choose .zip
+                      </label>
                     </div>
                   </div>
+                  <input
+                    id="project-files-input"
+                    ref={filesInputRef}
+                    type="file"
+                    multiple
+                    onChange={handleFilesInputChange}
+                    className="hidden"
+                  />
                   <input
                     id="project-zip-input"
                     ref={zipInputRef}
                     type="file"
-                    accept=".zip,application/zip,application/x-zip-compressed,application/octet-stream"
+                    accept=".zip,application/zip,application/x-zip-compressed,application/x-compressed,application/octet-stream"
                     onChange={handleZipInputChange}
                     className="hidden"
                   />
@@ -989,6 +1104,15 @@ export default function ProjectsPage() {
                     Framework {inspectionResult.framework} · {inspectionResult.fileCount} files
                     {inspectionResult.cloneError ? ` · ${inspectionResult.cloneError}` : ""}
                   </p>
+                  {createdProjectId && (
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/studio?projectId=${encodeURIComponent(createdProjectId)}`)}
+                      className="btn-secondary btn-sm mt-2"
+                    >
+                      Open in Studio →
+                    </button>
+                  )}
                 </div>
               )}
 

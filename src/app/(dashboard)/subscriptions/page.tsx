@@ -45,11 +45,20 @@ export default function SubscriptionsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [syncingRenewals, setSyncingRenewals] = useState(false)
   const [syncSummary, setSyncSummary] = useState<string | null>(null)
-  const [baseCurrency, setBaseCurrency] = useState<string>("INR")
+  const [baseCurrency, setBaseCurrency] = useState<string>("USD")
   const [ratesMap, setRatesMap] = useState<{ USD_INR: number; EUR_USD: number; GBP_USD: number }>({
     USD_INR: 84.5,
     EUR_USD: 1.08,
     GBP_USD: 1.27,
+  })
+  const [fxMeta, setFxMeta] = useState<{
+    isFallback: boolean
+    source: string
+    fetchedAt: string | null
+  }>({
+    isFallback: true,
+    source: "estimated_fallback",
+    fetchedAt: null,
   })
 
   const fetchSubscriptions = async () => {
@@ -63,10 +72,11 @@ export default function SubscriptionsPage() {
       const json = await res.json()
       const settingsJson = settingsRes ? await settingsRes.json().catch(() => null) : null
       const fxJson = fxRes ? await fxRes.json().catch(() => null) : null
-      if (settingsJson?.data?.currency) {
-        setBaseCurrency(settingsJson.data.currency)
-      }
-      if (Array.isArray(fxJson?.data)) {
+      const resolvedUserCurrency = String(settingsJson?.data?.currency || "USD").toUpperCase()
+      setBaseCurrency(resolvedUserCurrency)
+      if (fxJson?.ratesMap) {
+        setRatesMap(fxJson.ratesMap)
+      } else if (Array.isArray(fxJson?.data)) {
         const next = { USD_INR: 84.5, EUR_USD: 1.08, GBP_USD: 1.27 }
         for (const row of fxJson.data as Array<{ fromCurrency: string; toCurrency: string; rate: number }>) {
           if (row.fromCurrency === "USD" && row.toCurrency === "INR" && row.rate > 0) next.USD_INR = row.rate
@@ -74,6 +84,13 @@ export default function SubscriptionsPage() {
           if (row.fromCurrency === "GBP" && row.toCurrency === "USD" && row.rate > 0) next.GBP_USD = row.rate
         }
         setRatesMap(next)
+      }
+      if (fxJson) {
+        setFxMeta({
+          isFallback: fxJson.isFallback !== false,
+          source: fxJson.source || "estimated_fallback",
+          fetchedAt: fxJson.fetchedAt || null,
+        })
       }
       if (json.data) {
         const mapped: SubscriptionData[] = json.data.map((s: RawSubscription) => ({
@@ -87,7 +104,7 @@ export default function SubscriptionsPage() {
           status: s.status || "active",
           billingCycle: s.billingCycle || "monthly",
           price: s.price,
-          currency: s.currency || "INR",
+          currency: s.currency || resolvedUserCurrency,
           startDate: s.startDate,
           renewalDate: s.renewalDate,
           expiryDate: s.expiryDate,
@@ -159,8 +176,8 @@ export default function SubscriptionsPage() {
   }, [])
 
   const convertToBase = (amount: number, fromCurrency: string) => {
-    const from = (fromCurrency || "INR").toUpperCase()
-    const to = (baseCurrency || "INR").toUpperCase()
+    const from = (fromCurrency || baseCurrency || "USD").toUpperCase()
+    const to = (baseCurrency || "USD").toUpperCase()
     if (from === to) return amount
     let usd = amount
     if (from === "INR") usd = amount / ratesMap.USD_INR
@@ -174,6 +191,9 @@ export default function SubscriptionsPage() {
   }
 
   const activeSubs = subscriptions.filter((s) => s.status === "active")
+  const hasCrossCurrencySubs = activeSubs.some(
+    (s) => (s.currency || baseCurrency).toUpperCase() !== baseCurrency.toUpperCase()
+  )
   const totalMonthlySpend = activeSubs.reduce(
     (acc, s) => acc + convertToBase(getMonthlyEquivalent(s.price, s.billingCycle), s.currency),
     0
@@ -201,6 +221,12 @@ export default function SubscriptionsPage() {
     setIsFormOpen(true)
   }
 
+  const fxProvenanceLabel = !hasCrossCurrencySubs
+    ? `Native ${baseCurrency} billing`
+    : fxMeta.isFallback
+      ? `Estimated (${baseCurrency} · fallback FX)`
+      : `Normalized (${baseCurrency} · live FX${fxMeta.fetchedAt ? ` ${new Date(fxMeta.fetchedAt).toLocaleDateString()}` : ""})`
+
   const metrics = [
     {
       label: "Active subscriptions",
@@ -209,8 +235,8 @@ export default function SubscriptionsPage() {
     },
     {
       label: "Monthly committed",
-      value: formatCurrency(totalMonthlySpend, baseCurrency),
-      meta: `Normalized across billing cycles (${baseCurrency})`,
+      value: `${hasCrossCurrencySubs && fxMeta.isFallback ? "~" : ""}${formatCurrency(totalMonthlySpend, baseCurrency)}`,
+      meta: fxProvenanceLabel,
     },
     {
       label: "Renewing in 14 days",

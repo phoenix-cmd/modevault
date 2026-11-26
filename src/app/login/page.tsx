@@ -52,19 +52,21 @@ export default function LoginPage() {
       <div className="h-[3px] w-full bg-[var(--rig-blue)]" aria-hidden="true" />
 
       <div className="rig-container relative z-10 flex min-h-[calc(100vh-3px)] flex-col">
-        <header className="flex h-16 items-center justify-between border-b border-[var(--rig-paper-18)]">
-          <Link href="/" aria-label="MODELVAULT Home">
-            <BrandMark />
-          </Link>
-          <Link
-            href="/register"
-            className="inline-flex min-h-[44px] items-center rig-mono text-[11.5px] uppercase tracking-[0.08em] text-[var(--rig-paper-60)] transition-colors hover:text-[var(--rig-blue)]"
-          >
-            Create account
-          </Link>
+        <header className="flex h-16 items-center border-b border-[var(--rig-paper-18)]">
+          <nav aria-label="Account" className="flex w-full items-center justify-between">
+            <Link href="/" aria-label="MODELVAULT Home">
+              <BrandMark />
+            </Link>
+            <Link
+              href="/register"
+              className="inline-flex min-h-[44px] items-center rig-mono text-[11.5px] uppercase tracking-[0.08em] text-[var(--rig-paper-60)] transition-colors hover:text-[var(--rig-blue)]"
+            >
+              Create account
+            </Link>
+          </nav>
         </header>
 
-        <main className="grid flex-1 items-center gap-8 py-8 sm:gap-12 sm:py-12 lg:grid-cols-[minmax(0,1fr)_430px] lg:gap-16">
+        <main id="main-content" tabIndex={-1} className="grid flex-1 items-center gap-8 py-8 outline-none sm:gap-12 sm:py-12 lg:grid-cols-[minmax(0,1fr)_430px] lg:gap-16">
           <div className="max-w-xl">
             <span className="rig-badge mb-6">
               <span className="rig-blink-dot" aria-hidden="true" />
@@ -142,16 +144,18 @@ export default function LoginPage() {
               </a>
             </form>
 
-            <div className="mt-6 border-t border-[var(--rig-paper-12)] pt-5">
-              <p className="rig-mono text-[10px] uppercase tracking-[0.12em] text-[var(--rig-paper-40)]">
-                Demo credentials
-              </p>
-              <p className="mt-2 rig-mono text-[12px] text-[var(--rig-paper)]">
-                demo@modelvault.dev
-                <span className="mx-2 text-[var(--rig-paper-30)]">/</span>
-                password
-              </p>
-            </div>
+            {process.env.NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS === "true" && (
+              <div className="mt-6 border-t border-[var(--rig-paper-12)] pt-5">
+                <p className="rig-mono text-[11px] uppercase tracking-[0.1em] text-[var(--rig-paper-40)]">
+                  Sandbox demo credentials
+                </p>
+                <p className="mt-2 rig-mono text-[12px] text-[var(--rig-paper)]">
+                  demo@modelvault.dev
+                  <span className="mx-2 text-[var(--rig-paper-30)]">/</span>
+                  password
+                </p>
+              </div>
+            )}
 
             <p className="mt-5 text-[13px] text-[var(--rig-paper-50)]">
               New to MODELVAULT?{" "}

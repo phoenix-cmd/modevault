@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { requireAuthenticatedUser, authErrorResponse } from "@/lib/auth"
 import { unpackBillingDescription } from "@/lib/billing-meta"
-import { convertCurrency, getExchangeRatesMap } from "@/lib/currency"
+import { convertCurrency, getExchangeRatesWithMeta } from "@/lib/currency"
+import { formatCurrency } from "@/lib/utils"
 import { getProviderCapability } from "@/lib/providers/capabilities"
 
 function formatContextWindow(tokens: number): string {
@@ -20,9 +21,9 @@ export async function GET(_request: NextRequest) {
     const now = new Date()
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
 
-    const [rates, dbUser, subscriptions, apiAccounts, billingRecords, apiUsageRecords, dbModels, usageSnapshots] =
+    const [fxMeta, dbUser, subscriptions, apiAccounts, billingRecords, apiUsageRecords, dbModels, usageSnapshots] =
       await Promise.all([
-        getExchangeRatesMap(),
+        getExchangeRatesWithMeta({ allowLiveRefresh: true }),
         prisma.user.findUnique({ where: { id: user.id }, select: { currency: true } }),
         prisma.subscription.findMany({
           where: { userId: user.id },
@@ -58,6 +59,10 @@ export async function GET(_request: NextRequest) {
           take: 100,
         }),
       ])
+    const rates = fxMeta.rates
+    const baseCurrency = (
+      dbUser?.currency || subscriptions[0]?.currency || apiAccounts[0]?.currency || "USD"
+    ).toUpperCase()
 
     const months: Record<string, { month: string; subscriptions: number; api: number; total: number }> = {}
     for (let i = 5; i >= 0; i--) {
@@ -179,32 +184,32 @@ export async function GET(_request: NextRequest) {
     )
     if (codingTools.length > 1) {
       const names = codingTools.map((c) => c.customPlanName || c.provider.name).join(", ")
-      const totalCost = codingTools.reduce((acc, c) => {
-        const inrPrice = convertCurrency(c.price, c.currency, "INR", rates)
-        return acc + (c.billingCycle === "yearly" ? inrPrice / 12 : inrPrice)
+      const totalCostBase = codingTools.reduce((acc, c) => {
+        const converted = convertCurrency(c.price, c.currency, baseCurrency, rates)
+        return acc + (c.billingCycle === "yearly" ? converted / 12 : converted)
       }, 0)
       insights.push({
         type: "overlapping",
         title: "Multiple AI Code Editors Active",
-        description: `You are currently paying for ${codingTools.length} AI development tools (${names}) totaling ₹${Math.round(totalCost)}/mo.`,
-        impact: `Potential savings of up to ₹${Math.round(totalCost * 0.5)}/mo by standardizing.`,
+        description: `You are currently paying for ${codingTools.length} AI development tools (${names}) totaling ${fxMeta.isFallback ? "~" : ""}${formatCurrency(totalCostBase, baseCurrency)}/mo.`,
+        impact: `Potential savings of up to ${fxMeta.isFallback ? "~" : ""}${formatCurrency(totalCostBase * 0.5, baseCurrency)}/mo by standardizing.`,
         severity: "high",
       })
     }
 
-    let potentialAnnualSavings = 0
+    let potentialAnnualSavingsBase = 0
     for (const s of subscriptions) {
       if (s.status === "active" && s.billingCycle === "monthly") {
-        const inrPrice = convertCurrency(s.price, s.currency, "INR", rates)
-        potentialAnnualSavings += inrPrice * 12 * 0.16
+        const converted = convertCurrency(s.price, s.currency, baseCurrency, rates)
+        potentialAnnualSavingsBase += converted * 12 * 0.16
       }
     }
-    if (potentialAnnualSavings > 500) {
+    if (convertCurrency(potentialAnnualSavingsBase, baseCurrency, "USD", rates) > 6) {
       insights.push({
         type: "savings",
         title: "Annual Billing Switch Opportunities",
-        description: `Switching eligible monthly subscriptions to annual billing could save an estimated ₹${Math.round(potentialAnnualSavings)} per year.`,
-        impact: `Save ~₹${Math.round(potentialAnnualSavings)}/yr`,
+        description: `Switching eligible monthly subscriptions to annual billing could save an estimated ${formatCurrency(potentialAnnualSavingsBase, baseCurrency)} per year.`,
+        impact: `Save ~${formatCurrency(potentialAnnualSavingsBase, baseCurrency)}/yr`,
         severity: "low",
       })
     }
@@ -310,9 +315,6 @@ export async function GET(_request: NextRequest) {
       modelUsageMap.set(modelKey, cur)
     }
 
-    const baseCurrency =
-      dbUser?.currency || subscriptions[0]?.currency || apiAccounts[0]?.currency || "USD"
-
     return NextResponse.json({
       data: {
         baseCurrency,
@@ -320,6 +322,11 @@ export async function GET(_request: NextRequest) {
         providerBreakdown,
         exchangeRateUsdToInr: rates.USD_INR,
         exchangeRates: rates,
+        fxMeta: {
+          isFallback: fxMeta.isFallback,
+          source: fxMeta.source,
+          fetchedAt: fxMeta.fetchedAt,
+        },
         overview: {
           monthlySubscriptions: parseFloat(activeSubMonthlyTotal.toFixed(2)),
           annualSubscriptions: parseFloat(activeSubAnnualTotal.toFixed(2)),

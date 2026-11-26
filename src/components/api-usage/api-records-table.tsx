@@ -1,7 +1,8 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { memo, useEffect, useMemo, useState } from "react"
 import { Search } from "lucide-react"
+import { useMediaQuery } from "@/lib/use-media-query"
 import { formatNumber, formatDate } from "@/lib/utils"
 import type { ApiUsageRecordData } from "@/lib/types"
 
@@ -22,10 +23,12 @@ function formatCost(cost: number, currency: string | undefined) {
   return `${symbol}${cost.toFixed(4)}`
 }
 
-export function ApiRecordsTable({ records }: ApiRecordsTableProps) {
+export const ApiRecordsTable = memo(function ApiRecordsTable({ records }: ApiRecordsTableProps) {
+  const isDesktop = useMediaQuery("(min-width: 768px)")
   const [search, setSearch] = useState("")
   const [providerFilter, setProviderFilter] = useState("all")
   const [range, setRange] = useState("30")
+  const [pageSize, setPageSize] = useState(25)
   const [now, setNow] = useState<number | null>(null)
 
   useEffect(() => {
@@ -68,7 +71,7 @@ export function ApiRecordsTable({ records }: ApiRecordsTableProps) {
     })
   }, [records, search, providerFilter, range, now])
 
-  const visible = filtered.slice(0, 50)
+  const visible = useMemo(() => filtered.slice(0, pageSize), [filtered, pageSize])
 
   return (
     <section className="border-t border-line pt-5">
@@ -116,8 +119,10 @@ export function ApiRecordsTable({ records }: ApiRecordsTableProps) {
         </div>
       ) : (
         <>
-          <div className="hidden overflow-x-auto md:block">
+          {isDesktop ? (
+          <div className="overflow-x-auto">
             <table className="data-table">
+              <caption className="sr-only">Recorded API token usage, model requests, and cost log</caption>
               <thead>
                 <tr>
                   <th>Date</th>
@@ -151,8 +156,8 @@ export function ApiRecordsTable({ records }: ApiRecordsTableProps) {
               </tbody>
             </table>
           </div>
-
-          <div className="border-t border-line md:hidden">
+          ) : (
+          <div className="border-t border-line">
             {visible.map((record) => (
               <div key={record.id} className="border-b border-line py-3.5 last:border-b-0">
                 <div className="flex items-start justify-between gap-3">
@@ -199,14 +204,24 @@ export function ApiRecordsTable({ records }: ApiRecordsTableProps) {
               </div>
             ))}
           </div>
+          )}
 
           {filtered.length > visible.length && (
-            <div className="border-b border-line py-2.5 text-center text-[11px] text-ink-3">
-              Showing {visible.length} of {filtered.length} records — refine filters to narrow results.
+            <div className="flex items-center justify-between gap-3 border-b border-line py-3 text-[12px] text-ink-3">
+              <span>
+                Showing {visible.length} of {filtered.length} records
+              </span>
+              <button
+                type="button"
+                onClick={() => setPageSize((s) => s + 25)}
+                className="btn-secondary btn-sm"
+              >
+                Show 25 more
+              </button>
             </div>
           )}
         </>
       )}
     </section>
   )
-}
+})

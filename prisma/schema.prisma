@@ -114,6 +114,7 @@ model ProjectSource {
   fileSize     Int?
   branch       String?
   manifestJson String?  // JSON string of detected files, dependencies, scripts
+  archiveData  String?  // Base64-encoded compressed ZIP snapshot for durable rehydration
   createdAt    DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
